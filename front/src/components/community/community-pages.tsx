@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Bell, ChevronRight, Eye, Heart, ImagePlus, MessageSquare, MoveRight, PenLine, Search, Send, Share2, Sparkles, Tag, Wrench, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { CommunityDemoProvider, useCommunityDemo } from "@/components/community/community-interactions";
 import { RightRail, Sidebar, TopNavigation } from "@/components/community/community-home";
 import { characters, echoSets, guides, newsItems, toolItems } from "@/lib/mock";
@@ -28,15 +31,28 @@ export function CreationsPage() { return <CommunityPageFrame activeNav="creation
 export function ToolsPage() { return <CommunityPageFrame activeNav="tools"><PageHeader section="实用工具" title="漂泊者工具箱" description="把常用的养成计算、声骸查询与配队思路收在同一处。" /><section className="tools-page-grid">{toolItems.map((tool) => { const href = tool.slug === "echo" ? "/echoes" : "/tools/" + tool.slug; return <Link href={href} key={tool.slug}><article className="tool-page-card"><span>{tool.icon === "calculator" ? "算" : tool.icon === "echo" ? "骸" : "队"}</span><h2>{tool.title}</h2><p>{tool.description}</p><small>打开工具 <ChevronRight size={13} /></small></article></Link>; })}</section></CommunityPageFrame>; }
 export function ToolDetailPage({ slug }: { slug: string }) { const tool = toolItems.find((item) => item.slug === slug) ?? toolItems[0]; const [level, setLevel] = useState(1); const [weapon, setWeapon] = useState(1); const [members, setMembers] = useState<string[]>([]); const isTeam = tool.slug === "team-builder"; const total = (level * 1200 + weapon * 780).toLocaleString(); function toggleMember(id: string) { setMembers((current) => current.includes(id) ? current.filter((entry) => entry !== id) : current.length === 3 ? [...current.slice(1), id] : [...current, id]); } return <CommunityPageFrame activeNav="tools"><PageHeader section={"实用工具 / " + tool.title} title={tool.title} description={tool.description} /><section className="tool-workspace">{isTeam ? <><div className="team-slots">{[0, 1, 2].map((index) => <div className="team-slot" key={index}>{members[index] ? characters.find((item) => item.id === members[index])?.name : "选择角色"}</div>)}</div><div className="tool-choice-list">{characters.map((item) => <button className={members.includes(item.id) ? "is-active" : ""} key={item.id} onClick={() => toggleMember(item.id)} type="button">{item.name}<small>{item.role}</small></button>)}</div><p className="tool-result">{members.length ? "当前队伍已记录 " + members.length + " 位角色。Demo 版用于梳理轮切思路。" : "从下方选择至多三位角色，开始构建队伍。"}</p></> : <><div className="calculator-fields"><label>角色等级<input max="90" min="1" onChange={(event) => setLevel(Number(event.target.value))} type="number" value={level} /></label><label>武器等级<input max="90" min="1" onChange={(event) => setWeapon(Number(event.target.value))} type="number" value={weapon} /></label></div><div className="tool-result"><span>预计养成素材</span><strong>{total}</strong><small>按当前等级差估算；接入数据服务后可展示真实材料明细。</small></div></>}</section></CommunityPageFrame>; }
 export function SearchResultsPage() { const params = useSearchParams(); const initialTerm = params.get("q")?.trim() ?? ""; const [term, setTerm] = useState(initialTerm); const [page, setPage] = useState(1); const result = useCommunityPostQuery({ keyword: term, page, pageSize: 10, sort: "latest" }); const fallback = guides.filter((guide) => (guide.title + guide.excerpt + guide.tags.join("")).toLowerCase().includes(term.toLowerCase())); const items = result.error ? fallback : result.data?.items.map(toGuide) ?? []; const totalPages = result.error ? 1 : result.data?.meta?.totalPages ?? 1; return <CommunityPageFrame query={term} onQueryChange={(value) => { setTerm(value); setPage(1); window.history.replaceState(null, "", value ? "/search?q=" + encodeURIComponent(value) : "/search"); }}><PageHeader section="搜索" title={term ? "“" + term + "” 的结果" : "搜索"} description={term ? "优先展示匹配的攻略与社区内容。" : "输入关键词寻找攻略、声骸和玩家讨论。"} /><section className="guide-list-page">{result.isLoading ? <div className="feed-status">正在搜索鸣潮社区…</div> : items.length ? items.map((guide) => <GuideListItem guide={guide} key={guide.id} />) : <div className="empty-state"><Search size={20} /><p>没有找到匹配内容，试试角色名、声骸或攻略标签。</p></div>}{result.error && <p className="api-fallback-note">后端暂不可用，当前显示本地 Demo 数据。</p>}{totalPages > 1 && <nav className="pagination" aria-label="搜索结果分页">{Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => <button className={page === pageNumber ? "is-active" : ""} key={pageNumber} onClick={() => setPage(pageNumber)} type="button">{pageNumber}</button>)}</nav>}</section></CommunityPageFrame>; }
+const publishFormSchema = z.object({
+  title: z.string().trim().min(1, "请输入帖子标题").max(200, "标题长度不能超过 200 个字符"),
+  content: z.string().trim().min(1, "请输入帖子正文").max(50000, "正文长度不能超过 50000 个字符"),
+  type: z.enum(["攻略", "心得", "同人", "提问"]),
+  tags: z.string().superRefine((value, context) => {
+    const tags = value.split(/[，,\s]+/).map((tag) => tag.trim()).filter(Boolean);
+    if (tags.length > 10) context.addIssue({ code: "custom", message: "最多添加 10 个标签" });
+    if (tags.some((tag) => tag.length > 64)) context.addIssue({ code: "custom", message: "单个标签长度不能超过 64 个字符" });
+  }),
+});
+type PublishFormValues = z.infer<typeof publishFormSchema>;
+
 function PublishPageContent() {
   const params = useSearchParams();
   const router = useRouter();
   const { loggedIn, requestLogin, notify } = useCommunityDemo();
   const editPostId = params.get("edit");
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [type, setType] = useState(params.get("type") === "guide" ? "攻略" : params.get("type") === "creation" ? "同人" : "心得");
-  const [tags, setTags] = useState("");
+  const defaultType = params.get("type") === "guide" ? "攻略" : params.get("type") === "creation" ? "同人" : "心得";
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<PublishFormValues>({
+    resolver: zodResolver(publishFormSchema),
+    defaultValues: { title: "", content: "", type: defaultType, tags: "" },
+  });
   const [error, setError] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
@@ -49,15 +65,12 @@ function PublishPageContent() {
     let active = true;
     void fetchPost(editPostId).then((post) => {
       if (!active) return;
-      setTitle(post.title);
-      setContent(post.content ?? "");
-      setType(post.type === "GUIDE" ? "攻略" : ["心得", "同人", "提问"].includes(post.category) ? post.category : "心得");
-      setTags(post.tags.join("、"));
+      reset({ title: post.title, content: post.content ?? "", type: post.type === "GUIDE" ? "攻略" : ["心得", "同人", "提问"].includes(post.category) ? post.category as PublishFormValues["type"] : "心得", tags: post.tags.join("、") });
     }).catch((requestError) => {
       if (active) setError(requestError instanceof Error ? requestError.message : "无法读取待编辑的帖子");
     }).finally(() => { if (active) setLoadingEdit(false); });
     return () => { active = false; };
-  }, [editPostId, loggedIn]);
+  }, [editPostId, loggedIn, reset]);
 
   function changeImage(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -70,39 +83,32 @@ function PublishPageContent() {
     setImageUrl(URL.createObjectURL(file));
   }
 
-  async function publish() {
+  async function publish(values: PublishFormValues) {
     setPublishing(true);
     setError("");
     try {
       const uploadedImage = imageFile ? await uploadImage(imageFile) : null;
-      const publishedContent = uploadedImage ? `${content.trim()}\n\n![${uploadedImage.originalName ?? "鸣潮社区配图"}](${uploadedImage.url})` : content;
-      const input = {
-        type: type === "攻略" ? "GUIDE" : "GENERAL",
-        category: type === "攻略" ? "配队攻略" : type,
-        title,
-        content: publishedContent,
-        tags: tags.split(/[，,\s]+/).map((tag) => tag.trim()).filter(Boolean),
-      } as const;
+      const publishedContent = uploadedImage ? `${values.content.trim()}\n\n![${uploadedImage.originalName ?? "鸣潮社区配图"}](${uploadedImage.url})` : values.content;
+      const input = { type: values.type === "攻略" ? "GUIDE" : "GENERAL", category: values.type === "攻略" ? "配队攻略" : values.type, title: values.title, content: publishedContent, tags: values.tags.split(/[，,\s]+/).map((tag) => tag.trim()).filter(Boolean) } as const;
       const post = editPostId ? await updatePost(editPostId, input) : await createPost(input);
       notify(editPostId ? "帖子已更新" : "内容已发布");
       router.push("/guides/" + post.id);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "发布失败，请稍后重试");
-      notify("发布失败，请检查表单内容");
+      notify(editPostId ? "保存失败，请检查表单内容" : "发布失败，请检查表单内容");
     } finally {
       setPublishing(false);
     }
   }
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!loggedIn) { requestLogin(() => { void publish(); }); return; }
-    void publish();
+  function submit(values: PublishFormValues) {
+    if (!loggedIn) { requestLogin(() => { void publish(values); }); return; }
+    void publish(values);
   }
 
   if (editPostId && !loggedIn) return <><PageHeader section="社区 / 编辑" title="编辑内容" description="登录后才能修改你发布的内容。" /><div className="empty-state"><p>请先登录，再打开编辑页面。</p><button className="primary-button" onClick={() => requestLogin()} type="button">立即登录</button></div></>;
   if (loadingEdit) return <><PageHeader section="社区 / 编辑" title="编辑内容" description="正在读取这篇帖子…" /><div className="feed-status">正在载入帖子内容…</div></>;
-  return <><PageHeader section={editPostId ? "社区 / 编辑" : "社区 / 发布"} title={editPostId ? "编辑内容" : "发布内容"} description={editPostId ? "更新你的鸣潮攻略与实战心得。" : "分享攻略、心得和创作，让更多漂泊者看到你的答案。"} /><form className="publish-form" onSubmit={submit}><div className="publish-form-main"><label>标题<input required maxLength={200} onChange={(event) => setTitle(event.target.value)} placeholder="给这篇内容起一个清晰的标题" value={title} /></label><label>正文<textarea required onChange={(event) => setContent(event.target.value)} placeholder="写下你的攻略、发现或想和大家讨论的问题..." rows={11} value={content} /></label><input accept="image/png,image/jpeg,image/webp" className="file-input" onChange={changeImage} ref={fileRef} type="file" />{imageUrl ? <div className="upload-preview"><Image alt="待发布的图片预览" fill sizes="500px" src={imageUrl} unoptimized /><button onClick={() => { URL.revokeObjectURL(imageUrl); setImageUrl(""); setImageFile(null); if (fileRef.current) fileRef.current.value = ""; }} type="button" aria-label="移除图片"><X size={16} /></button></div> : <button className="upload-box" onClick={() => fileRef.current?.click()} type="button"><ImagePlus size={22} /><strong>{editPostId ? "追加图片" : "添加图片"}</strong><span>选择后{editPostId ? "保存时" : "发布时"}会上传到社区</span></button>}</div><aside className="publish-form-side"><label>内容类型<select onChange={(event) => setType(event.target.value)} value={type}><option>攻略</option><option>心得</option><option>同人</option><option>提问</option></select></label><label>添加标签<input onChange={(event) => setTags(event.target.value)} placeholder="例如：长离、声骸" value={tags} /></label><div className="publish-note"><Tag size={16} /><p>选择准确的标签，可以让内容更容易被需要的人找到。</p></div>{error && <p className="login-form-error" role="alert">{error}</p>}<button className="primary-button submit-button" disabled={publishing} type="submit"><Send size={16} />{publishing ? (editPostId ? "保存中…" : "发布中…") : (editPostId ? "保存修改" : "保存并发布")}</button></aside></form></>;
+  return <><PageHeader section={editPostId ? "社区 / 编辑" : "社区 / 发布"} title={editPostId ? "编辑内容" : "发布内容"} description={editPostId ? "更新你的鸣潮攻略与实战心得。" : "分享攻略、心得和创作，让更多漂泊者看到你的答案。"} /><form className="publish-form" onSubmit={(event) => { void handleSubmit(submit)(event); }}><div className="publish-form-main"><label>标题<input maxLength={200} placeholder="给这篇内容起一个清晰的标题" {...register("title")} />{errors.title && <span className="field-error">{errors.title.message}</span>}</label><label>正文<textarea placeholder="写下你的攻略、发现或想和大家讨论的问题..." rows={11} {...register("content")} />{errors.content && <span className="field-error">{errors.content.message}</span>}</label><input accept="image/png,image/jpeg,image/webp" className="file-input" onChange={changeImage} ref={fileRef} type="file" />{imageUrl ? <div className="upload-preview"><Image alt="待发布的图片预览" fill sizes="500px" src={imageUrl} unoptimized /><button onClick={() => { URL.revokeObjectURL(imageUrl); setImageUrl(""); setImageFile(null); if (fileRef.current) fileRef.current.value = ""; }} type="button" aria-label="移除图片"><X size={16} /></button></div> : <button className="upload-box" onClick={() => fileRef.current?.click()} type="button"><ImagePlus size={22} /><strong>{editPostId ? "追加图片" : "添加图片"}</strong><span>选择后{editPostId ? "保存时" : "发布时"}会上传到社区</span></button>}</div><aside className="publish-form-side"><label>内容类型<select {...register("type")}><option>攻略</option><option>心得</option><option>同人</option><option>提问</option></select>{errors.type && <span className="field-error">{errors.type.message}</span>}</label><label>添加标签<input placeholder="例如：长离、声骸" {...register("tags")} />{errors.tags && <span className="field-error">{errors.tags.message}</span>}</label><div className="publish-note"><Tag size={16} /><p>选择准确的标签，可以让内容更容易被需要的人找到。</p></div>{error && <p className="login-form-error" role="alert">{error}</p>}<button className="primary-button submit-button" disabled={publishing} type="submit"><Send size={16} />{publishing ? (editPostId ? "保存中…" : "发布中…") : (editPostId ? "保存修改" : "保存并发布")}</button></aside></form></>;
 }
 
 export function PublishPage() {

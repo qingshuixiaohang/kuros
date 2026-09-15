@@ -196,9 +196,20 @@ function PostComments({ postId, authorName, onReport }: { postId: string; author
   </section>;
 }
 
+function isSafeMarkdownImageUrl(value: string) {
+  return value.startsWith("/media/") || /^https?:\/\//i.test(value);
+}
+
+function MarkdownImage({ src, alt }: { src: string; alt: string }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img alt={alt} loading="lazy" src={src} />;
+}
+
 function renderMarkdown(content: string): ReactNode[] {
   return content.split(/\n\s*\n/).map((block, index) => {
     const lines = block.split("\n");
+    const image = block.match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+["'][^)]*["'])?\)$/);
+    if (image && isSafeMarkdownImageUrl(image[2])) return <figure className="post-markdown-image" key={index}><MarkdownImage alt={image[1] || "帖子配图"} src={image[2]} /></figure>;
     if (lines.every((line) => line.startsWith("- "))) return <ul key={index}>{lines.map((line) => <li key={line}>{line.slice(2)}</li>)}</ul>;
     if (block.startsWith("## ")) return <h2 key={index}>{block.slice(3)}</h2>;
     return <p key={index}>{block.replace(/^# /, "")}</p>;
