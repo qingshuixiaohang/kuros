@@ -410,6 +410,27 @@ class KurosBackendApplicationTests {
                 .andExpect(jsonPath("$.data.author.nickname").value("漂泊者0008"));
     }
 
+    @Test
+    void 发布帖子会校验必填字段和内容类型() throws Exception {
+        Cookie sessionCookie = login("13800000008");
+
+        mockMvc.perform(post("/api/v1/posts")
+                        .cookie(sessionCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\" \",\"content\":\"正文\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("POST_TITLE_REQUIRED"));
+
+        mockMvc.perform(post("/api/v1/posts")
+                        .cookie(sessionCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"UNKNOWN\",\"category\":\"配队攻略\",\"title\":\"测试帖子\",\"content\":\"正文\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("POST_TYPE_INVALID"));
+    }
+
     private Cookie login(String phone) throws Exception {
         mockMvc.perform(post("/api/v1/auth/code")
                         .contentType(APPLICATION_JSON)

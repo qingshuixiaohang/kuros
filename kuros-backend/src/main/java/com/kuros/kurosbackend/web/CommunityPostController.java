@@ -6,6 +6,7 @@ import com.kuros.kurosbackend.api.PageResult;
 import com.kuros.kurosbackend.api.PostDetailResponse;
 import com.kuros.kurosbackend.api.PostSummaryResponse;
 import com.kuros.kurosbackend.service.CommunityPostService;
+import com.kuros.kurosbackend.service.PostPublishingService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -24,9 +25,9 @@ import java.util.List;
 public class CommunityPostController {
 
     private final CommunityPostService postService;
-    private final com.kuros.kurosbackend.service.PostPublishingService publishingService;
+    private final PostPublishingService publishingService;
 
-    public CommunityPostController(CommunityPostService postService, com.kuros.kurosbackend.service.PostPublishingService publishingService) {
+    public CommunityPostController(CommunityPostService postService, PostPublishingService publishingService) {
         this.postService = postService;
         this.publishingService = publishingService;
     }
