@@ -20,7 +20,7 @@ export function CommunityFollowButton({ targetUserId, fallbackKey, className = "
     requestLogin(() => {
       if (!targetUserId) { toggleFollow(fallbackKey); return; }
       void (isFollowed ? unfollowUser(targetUserId) : followUser(targetUserId))
-        .then(setFollow)
+        .then((result) => { setFollow(result); toggleFollow(fallbackKey); })
         .catch((error) => notify(error instanceof Error ? error.message : "关注操作失败，请稍后重试"));
     });
   }
