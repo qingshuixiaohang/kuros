@@ -50,7 +50,7 @@ function ProfileHero({ overview }: { overview: ProfileOverview }) {
 
 function ProfilePostRow({ post }: { post: ApiPost }) {
   const slug = postSlug(post.id);
-  return <Link className="profile-post-row" href={`/guides/${slug}`}><div className="author-avatar author-avatar--dark">{post.author.nickname.slice(0, 1)}</div><div className="profile-post-row-copy"><div className="profile-post-row-meta"><strong>{post.author.nickname}</strong><time>{formatDate(post.publishedAt)} · 鸣潮</time></div><h3>{post.title}</h3><p>{post.excerpt}</p><div className="profile-post-row-stats"><span>{post.category}</span><span>{post.viewCount} 阅读</span><span>{post.commentCount} 评论</span></div></div><div className="profile-post-thumbnail"><Image alt="" fill sizes="140px" src={coverByGuide[slug] ?? "/art/guide-coast.png"} /></div><ChevronRight className="profile-row-arrow" size={17} /></Link>;
+  return <Link className="profile-post-row" href={`/guides/${slug}`} rel="noopener noreferrer" target="_blank"><div className="author-avatar author-avatar--dark">{post.author.nickname.slice(0, 1)}</div><div className="profile-post-row-copy"><div className="profile-post-row-meta"><strong>{post.author.nickname}</strong><time>{formatDate(post.publishedAt)} · 鸣潮</time></div><h3>{post.title}</h3><p>{post.excerpt}</p><div className="profile-post-row-stats"><span>{post.category}</span><span>{post.viewCount} 阅读</span><span>{post.commentCount} 评论</span></div></div><div className="profile-post-thumbnail"><Image alt="" fill sizes="140px" src={coverByGuide[slug] ?? "/art/guide-coast.png"} /></div><ChevronRight className="profile-row-arrow" size={17} /></Link>;
 }
 
 function ProfileEmpty({ icon: Icon, title, description }: { icon: LucideIcon; title: string; description: string }) {
@@ -58,7 +58,7 @@ function ProfileEmpty({ icon: Icon, title, description }: { icon: LucideIcon; ti
 }
 
 function CommentRow({ comment }: { comment: ProfileComment }) {
-  return <Link href={`/guides/${postSlug(comment.postId)}#comments`}><MessageCircle size={17} /><div><p className={comment.deleted ? "is-deleted" : ""}>{comment.content}</p><small>回复于《{comment.postTitle}》 · {formatDate(comment.createdAt)}</small></div><ChevronRight size={16} /></Link>;
+  return <Link href={`/guides/${postSlug(comment.postId)}#comments`} rel="noopener noreferrer" target="_blank"><MessageCircle size={17} /><div><p className={comment.deleted ? "is-deleted" : ""}>{comment.content}</p><small>回复于《{comment.postTitle}》 · {formatDate(comment.createdAt)}</small></div><ChevronRight size={16} /></Link>;
 }
 
 function ProfilePanel({ activeTab, overview }: { activeTab: ProfileTab; overview: ProfileOverview }) {
