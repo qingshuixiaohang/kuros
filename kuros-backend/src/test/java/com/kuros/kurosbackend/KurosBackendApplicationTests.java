@@ -464,6 +464,76 @@ class KurosBackendApplicationTests {
                 .andExpect(jsonPath("$.code").value("IMAGE_TOO_LARGE"));
     }
 
+    @Test
+    @DirtiesContext
+    void 用户可以举报内容且同一目标不能重复提交待处理举报() throws Exception {
+        mockMvc.perform(post("/api/v1/reports/POST/10000000-0000-0000-0000-000000000002")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"reason\":\"SPAM\"}"))
+                .andExpect(status().isUnauthorized());
+
+        Cookie userCookie = login("13800000008");
+        mockMvc.perform(post("/api/v1/reports/POST/10000000-0000-0000-0000-000000000002")
+                        .cookie(userCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"reason\":\"SPAM\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
+
+        mockMvc.perform(post("/api/v1/reports/POST/10000000-0000-0000-0000-000000000002")
+                        .cookie(userCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"reason\":\"ABUSE\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REPORT_DUPLICATE"));
+    }
+
+    @Test
+    @DirtiesContext
+    void 管理员可以处理举报并处置帖子() throws Exception {
+        Cookie userCookie = login("13800000008");
+        var created = mockMvc.perform(post("/api/v1/reports/POST/10000000-0000-0000-0000-000000000002")
+                        .cookie(userCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"reason\":\"MISINFORMATION\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String reportBody = created.getResponse().getContentAsString();
+        int idStart = reportBody.indexOf("\"id\":\"") + 6;
+        String reportId = reportBody.substring(idStart, reportBody.indexOf('"', idStart));
+
+        Cookie normalCookie = login("13800000009");
+        mockMvc.perform(get("/api/v1/admin/reports").cookie(normalCookie))
+                .andExpect(status().isForbidden());
+
+        Cookie adminCookie = login("13800000001");
+        mockMvc.perform(get("/api/v1/admin/reports").cookie(adminCookie)
+                        .param("status", "PENDING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].id").value(reportId));
+
+        mockMvc.perform(post("/api/v1/admin/reports/" + reportId + "/handle")
+                        .cookie(adminCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"action\":\"CONFIRM\",\"note\":\"确认内容不实\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CONFIRMED"));
+
+        mockMvc.perform(get("/api/v1/posts/10000000-0000-0000-0000-000000000002"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/v1/admin/reports/" + reportId + "/handle")
+                        .cookie(adminCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"action\":\"REJECT\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REPORT_ALREADY_HANDLED"));
+    }
+
     private Cookie login(String phone) throws Exception {
         mockMvc.perform(post("/api/v1/auth/code")
                         .contentType(APPLICATION_JSON)

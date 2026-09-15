@@ -104,6 +104,11 @@ public class CommunityPost {
         this.tags.addAll(tags);
     }
 
+    public void delete(LocalDateTime now) {
+        this.status = PostStatus.DELETED;
+        this.updatedAt = now;
+    }
+
     public String getId() {
         return id;
     }
