@@ -46,6 +46,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/posts/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users/*/posts").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint((request, response, exception) -> {
                     response.setStatus(401);

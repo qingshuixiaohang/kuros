@@ -70,6 +70,26 @@ public class CommunityPostService {
         return toDetail(post, author);
     }
 
+    public PageResult<PostSummaryResponse> findPublishedByAuthor(String authorId, int page, int pageSize) {
+        int normalizedPage = Math.max(page, 1);
+        int normalizedPageSize = Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE);
+        Pageable pageable = PageRequest.of(normalizedPage - 1, normalizedPageSize, Sort.by(Sort.Order.desc("publishedAt")));
+        Page<CommunityPost> posts = postRepository.findByAuthorIdAndStatus(authorId, PostStatus.PUBLISHED, pageable);
+        Map<String, CommunityUser> authors = authorsById(posts.getContent());
+        List<PostSummaryResponse> items = posts.getContent().stream()
+                .map(post -> toSummary(post, authors.get(post.getAuthorId())))
+                .toList();
+        return new PageResult<>(items, new PageMeta(normalizedPage, normalizedPageSize, posts.getTotalElements(), posts.getTotalPages()));
+    }
+
+    public long publishedPostCount(String authorId) {
+        return postRepository.countByAuthorIdAndStatus(authorId, PostStatus.PUBLISHED);
+    }
+
+    public long publishedPostLikeCount(String authorId) {
+        return postRepository.sumLikeCountByAuthorIdAndStatus(authorId, PostStatus.PUBLISHED);
+    }
+
     private Sort sortOf(String sort) {
         if ("hot".equalsIgnoreCase(sort)) {
             return Sort.by(Sort.Order.desc("likeCount"), Sort.Order.desc("commentCount"), Sort.Order.desc("publishedAt"));

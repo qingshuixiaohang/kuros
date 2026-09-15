@@ -30,4 +30,11 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, St
     );
 
     Optional<CommunityPost> findByIdAndStatus(String id, PostStatus status);
+
+    Page<CommunityPost> findByAuthorIdAndStatus(String authorId, PostStatus status, Pageable pageable);
+
+    long countByAuthorIdAndStatus(String authorId, PostStatus status);
+
+    @Query("select coalesce(sum(p.likeCount), 0) from CommunityPost p where p.authorId = :authorId and p.status = :status")
+    long sumLikeCountByAuthorIdAndStatus(@Param("authorId") String authorId, @Param("status") PostStatus status);
 }
