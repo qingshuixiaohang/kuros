@@ -5,8 +5,9 @@ import Link from "next/link";
 import { ArrowLeft, Bookmark, Clock3, Eye, Flag, Heart, MessageCircle, Reply, Share2, ThumbsUp } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
+import { CommunityFollowButton } from "@/components/community/community-follow-button";
 import { useCommunityDemo } from "@/components/community/community-interactions";
-import { createComment, deleteComment, favoritePost, fetchComments, fetchPost, fetchPostInteractions, fetchUserFollow, followUser, likePost, unfavoritePost, unlikePost, unfollowUser, type ApiComment, type PostInteraction, type UserFollow } from "@/lib/api";
+import { createComment, deleteComment, favoritePost, fetchComments, fetchPost, fetchPostInteractions, likePost, unfavoritePost, unlikePost, type ApiComment, type PostInteraction } from "@/lib/api";
 import { guides } from "@/lib/mock";
 import type { Guide } from "@/types/community";
 
@@ -102,32 +103,12 @@ function PostReactionRail({ guide, postId }: { guide: Guide; postId: string }) {
   </aside>;
 }
 
-function FollowButton({ targetUserId, fallbackKey, className = "" }: { targetUserId?: string; fallbackKey: string; className?: string }) {
-  const { loggedIn, followed, requestLogin, toggleFollow, notify } = useCommunityDemo();
-  const [follow, setFollow] = useState<UserFollow | null>(null);
-  useEffect(() => {
-    if (!loggedIn || !targetUserId) return;
-    let active = true;
-    fetchUserFollow(targetUserId).then((result) => { if (active) setFollow(result); }).catch(() => { /* Local fallback keeps the button usable offline. */ });
-    return () => { active = false; };
-  }, [loggedIn, targetUserId]);
-  const isFollowed = loggedIn && targetUserId ? follow?.followed === true : followed.includes(fallbackKey);
-  function toggle() {
-    requestLogin(() => {
-      if (!targetUserId) { toggleFollow(fallbackKey); return; }
-      const action = isFollowed ? unfollowUser : followUser;
-      void action(targetUserId).then(setFollow).catch((error) => notify(error instanceof Error ? error.message : "关注操作失败，请稍后重试"));
-    });
-  }
-  return <button className={`${className} ${isFollowed ? "is-followed" : ""}`.trim()} onClick={toggle} type="button">{isFollowed ? "已关注" : "＋关注"}</button>;
-}
-
 function PostAuthorCard({ guide, authorId }: { guide: Guide; authorId?: string }) {
   return <aside className="post-context-rail">
     <section className="post-author-card">
       <div className="post-author-card-top"><div className={"author-avatar author-avatar--" + guide.avatarTone}>{guide.authorMark}</div><div><strong>{guide.author}</strong><span><Eye size={13} /> {guide.views} 阅读</span></div></div>
       <p>一起来记录鸣潮里的配队、探索和实战心得。</p>
-      <FollowButton className="" fallbackKey={guide.author} targetUserId={authorId} />
+      <CommunityFollowButton fallbackKey={guide.author} targetUserId={authorId} />
     </section>
     <section className="post-topic-card">
       <h2>分区</h2>
@@ -260,7 +241,7 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
     <PostReactionRail guide={guide} postId={apiPostId} />
     <article className="post-detail-page">
       <Link className="back-link" href="/guides"><ArrowLeft size={15} />返回攻略列表</Link>
-      <header className="post-detail-heading"><div className="post-detail-kicker"><span className="guide-type">{guide.category}</span><span>原创</span><time>{guide.publishedAt}</time></div><h1>{guide.title}</h1><p>{guide.excerpt}</p><div className="detail-author"><div className={"author-avatar author-avatar--" + guide.avatarTone}>{guide.authorMark}</div><div><strong>{guide.author}</strong><small>攻略作者 · {guide.views} 阅读</small></div><FollowButton className="follow-button" fallbackKey={guide.author} targetUserId={authorId} /></div></header>
+      <header className="post-detail-heading"><div className="post-detail-kicker"><span className="guide-type">{guide.category}</span><span>原创</span><time>{guide.publishedAt}</time></div><h1>{guide.title}</h1><p>{guide.excerpt}</p><div className="detail-author"><div className={"author-avatar author-avatar--" + guide.avatarTone}>{guide.authorMark}</div><div><strong>{guide.author}</strong><small>攻略作者 · {guide.views} 阅读</small></div><CommunityFollowButton className="follow-button" fallbackKey={guide.author} targetUserId={authorId} /></div></header>
       <div className="post-cover"><Image alt={guide.title + "配图"} fill priority sizes="(max-width: 900px) 100vw, 820px" src={coverByGuide[guide.id] ?? coverByGuide[slug] ?? "/art/guide-sword.png"} /></div>
       <GuideArticle content={guide.content} />
       <div className="post-detail-footer"><span>阅读 {guide.views}</span><button type="button" onClick={() => notify("已收到反馈，感谢帮助维护社区。")}><Flag size={14} />举报</button><button type="button" onClick={() => notify("链接已复制，可以分享给你的队友。")}><Share2 size={14} />分享</button></div>
