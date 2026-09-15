@@ -1,5 +1,5 @@
 CREATE TABLE users (
-    id CHAR(36) NOT NULL PRIMARY KEY,
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
     phone VARCHAR(32) NOT NULL UNIQUE,
     nickname VARCHAR(64) NOT NULL,
     avatar_url VARCHAR(512),
@@ -10,8 +10,8 @@ CREATE TABLE users (
 );
 
 CREATE TABLE posts (
-    id CHAR(36) NOT NULL PRIMARY KEY,
-    author_id CHAR(36) NOT NULL,
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
+    author_id VARCHAR(36) NOT NULL,
     post_type VARCHAR(32) NOT NULL,
     category VARCHAR(64) NOT NULL,
     title VARCHAR(200) NOT NULL,
@@ -29,13 +29,13 @@ CREATE TABLE posts (
 );
 
 CREATE TABLE content_tags (
-    id CHAR(36) NOT NULL PRIMARY KEY,
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
     name VARCHAR(64) NOT NULL UNIQUE
 );
 
 CREATE TABLE post_tags (
-    post_id CHAR(36) NOT NULL,
-    tag_id CHAR(36) NOT NULL,
+    post_id VARCHAR(36) NOT NULL,
+    tag_id VARCHAR(36) NOT NULL,
     PRIMARY KEY (post_id, tag_id),
     CONSTRAINT fk_post_tags_post FOREIGN KEY (post_id) REFERENCES posts (id),
     CONSTRAINT fk_post_tags_tag FOREIGN KEY (tag_id) REFERENCES content_tags (id)
