@@ -48,6 +48,8 @@ export type ProfileOverview = {
   stats: { postCount: number; likeCount: number; commentCount: number };
   posts: { items: ApiPost[]; meta?: ApiPageMeta };
   comments: { items: ProfileComment[]; meta?: ApiPageMeta };
+  favorites: { items: ApiPost[]; meta?: ApiPageMeta };
+  following: { items: PublicProfile[]; meta?: ApiPageMeta };
 };
 
 export class ApiError extends Error {

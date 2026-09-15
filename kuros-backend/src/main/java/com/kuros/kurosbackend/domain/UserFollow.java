@@ -32,4 +32,6 @@ public class UserFollow {
         this.followedId = followedId;
         this.createdAt = createdAt;
     }
+
+    public String getFollowedId() { return followedId; }
 }

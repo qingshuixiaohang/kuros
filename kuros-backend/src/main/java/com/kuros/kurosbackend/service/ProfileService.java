@@ -14,6 +14,8 @@ import com.kuros.kurosbackend.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.repository.CommunityCommentRepository;
 import com.kuros.kurosbackend.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.repository.CommunityUserRepository;
+import com.kuros.kurosbackend.repository.PostFavoriteRepository;
+import com.kuros.kurosbackend.repository.UserFollowRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -33,17 +35,23 @@ public class ProfileService {
     private final CommunityPostRepository postRepository;
     private final CommunityCommentRepository commentRepository;
     private final CommunityPostService postService;
+    private final PostFavoriteRepository favoriteRepository;
+    private final UserFollowRepository followRepository;
 
     public ProfileService(
             CommunityUserRepository userRepository,
             CommunityPostRepository postRepository,
             CommunityCommentRepository commentRepository,
-            CommunityPostService postService
+            CommunityPostService postService,
+            PostFavoriteRepository favoriteRepository,
+            UserFollowRepository followRepository
     ) {
         this.userRepository = userRepository;
         this.postRepository = postRepository;
         this.commentRepository = commentRepository;
         this.postService = postService;
+        this.favoriteRepository = favoriteRepository;
+        this.followRepository = followRepository;
     }
 
     public PublicProfileResponse findPublic(String userId) {
@@ -60,14 +68,32 @@ public class ProfileService {
         CommunityUser user = findUser(userId);
         PageResult<com.kuros.kurosbackend.api.PostSummaryResponse> posts = postService.findPublishedByAuthor(userId, page, pageSize);
         PageResult<ProfileCommentResponse> comments = findOwnComments(userId, page, pageSize);
+        PageResult<com.kuros.kurosbackend.api.PostSummaryResponse> favorites = postService.findPublishedByIds(favoriteRepository.findVisiblePostIds(userId, PostStatus.PUBLISHED, pageRequest(page, pageSize)));
+        PageResult<PublicProfileResponse> following = findFollowing(userId, page, pageSize);
         long postCount = postService.publishedPostCount(userId);
         long likeCount = postService.publishedPostLikeCount(userId);
         return new ProfileOverviewResponse(
                 toPublic(user),
                 new ProfileOverviewResponse.ProfileStats(postCount, likeCount, comments.meta().totalItems()),
                 posts,
-                comments
+                comments,
+                favorites,
+                following
         );
+    }
+
+    private PageResult<PublicProfileResponse> findFollowing(String userId, int page, int pageSize) {
+        Page<com.kuros.kurosbackend.domain.UserFollow> follows = followRepository.findByFollowerIdOrderByCreatedAtDesc(userId, pageRequest(page, pageSize));
+        java.util.Map<String, CommunityUser> usersById = userRepository.findAllById(follows.getContent().stream().map(com.kuros.kurosbackend.domain.UserFollow::getFollowedId).toList())
+                .stream().collect(java.util.stream.Collectors.toMap(CommunityUser::getId, user -> user));
+        List<PublicProfileResponse> items = follows.getContent().stream().map(com.kuros.kurosbackend.domain.UserFollow::getFollowedId).map(usersById::get).filter(java.util.Objects::nonNull).map(this::toPublic).toList();
+        return new PageResult<>(items, new PageMeta(follows.getNumber() + 1, follows.getSize(), follows.getTotalElements(), follows.getTotalPages()));
+    }
+
+    private Pageable pageRequest(int page, int pageSize) {
+        int normalizedPage = Math.max(page, 1);
+        int normalizedPageSize = Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE);
+        return PageRequest.of(normalizedPage - 1, normalizedPageSize);
     }
 
     private PageResult<ProfileCommentResponse> findOwnComments(String userId, int page, int pageSize) {

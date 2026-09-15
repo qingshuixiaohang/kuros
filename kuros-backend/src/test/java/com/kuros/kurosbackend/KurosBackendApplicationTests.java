@@ -224,6 +224,24 @@ class KurosBackendApplicationTests {
 
     @Test
     @DirtiesContext
+    void 个人中心返回收藏帖子和关注用户() throws Exception {
+        Cookie sessionCookie = login("13800000008");
+
+        mockMvc.perform(post("/api/v1/posts/10000000-0000-0000-0000-000000000001/interactions/favorite").cookie(sessionCookie).with(csrf()))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/users/10000000-0000-0000-0000-000000000002/follow").cookie(sessionCookie).with(csrf()))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/users/me/profile").cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.favorites.items", hasSize(1)))
+                .andExpect(jsonPath("$.data.favorites.items[0].id").value("10000000-0000-0000-0000-000000000001"))
+                .andExpect(jsonPath("$.data.following.items", hasSize(1)))
+                .andExpect(jsonPath("$.data.following.items[0].nickname").value("无音区夜行者"));
+    }
+
+    @Test
+    @DirtiesContext
     void 登录用户点赞和取消点赞帖子且重复操作幂等() throws Exception {
         Cookie sessionCookie = login("13800000008");
         String interactionPath = "/api/v1/posts/10000000-0000-0000-0000-000000000001/interactions";

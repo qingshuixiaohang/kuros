@@ -59,6 +59,10 @@ function ProfileEmpty({ icon: Icon, title, description }: { icon: LucideIcon; ti
   return <div className="profile-empty-panel"><Icon size={30} /><strong>{title}</strong><span>{description}</span></div>;
 }
 
+function FollowingRow({ profile }: { profile: ProfileOverview["following"]["items"][number] }) {
+  return <Link className="profile-following-row" href={`/search?q=${encodeURIComponent(profile.nickname)}`}><div className="author-avatar author-avatar--blue">{profile.nickname.slice(0, 1)}</div><div><strong>{profile.nickname}</strong><span>{profile.bio || "鸣潮漂泊者"}</span></div><small>{profile.postCount} 帖子 · {profile.likeCount} 获赞</small><ChevronRight size={16} /></Link>;
+}
+
 function CommentRow({ comment }: { comment: ProfileComment }) {
   return <Link href={`/guides/${postSlug(comment.postId)}#comments`} rel="noopener noreferrer" target="_blank"><MessageCircle size={17} /><div><p className={comment.deleted ? "is-deleted" : ""}>{comment.content}</p><small>回复于《{comment.postTitle}》 · {formatDate(comment.createdAt)}</small></div><ChevronRight size={16} /></Link>;
 }
@@ -66,8 +70,8 @@ function CommentRow({ comment }: { comment: ProfileComment }) {
 function ProfilePanel({ activeTab, overview }: { activeTab: ProfileTab; overview: ProfileOverview }) {
   const title = profileTabs.find((item) => item.key === activeTab)?.label ?? "个人中心";
   if (activeTab === "comments") return <section className="profile-panel"><header className="profile-panel-heading"><div><h2>评论</h2><p>你在社区留下的讨论足迹。</p></div><span>{overview.comments.meta?.totalItems ?? overview.comments.items.length} 条记录</span></header>{overview.comments.items.length > 0 ? <div className="profile-comment-list">{overview.comments.items.map((comment) => <CommentRow comment={comment} key={comment.id} />)}</div> : <ProfileEmpty icon={MessageCircle} title="还没有评论记录" description="参与一次讨论，你的想法会留在这里。" />}</section>;
-  if (activeTab === "favorites") return <section className="profile-panel"><header className="profile-panel-heading"><div><h2>收藏</h2><p>收藏的攻略与帖子会集中保存在这里。</p></div></header><ProfileEmpty icon={Bookmark} title="还没有收藏内容" description="看到值得反复查看的配队和声骸思路，可以收藏起来。" /></section>;
-  if (activeTab === "following") return <section className="profile-panel"><header className="profile-panel-heading"><div><h2>关注</h2><p>你关注的创作者和他们最近的内容。</p></div></header><ProfileEmpty icon={UserRound} title="还没有关注创作者" description="关注你喜欢的攻略作者，方便回来查看更新。" /></section>;
+  if (activeTab === "favorites") return <section className="profile-panel"><header className="profile-panel-heading"><div><h2>收藏</h2><p>收藏的攻略与帖子会集中保存在这里。</p></div><span>{overview.favorites.meta?.totalItems ?? overview.favorites.items.length} 条记录</span></header>{overview.favorites.items.length > 0 ? <div className="profile-post-list">{overview.favorites.items.map((post) => <ProfilePostRow key={post.id} post={post} />)}</div> : <ProfileEmpty icon={Bookmark} title="还没有收藏内容" description="看到值得反复查看的配队和声骸思路，可以收藏起来。" />}</section>;
+  if (activeTab === "following") return <section className="profile-panel"><header className="profile-panel-heading"><div><h2>关注</h2><p>你关注的创作者和他们最近的内容。</p></div><span>{overview.following.meta?.totalItems ?? overview.following.items.length} 位创作者</span></header>{overview.following.items.length > 0 ? <div className="profile-following-list">{overview.following.items.map((profile) => <FollowingRow key={profile.id} profile={profile} />)}</div> : <ProfileEmpty icon={UserRound} title="还没有关注创作者" description="关注你喜欢的攻略作者，方便回来查看更新。" />}</section>;
   if (activeTab === "fans") return <section className="profile-panel"><header className="profile-panel-heading"><div><h2>粉丝</h2><p>关注你内容的漂泊者会出现在这里。</p></div></header><ProfileEmpty icon={UsersRound} title="还没有新的粉丝记录" description="持续分享你的配队和探索心得吧。" /></section>;
   return <section className="profile-panel"><header className="profile-panel-heading"><div><h2>{title}</h2><p>你发布过的内容与最近的更新。</p></div><span>{overview.posts.meta?.totalItems ?? overview.posts.items.length} 条记录</span></header>{overview.posts.items.length > 0 ? <div className="profile-post-list">{overview.posts.items.map((post) => <ProfilePostRow key={post.id} post={post} />)}</div> : <ProfileEmpty icon={FileText} title="还没有公开帖子" description="把你的鸣潮配队、声骸和探索心得分享出来吧。" />}</section>;
 }
