@@ -162,7 +162,7 @@ button, input { font: inherit; } button { border: 0; cursor: pointer; } a { colo
 .post-detail-footer span { margin-right: auto; }
 .post-detail-footer button { display: inline-flex; align-items: center; gap: 5px; background: transparent; color: inherit; font-size: 11px; }
 .post-detail-footer button:hover { color: var(--cyan); }
-.post-context-rail { display: grid; gap: 13px; }
+.post-context-rail { position: sticky; top: 88px; align-self: start; display: grid; gap: 13px; }
 .post-author-card, .post-topic-card { padding: 19px 18px; border-radius: 9px; background: var(--white); }
 .post-author-card-top { display: flex; align-items: center; gap: 10px; }
 .post-author-card-top > div:last-child { display: grid; gap: 5px; }
