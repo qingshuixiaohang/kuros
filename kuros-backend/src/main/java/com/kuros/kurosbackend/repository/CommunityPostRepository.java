@@ -5,6 +5,7 @@ import com.kuros.kurosbackend.domain.PostStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -37,4 +38,20 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, St
 
     @Query("select coalesce(sum(p.likeCount), 0) from CommunityPost p where p.authorId = :authorId and p.status = :status")
     long sumLikeCountByAuthorIdAndStatus(@Param("authorId") String authorId, @Param("status") PostStatus status);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update CommunityPost p set p.likeCount = p.likeCount + 1 where p.id = :postId")
+    int incrementLikeCount(@Param("postId") String postId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update CommunityPost p set p.likeCount = case when p.likeCount > 0 then p.likeCount - 1 else 0 end where p.id = :postId")
+    int decrementLikeCount(@Param("postId") String postId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update CommunityPost p set p.favoriteCount = p.favoriteCount + 1 where p.id = :postId")
+    int incrementFavoriteCount(@Param("postId") String postId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update CommunityPost p set p.favoriteCount = case when p.favoriteCount > 0 then p.favoriteCount - 1 else 0 end where p.id = :postId")
+    int decrementFavoriteCount(@Param("postId") String postId);
 }

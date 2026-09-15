@@ -224,6 +224,82 @@ class KurosBackendApplicationTests {
 
     @Test
     @DirtiesContext
+    void 登录用户点赞和取消点赞帖子且重复操作幂等() throws Exception {
+        Cookie sessionCookie = login("13800000008");
+        String interactionPath = "/api/v1/posts/10000000-0000-0000-0000-000000000001/interactions";
+
+        mockMvc.perform(get(interactionPath).cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.liked").value(false))
+                .andExpect(jsonPath("$.data.likeCount").value(3700));
+
+        mockMvc.perform(post(interactionPath + "/like").cookie(sessionCookie).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.liked").value(true))
+                .andExpect(jsonPath("$.data.likeCount").value(3701));
+
+        mockMvc.perform(post(interactionPath + "/like").cookie(sessionCookie).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.liked").value(true))
+                .andExpect(jsonPath("$.data.likeCount").value(3701));
+
+        mockMvc.perform(delete(interactionPath + "/like").cookie(sessionCookie).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.liked").value(false))
+                .andExpect(jsonPath("$.data.likeCount").value(3700));
+    }
+
+    @Test
+    @DirtiesContext
+    void 登录用户收藏和取消收藏帖子且重复操作幂等() throws Exception {
+        Cookie sessionCookie = login("13800000008");
+        String interactionPath = "/api/v1/posts/10000000-0000-0000-0000-000000000001/interactions";
+
+        mockMvc.perform(post(interactionPath + "/favorite").cookie(sessionCookie).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.favorited").value(true))
+                .andExpect(jsonPath("$.data.favoriteCount").value(1201));
+
+        mockMvc.perform(post(interactionPath + "/favorite").cookie(sessionCookie).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.favorited").value(true))
+                .andExpect(jsonPath("$.data.favoriteCount").value(1201));
+
+        mockMvc.perform(delete(interactionPath + "/favorite").cookie(sessionCookie).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.favorited").value(false))
+                .andExpect(jsonPath("$.data.favoriteCount").value(1200));
+    }
+
+    @Test
+    @DirtiesContext
+    void 登录用户可以关注和取消关注其他用户且重复操作幂等() throws Exception {
+        Cookie sessionCookie = login("13800000008");
+        String followPath = "/api/v1/users/10000000-0000-0000-0000-000000000002/follow";
+
+        mockMvc.perform(get(followPath).cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.followed").value(false))
+                .andExpect(jsonPath("$.data.followerCount").value(0));
+
+        mockMvc.perform(post(followPath).cookie(sessionCookie).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.followed").value(true))
+                .andExpect(jsonPath("$.data.followerCount").value(1));
+
+        mockMvc.perform(post(followPath).cookie(sessionCookie).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.followed").value(true))
+                .andExpect(jsonPath("$.data.followerCount").value(1));
+
+        mockMvc.perform(delete(followPath).cookie(sessionCookie).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.followed").value(false))
+                .andExpect(jsonPath("$.data.followerCount").value(0));
+    }
+
+    @Test
+    @DirtiesContext
     void 登录用户可以发表评论但不能创建二级回复() throws Exception {
         Cookie sessionCookie = login("13800000008");
         String commentsPath = "/api/v1/posts/10000000-0000-0000-0000-000000000001/comments";

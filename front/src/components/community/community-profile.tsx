@@ -37,15 +37,17 @@ function postSlug(postId: string) { return slugByPostId[postId] ?? postId; }
 function formatDate(value: string) { return value.length >= 10 ? value.slice(5, 10).replace("-", "/") : value; }
 function safeAvatar(avatarUrl: string | null) { return avatarUrl?.startsWith("/") ? avatarUrl : fallbackAvatar; }
 
+function ProfileFollowButton() {
+  return <button className="profile-follow-button is-followed" disabled type="button">我的主页</button>;
+}
+
 function ProfileNavigation({ activeTab }: { activeTab: ProfileTab }) {
   return <aside className="profile-navigation"><div className="profile-navigation-heading"><UserRound size={19} /><h2>个人中心</h2></div><nav aria-label="个人中心导航">{profileTabs.map(({ key, label, icon: Icon }) => <Link className={activeTab === key ? "is-active" : ""} href={`/profile?tab=${key}`} key={key}><Icon size={18} strokeWidth={1.8} /><span>{label}</span>{activeTab === key && <ChevronRight size={15} />}</Link>)}</nav></aside>;
 }
 
 function ProfileHero({ overview }: { overview: ProfileOverview }) {
-  const { followed, toggleFollow } = useCommunityDemo();
   const { profile, stats } = overview;
-  const isFollowed = followed.includes(profile.id);
-  return <section className="profile-hero"><div className="profile-identity"><div className="profile-avatar"><Image alt={`${profile.nickname}头像`} fill sizes="116px" src={safeAvatar(profile.avatarUrl)} /></div><div className="profile-copy"><div className="profile-name-line"><h1>{profile.nickname}</h1>{profile.postCount > 0 && <span className="profile-author-mark"><Award size={13} />攻略作者</span>}</div><p className="profile-location"><MapPin size={14} />鸣潮 · 漂泊者档案</p><div className="profile-stat-line"><span><b>{stats.postCount}</b>帖子</span><span><b>{stats.commentCount}</b>评论</span><span><b>{stats.likeCount}</b>获赞</span></div><p className="profile-bio">{profile.bio || "还没有留下个人介绍。"}</p><button className={`profile-follow-button ${isFollowed ? "is-followed" : ""}`} onClick={() => toggleFollow(profile.id)} type="button">{isFollowed ? "已关注" : "关注"}</button></div></div><div className="profile-game-card"><div className="profile-game-card-top"><div className="profile-mini-avatar">潮</div><div><strong>{profile.nickname}</strong><small>鸣潮社区档案</small></div><span className="profile-game-wave">鸣潮</span></div><div className="profile-game-stats"><span><b>{stats.postCount}</b>公开帖子</span><span><b>{stats.commentCount}</b>评论记录</span><span><b>{stats.likeCount}</b>累计获赞</span><span><b>{profile.postCount > 0 ? "作者" : "玩家"}</b>社区身份</span></div></div></section>;
+  return <section className="profile-hero"><div className="profile-identity"><div className="profile-avatar"><Image alt={`${profile.nickname}头像`} fill sizes="116px" src={safeAvatar(profile.avatarUrl)} /></div><div className="profile-copy"><div className="profile-name-line"><h1>{profile.nickname}</h1>{profile.postCount > 0 && <span className="profile-author-mark"><Award size={13} />攻略作者</span>}</div><p className="profile-location"><MapPin size={14} />鸣潮 · 漂泊者档案</p><div className="profile-stat-line"><span><b>{stats.postCount}</b>帖子</span><span><b>{stats.commentCount}</b>评论</span><span><b>{stats.likeCount}</b>获赞</span></div><p className="profile-bio">{profile.bio || "还没有留下个人介绍。"}</p><ProfileFollowButton /></div></div><div className="profile-game-card"><div className="profile-game-card-top"><div className="profile-mini-avatar">潮</div><div><strong>{profile.nickname}</strong><small>鸣潮社区档案</small></div><span className="profile-game-wave">鸣潮</span></div><div className="profile-game-stats"><span><b>{stats.postCount}</b>公开帖子</span><span><b>{stats.commentCount}</b>评论记录</span><span><b>{stats.likeCount}</b>累计获赞</span><span><b>{profile.postCount > 0 ? "作者" : "玩家"}</b>社区身份</span></div></div></section>;
 }
 
 function ProfilePostRow({ post }: { post: ApiPost }) {
