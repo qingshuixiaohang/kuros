@@ -46,10 +46,6 @@ public class UserSession {
         return userId;
     }
 
-    public String getExpiresAtValue() {
-        return expiresAt.toString();
-    }
-
     public LocalDateTime getExpiresAt() {
         return expiresAt;
     }

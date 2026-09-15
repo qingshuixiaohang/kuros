@@ -1,6 +1,7 @@
 package com.kuros.kurosbackend.web;
 
 import com.kuros.kurosbackend.service.AuthService;
+import com.kuros.kurosbackend.exception.UnauthorizedException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -40,7 +41,7 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
                 var authentication = new UsernamePasswordAuthenticationToken(user.id(), null, List.of());
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
-            } catch (RuntimeException ignored) {
+            } catch (UnauthorizedException ignored) {
                 // An invalid cookie is treated as anonymous; protected endpoints return 401/403 normally.
             }
         }

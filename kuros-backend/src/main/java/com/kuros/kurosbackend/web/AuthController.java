@@ -6,11 +6,12 @@ import com.kuros.kurosbackend.api.PhoneCodeRequest;
 import com.kuros.kurosbackend.api.PhoneLoginRequest;
 import com.kuros.kurosbackend.api.VerificationCodeResponse;
 import com.kuros.kurosbackend.service.AuthService;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -51,13 +52,13 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ApiResponse<AuthUserResponse> me(@CookieValue(value = "KUROS_SESSION", required = false) String token) {
-        return new ApiResponse<>(authService.currentUser(token), null);
+    public ApiResponse<AuthUserResponse> me(HttpServletRequest request) {
+        return new ApiResponse<>(authService.currentUser(readToken(request)), null);
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@CookieValue(value = "KUROS_SESSION", required = false) String token) {
-        authService.logout(token);
+    public ResponseEntity<Void> logout(HttpServletRequest request) {
+        authService.logout(readToken(request));
         return ResponseEntity.noContent()
                 .header(HttpHeaders.SET_COOKIE, sessionCookie("", 0).toString())
                 .build();
@@ -71,5 +72,18 @@ public class AuthController {
                 .path("/")
                 .maxAge(Duration.ofSeconds(maxAgeSeconds))
                 .build();
+    }
+
+    private String readToken(HttpServletRequest request) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            return null;
+        }
+        for (Cookie cookie : cookies) {
+            if (cookieName.equals(cookie.getName())) {
+                return cookie.getValue();
+            }
+        }
+        return null;
     }
 }
