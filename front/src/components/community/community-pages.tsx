@@ -3,11 +3,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Bell, ChevronRight, Eye, Heart, ImagePlus, MessageSquare, MoveRight, PenLine, Search, Send, Share2, Sparkles, Tag, Wrench, X } from "lucide-react";
-import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { CommunityDemoProvider, useCommunityDemo } from "@/components/community/community-interactions";
 import { RightRail, Sidebar, TopNavigation } from "@/components/community/community-home";
 import { characters, echoSets, guides, newsItems, toolItems } from "@/lib/mock";
-import { createPost, uploadImage } from "@/lib/api";
+import { createPost, fetchPost, updatePost, uploadImage } from "@/lib/api";
 
 type FrameProps = { children: ReactNode; activeNav?: string; query?: string; onQueryChange?: (query: string) => void; hideSidebar?: boolean; hideRail?: boolean; };
 export function CommunityPageFrame(props: FrameProps) { return <CommunityDemoProvider><FrameContent {...props} /></CommunityDemoProvider>; }
@@ -30,6 +30,7 @@ function PublishPageContent() {
   const params = useSearchParams();
   const router = useRouter();
   const { loggedIn, requestLogin, notify } = useCommunityDemo();
+  const editPostId = params.get("edit");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [type, setType] = useState(params.get("type") === "guide" ? "攻略" : params.get("type") === "creation" ? "同人" : "心得");
@@ -38,7 +39,23 @@ function PublishPageContent() {
   const [publishing, setPublishing] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [loadingEdit, setLoadingEdit] = useState(Boolean(editPostId));
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!editPostId || !loggedIn) return;
+    let active = true;
+    void fetchPost(editPostId).then((post) => {
+      if (!active) return;
+      setTitle(post.title);
+      setContent(post.content ?? "");
+      setType(post.type === "GUIDE" ? "攻略" : ["心得", "同人", "提问"].includes(post.category) ? post.category : "心得");
+      setTags(post.tags.join("、"));
+    }).catch((requestError) => {
+      if (active) setError(requestError instanceof Error ? requestError.message : "无法读取待编辑的帖子");
+    }).finally(() => { if (active) setLoadingEdit(false); });
+    return () => { active = false; };
+  }, [editPostId, loggedIn]);
 
   function changeImage(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -57,14 +74,15 @@ function PublishPageContent() {
     try {
       const uploadedImage = imageFile ? await uploadImage(imageFile) : null;
       const publishedContent = uploadedImage ? `${content.trim()}\n\n![${uploadedImage.originalName ?? "鸣潮社区配图"}](${uploadedImage.url})` : content;
-      const post = await createPost({
+      const input = {
         type: type === "攻略" ? "GUIDE" : "GENERAL",
         category: type === "攻略" ? "配队攻略" : type,
         title,
         content: publishedContent,
         tags: tags.split(/[，,\s]+/).map((tag) => tag.trim()).filter(Boolean),
-      });
-      notify("内容已发布");
+      } as const;
+      const post = editPostId ? await updatePost(editPostId, input) : await createPost(input);
+      notify(editPostId ? "帖子已更新" : "内容已发布");
       router.push("/guides/" + post.id);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "发布失败，请稍后重试");
@@ -80,7 +98,9 @@ function PublishPageContent() {
     void publish();
   }
 
-  return <><PageHeader section="社区 / 发布" title="发布内容" description="分享攻略、心得和创作，让更多漂泊者看到你的答案。" /><form className="publish-form" onSubmit={submit}><div className="publish-form-main"><label>标题<input required maxLength={200} onChange={(event) => setTitle(event.target.value)} placeholder="给这篇内容起一个清晰的标题" value={title} /></label><label>正文<textarea required onChange={(event) => setContent(event.target.value)} placeholder="写下你的攻略、发现或想和大家讨论的问题..." rows={11} value={content} /></label><input accept="image/png,image/jpeg,image/webp" className="file-input" onChange={changeImage} ref={fileRef} type="file" />{imageUrl ? <div className="upload-preview"><Image alt="待发布的图片预览" fill sizes="500px" src={imageUrl} unoptimized /><button onClick={() => { URL.revokeObjectURL(imageUrl); setImageUrl(""); setImageFile(null); if (fileRef.current) fileRef.current.value = ""; }} type="button" aria-label="移除图片"><X size={16} /></button></div> : <button className="upload-box" onClick={() => fileRef.current?.click()} type="button"><ImagePlus size={22} /><strong>添加图片</strong><span>选择后发布时会上传到社区</span></button>}</div><aside className="publish-form-side"><label>内容类型<select onChange={(event) => setType(event.target.value)} value={type}><option>攻略</option><option>心得</option><option>同人</option><option>提问</option></select></label><label>添加标签<input onChange={(event) => setTags(event.target.value)} placeholder="例如：长离、声骸" value={tags} /></label><div className="publish-note"><Tag size={16} /><p>选择准确的标签，可以让内容更容易被需要的人找到。</p></div>{error && <p className="login-form-error" role="alert">{error}</p>}<button className="primary-button submit-button" disabled={publishing} type="submit"><Send size={16} />{publishing ? "发布中…" : "保存并发布"}</button></aside></form></>;
+  if (editPostId && !loggedIn) return <><PageHeader section="社区 / 编辑" title="编辑内容" description="登录后才能修改你发布的内容。" /><div className="empty-state"><p>请先登录，再打开编辑页面。</p><button className="primary-button" onClick={() => requestLogin()} type="button">立即登录</button></div></>;
+  if (loadingEdit) return <><PageHeader section="社区 / 编辑" title="编辑内容" description="正在读取这篇帖子…" /><div className="feed-status">正在载入帖子内容…</div></>;
+  return <><PageHeader section={editPostId ? "社区 / 编辑" : "社区 / 发布"} title={editPostId ? "编辑内容" : "发布内容"} description={editPostId ? "更新你的鸣潮攻略与实战心得。" : "分享攻略、心得和创作，让更多漂泊者看到你的答案。"} /><form className="publish-form" onSubmit={submit}><div className="publish-form-main"><label>标题<input required maxLength={200} onChange={(event) => setTitle(event.target.value)} placeholder="给这篇内容起一个清晰的标题" value={title} /></label><label>正文<textarea required onChange={(event) => setContent(event.target.value)} placeholder="写下你的攻略、发现或想和大家讨论的问题..." rows={11} value={content} /></label><input accept="image/png,image/jpeg,image/webp" className="file-input" onChange={changeImage} ref={fileRef} type="file" />{imageUrl ? <div className="upload-preview"><Image alt="待发布的图片预览" fill sizes="500px" src={imageUrl} unoptimized /><button onClick={() => { URL.revokeObjectURL(imageUrl); setImageUrl(""); setImageFile(null); if (fileRef.current) fileRef.current.value = ""; }} type="button" aria-label="移除图片"><X size={16} /></button></div> : <button className="upload-box" onClick={() => fileRef.current?.click()} type="button"><ImagePlus size={22} /><strong>{editPostId ? "追加图片" : "添加图片"}</strong><span>选择后{editPostId ? "保存时" : "发布时"}会上传到社区</span></button>}</div><aside className="publish-form-side"><label>内容类型<select onChange={(event) => setType(event.target.value)} value={type}><option>攻略</option><option>心得</option><option>同人</option><option>提问</option></select></label><label>添加标签<input onChange={(event) => setTags(event.target.value)} placeholder="例如：长离、声骸" value={tags} /></label><div className="publish-note"><Tag size={16} /><p>选择准确的标签，可以让内容更容易被需要的人找到。</p></div>{error && <p className="login-form-error" role="alert">{error}</p>}<button className="primary-button submit-button" disabled={publishing} type="submit"><Send size={16} />{publishing ? (editPostId ? "保存中…" : "发布中…") : (editPostId ? "保存修改" : "保存并发布")}</button></aside></form></>;
 }
 
 export function PublishPage() {

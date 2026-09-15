@@ -15,6 +15,7 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -431,6 +432,47 @@ class KurosBackendApplicationTests {
                         .content("{\"type\":\"UNKNOWN\",\"category\":\"配队攻略\",\"title\":\"测试帖子\",\"content\":\"正文\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("POST_TYPE_INVALID"));
+    }
+
+    @Test
+    @DirtiesContext
+    void 作者可以编辑自己的帖子但其他用户不能操作并且可以软删除() throws Exception {
+        Cookie ownerCookie = login("13800000008");
+        var created = mockMvc.perform(post("/api/v1/posts")
+                        .cookie(ownerCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"待维护的帖子\",\"content\":\"原始正文\",\"tags\":[\"长离\"]}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String responseBody = created.getResponse().getContentAsString();
+        int idStart = responseBody.indexOf("\"id\":\"") + 6;
+        String postId = responseBody.substring(idStart, responseBody.indexOf('"', idStart));
+        String path = "/api/v1/posts/" + postId;
+
+        Cookie otherCookie = login("13800000010");
+        mockMvc.perform(put(path)
+                        .cookie(otherCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"不应被修改\",\"content\":\"正文\"}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put(path)
+                        .cookie(ownerCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GENERAL\",\"category\":\"心得\",\"title\":\"已更新的帖子\",\"content\":\"更新后的正文\",\"tags\":[\"实战\",\"轮切\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.title").value("已更新的帖子"))
+                .andExpect(jsonPath("$.data.content").value("更新后的正文"))
+                .andExpect(jsonPath("$.data.tags", hasSize(2)));
+
+        mockMvc.perform(delete(path).cookie(ownerCookie).with(csrf()))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(delete(path).cookie(ownerCookie).with(csrf()))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get(path)).andExpect(status().isNotFound());
     }
 
     @Test

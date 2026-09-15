@@ -114,6 +114,14 @@ export function createPost(input: CreatePostInput) {
   return ensureCsrfToken().then(() => request<ApiPost>("/api/v1/posts", { method: "POST", body: JSON.stringify(input) }));
 }
 
+export function updatePost(postId: string, input: CreatePostInput) {
+  return ensureCsrfToken().then(() => request<ApiPost>(`/api/v1/posts/${encodeURIComponent(postId)}`, { method: "PUT", body: JSON.stringify(input) }));
+}
+
+export function deletePost(postId: string) {
+  return ensureCsrfToken().then(() => request<void>(`/api/v1/posts/${encodeURIComponent(postId)}`, { method: "DELETE" }));
+}
+
 export type ReportTargetType = "POST" | "COMMENT";
 export type ReportReason = "SPAM" | "ABUSE" | "MISINFORMATION" | "OTHER";
 export type ReportStatus = "PENDING" | "CONFIRMED" | "REJECTED";
