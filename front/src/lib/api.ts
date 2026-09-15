@@ -21,7 +21,7 @@ export type ApiPost = {
 export type ApiPageMeta = { page: number; pageSize: number; totalItems: number; totalPages: number };
 type ApiEnvelope<T> = { data: T; meta?: ApiPageMeta };
 
-export type AuthUser = { id: string; phone: string; nickname: string; avatarUrl: string | null; bio: string | null };
+export type AuthUser = { id: string; phone: string; nickname: string; avatarUrl: string | null; bio: string | null; role: "USER" | "ADMIN" };
 export type VerificationCode = { expiresIn: number; retryAfter: number; devCode?: string | null };
 
 export type PublicProfile = {
@@ -112,6 +112,29 @@ export type CreatePostInput = { type: "GUIDE" | "GENERAL"; category: string; tit
 
 export function createPost(input: CreatePostInput) {
   return ensureCsrfToken().then(() => request<ApiPost>("/api/v1/posts", { method: "POST", body: JSON.stringify(input) }));
+}
+
+export type ReportTargetType = "POST" | "COMMENT";
+export type ReportReason = "SPAM" | "ABUSE" | "MISINFORMATION" | "OTHER";
+export type ReportStatus = "PENDING" | "CONFIRMED" | "REJECTED";
+export type ApiReport = { id: string; reporterId: string; targetType: ReportTargetType; targetId: string; reason: ReportReason; status: ReportStatus; handledBy: string | null; handledAt: string | null; handlingNote: string | null; createdAt: string };
+
+export function createReport(targetType: ReportTargetType, targetId: string, reason: ReportReason) {
+  return ensureCsrfToken().then(() => request<ApiReport>(`/api/v1/reports/${targetType}/${encodeURIComponent(targetId)}`, {
+    method: "POST", body: JSON.stringify({ reason }),
+  }));
+}
+
+export function fetchAdminReports(status?: ReportStatus) {
+  const params = new URLSearchParams({ page: "1", pageSize: "50" });
+  if (status) params.set("status", status);
+  return request<ApiReport[]>(`/api/v1/admin/reports?${params.toString()}`);
+}
+
+export function handleReport(reportId: string, action: "CONFIRM" | "REJECT", note?: string) {
+  return ensureCsrfToken().then(() => request<ApiReport>(`/api/v1/admin/reports/${encodeURIComponent(reportId)}/handle`, {
+    method: "POST", body: JSON.stringify({ action, note: note?.trim() || null }),
+  }));
 }
 
 export type UploadedImage = { url: string; originalName: string | null; contentType: string; size: number };

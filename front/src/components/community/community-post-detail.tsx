@@ -6,8 +6,9 @@ import { ArrowLeft, Bookmark, Clock3, Eye, Flag, Heart, MessageCircle, Reply, Sh
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
+import { CommunityReportDialog } from "@/components/community/community-report-dialog";
 import { useCommunityDemo } from "@/components/community/community-interactions";
-import { createComment, deleteComment, favoritePost, fetchComments, fetchPost, fetchPostInteractions, likePost, unfavoritePost, unlikePost, type ApiComment, type PostInteraction } from "@/lib/api";
+import { createComment, deleteComment, favoritePost, fetchComments, fetchPost, fetchPostInteractions, likePost, unfavoritePost, unlikePost, type ApiComment, type PostInteraction, type ReportTargetType } from "@/lib/api";
 import { guides } from "@/lib/mock";
 import type { Guide } from "@/types/community";
 
@@ -137,7 +138,7 @@ function CommentComposer({ onComment, replyTo, replyLabel, onCancel }: { onComme
   </form>;
 }
 
-function PostComments({ postId, authorName }: { postId: string; authorName: string }) {
+function PostComments({ postId, authorName, onReport }: { postId: string; authorName: string; onReport: (commentId: string) => void }) {
   const [comments, setComments] = useState(seedComments);
   const [totalItems, setTotalItems] = useState(seedComments.length);
   const [onlyAuthor, setOnlyAuthor] = useState(false);
@@ -191,7 +192,7 @@ function PostComments({ postId, authorName }: { postId: string; authorName: stri
     <CommentComposer onComment={submitComment} onCancel={() => setReplyTo(null)} replyLabel={comments.find((comment) => comment.id === replyTo)?.author} replyTo={replyTo} />
     {apiError && <p className="comment-inline-status" role="status">{apiError}</p>}
     {loading && <p className="comment-inline-status">正在整理漂泊者的留言…</p>}
-    <div className="comment-list">{visibleComments.map((comment) => <article className={"comment-item" + (comment.parentId ? " comment-item--reply" : "")} key={comment.id}><div className={"author-avatar author-avatar--" + comment.tone}>{comment.mark}</div><div className="comment-item-main"><div className="comment-item-meta"><strong>{comment.author}{comment.authorComment && <em>楼主</em>}</strong><span>{comment.floor} · {comment.date}</span></div><p className={comment.deleted ? "comment-deleted" : ""}>{comment.content}</p><div className="comment-item-actions"><button type="button"><ThumbsUp size={14} />{comment.likes}</button>{!comment.deleted && !comment.parentId && <button type="button" onClick={() => { if (loggedIn) setReplyTo(comment.id); else requestLogin(() => setReplyTo(comment.id)); }}>回复</button>}<button type="button" onClick={() => notify("举报入口将在社区审核功能接入后开放。")}>举报</button>{user?.id === comment.authorId && !comment.deleted && <button type="button" onClick={() => void removeComment(comment.id)}>删除</button>}</div></div></article>)}</div>
+    <div className="comment-list">{visibleComments.map((comment) => <article className={"comment-item" + (comment.parentId ? " comment-item--reply" : "")} key={comment.id}><div className={"author-avatar author-avatar--" + comment.tone}>{comment.mark}</div><div className="comment-item-main"><div className="comment-item-meta"><strong>{comment.author}{comment.authorComment && <em>楼主</em>}</strong><span>{comment.floor} · {comment.date}</span></div><p className={comment.deleted ? "comment-deleted" : ""}>{comment.content}</p><div className="comment-item-actions"><button type="button"><ThumbsUp size={14} />{comment.likes}</button>{!comment.deleted && !comment.parentId && <button type="button" onClick={() => { if (loggedIn) setReplyTo(comment.id); else requestLogin(() => setReplyTo(comment.id)); }}>回复</button>}<button type="button" onClick={() => onReport(comment.id)}>举报</button>{user?.id === comment.authorId && !comment.deleted && <button type="button" onClick={() => void removeComment(comment.id)}>删除</button>}</div></div></article>)}</div>
   </section>;
 }
 
@@ -225,7 +226,8 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
   const [guide, setGuide] = useState(fallbackGuide);
   const [authorId, setAuthorId] = useState<string>();
   const [apiUnavailable, setApiUnavailable] = useState(false);
-  const { notify } = useCommunityDemo();
+  const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string } | null>(null);
+  const { notify, requestLogin } = useCommunityDemo();
   useEffect(() => {
     let cancelled = false;
     fetchPost(apiPostId).then((post) => {
@@ -244,10 +246,11 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
       <header className="post-detail-heading"><div className="post-detail-kicker"><span className="guide-type">{guide.category}</span><span>原创</span><time>{guide.publishedAt}</time></div><h1>{guide.title}</h1><p>{guide.excerpt}</p><div className="detail-author"><div className={"author-avatar author-avatar--" + guide.avatarTone}>{guide.authorMark}</div><div><strong>{guide.author}</strong><small>攻略作者 · {guide.views} 阅读</small></div><CommunityFollowButton className="follow-button" fallbackKey={guide.author} targetUserId={authorId} /></div></header>
       <div className="post-cover"><Image alt={guide.title + "配图"} fill priority sizes="(max-width: 900px) 100vw, 820px" src={coverByGuide[guide.id] ?? coverByGuide[slug] ?? "/art/guide-sword.png"} /></div>
       <GuideArticle content={guide.content} />
-      <div className="post-detail-footer"><span>阅读 {guide.views}</span><button type="button" onClick={() => notify("已收到反馈，感谢帮助维护社区。")}><Flag size={14} />举报</button><button type="button" onClick={() => notify("链接已复制，可以分享给你的队友。")}><Share2 size={14} />分享</button></div>
-      <PostComments authorName={guide.author} postId={apiPostId} />
+      <div className="post-detail-footer"><span>阅读 {guide.views}</span><button type="button" onClick={() => requestLogin(() => setReportTarget({ type: "POST", id: apiPostId }))}><Flag size={14} />举报</button><button type="button" onClick={() => notify("链接已复制，可以分享给你的队友。")}><Share2 size={14} />分享</button></div>
+      <PostComments authorName={guide.author} onReport={(commentId) => requestLogin(() => setReportTarget({ type: "COMMENT", id: commentId }))} postId={apiPostId} />
       {apiUnavailable && <p className="api-fallback-note">后端暂不可用，当前显示本地 Demo 数据。</p>}
     </article>
     <PostAuthorCard authorId={authorId} guide={guide} />
+    {reportTarget && <CommunityReportDialog onClose={() => setReportTarget(null)} onSuccess={() => setReportTarget(null)} targetId={reportTarget.id} targetType={reportTarget.type} />}
   </div></CommunityPageFrame>;
 }

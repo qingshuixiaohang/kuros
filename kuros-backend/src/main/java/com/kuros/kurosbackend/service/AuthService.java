@@ -112,7 +112,7 @@ public class AuthService {
     }
 
     private AuthUserResponse toResponse(CommunityUser user) {
-        return new AuthUserResponse(user.getId(), user.getPhone(), user.getNickname(), user.getAvatarUrl(), user.getBio());
+        return new AuthUserResponse(user.getId(), user.getPhone(), user.getNickname(), user.getAvatarUrl(), user.getBio(), user.getRole());
     }
 
     private String randomToken() {
