@@ -12,8 +12,10 @@ import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.UUID;
 
 @Entity
 @Table(name = "posts")
@@ -76,6 +78,30 @@ public class CommunityPost {
     private Set<ContentTag> tags = new LinkedHashSet<>();
 
     protected CommunityPost() {
+    }
+
+    public static CommunityPost publish(String authorId, PostType type, String category, String title, String excerpt, String content, LocalDateTime now) {
+        CommunityPost post = new CommunityPost();
+        post.id = UUID.randomUUID().toString();
+        post.authorId = authorId;
+        post.type = type;
+        post.category = category;
+        post.title = title;
+        post.excerpt = excerpt;
+        post.content = content;
+        post.status = PostStatus.PUBLISHED;
+        post.viewCount = 0;
+        post.likeCount = 0;
+        post.favoriteCount = 0;
+        post.commentCount = 0;
+        post.publishedAt = now;
+        post.createdAt = now;
+        post.updatedAt = now;
+        return post;
+    }
+
+    public void addTags(List<ContentTag> tags) {
+        this.tags.addAll(tags);
     }
 
     public String getId() {

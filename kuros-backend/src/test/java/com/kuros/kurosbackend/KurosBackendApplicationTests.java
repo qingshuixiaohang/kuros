@@ -374,6 +374,42 @@ class KurosBackendApplicationTests {
                 .andExpect(jsonPath("$.data[?(@.id == '" + commentId + "')].deleted").value(true));
     }
 
+    @Test
+    void 游客不能发布帖子() throws Exception {
+        mockMvc.perform(post("/api/v1/posts")
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"游客帖子\",\"content\":\"不应该发布\",\"tags\":[\"测试\"]}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DirtiesContext
+    void 登录用户发布帖子后可以在公开列表查看且作者绑定当前用户() throws Exception {
+        Cookie sessionCookie = login("13800000008");
+
+        var created = mockMvc.perform(post("/api/v1/posts")
+                        .cookie(sessionCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"长离实战循环记录\",\"content\":\"循环内容\",\"tags\":[\"长离\",\"实战\"]}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.type").value("GUIDE"))
+                .andExpect(jsonPath("$.data.author.nickname").value("漂泊者0008"))
+                .andExpect(jsonPath("$.data.likeCount").value(0))
+                .andExpect(jsonPath("$.data.favoriteCount").value(0))
+                .andReturn();
+
+        String responseBody = created.getResponse().getContentAsString();
+        int idStart = responseBody.indexOf("\"id\":\"") + 6;
+        String postId = responseBody.substring(idStart, responseBody.indexOf('"', idStart));
+        mockMvc.perform(get("/api/v1/posts/" + postId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.title").value("长离实战循环记录"))
+                .andExpect(jsonPath("$.data.author.nickname").value("漂泊者0008"));
+    }
+
     private Cookie login(String phone) throws Exception {
         mockMvc.perform(post("/api/v1/auth/code")
                         .contentType(APPLICATION_JSON)

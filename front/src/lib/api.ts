@@ -107,6 +107,12 @@ export function fetchPost(id: string) {
   return request<ApiPost>("/api/v1/posts/" + encodeURIComponent(id));
 }
 
+export type CreatePostInput = { type: "GUIDE" | "GENERAL"; category: string; title: string; excerpt?: string; content: string; tags: string[] };
+
+export function createPost(input: CreatePostInput) {
+  return ensureCsrfToken().then(() => request<ApiPost>("/api/v1/posts", { method: "POST", body: JSON.stringify(input) }));
+}
+
 export type PostInteraction = {
   postId: string;
   likeCount: number;
