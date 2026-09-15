@@ -50,6 +50,7 @@ export type ProfileOverview = {
   comments: { items: ProfileComment[]; meta?: ApiPageMeta };
   favorites: { items: ApiPost[]; meta?: ApiPageMeta };
   following: { items: PublicProfile[]; meta?: ApiPageMeta };
+  fans: { items: PublicProfile[]; meta?: ApiPageMeta };
 };
 
 export class ApiError extends Error {

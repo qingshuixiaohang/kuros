@@ -6,7 +6,8 @@ public record ProfileOverviewResponse(
         PageResult<PostSummaryResponse> posts,
         PageResult<ProfileCommentResponse> comments,
         PageResult<PostSummaryResponse> favorites,
-        PageResult<PublicProfileResponse> following
+        PageResult<PublicProfileResponse> following,
+        PageResult<PublicProfileResponse> fans
 ) {
     public record ProfileStats(long postCount, long likeCount, long commentCount) {
     }
