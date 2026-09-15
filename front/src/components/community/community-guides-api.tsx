@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Eye, Heart, MessageSquare, MoveRight, PenLine } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CommunityPageFrame, PageHeader } from "@/components/community/community-pages";
@@ -33,8 +34,10 @@ function GuideListItem({ guide }: { guide: Guide }) {
 }
 
 export function GuidesApiPage() {
+  const params = useSearchParams();
+  const initialCategory = params.get("category") ?? "全部";
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("全部");
+  const [category, setCategory] = useState(initialCategory);
   const [items, setItems] = useState<Guide[]>(fallbackGuides);
   const [loadedKey, setLoadedKey] = useState("");
   const [apiUnavailable, setApiUnavailable] = useState(false);

@@ -35,6 +35,11 @@ const seedComments: CommentItem[] = [
   { id: 3, author: "无音区观测者", mark: "观", tone: "lavender", date: "09-14 09:12", floor: "3楼", content: "已收藏，等下一次深塔刷新后按这个思路试一遍。", likes: 18 },
 ];
 
+function formatCount(value: number) {
+  if (value >= 10000) return (value / 10000).toFixed(value >= 100000 ? 0 : 1).replace(/\.0$/, "") + "w";
+  return String(value);
+}
+
 function PostReactionRail({ guide }: { guide: Guide }) {
   const { liked, bookmarked, toggleLike, toggleBookmark } = useCommunityDemo();
   const isLiked = liked.includes(guide.id);
@@ -130,7 +135,7 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
     let cancelled = false;
     fetchPost(slug).then((post) => {
       if (!cancelled) {
-        setGuide({ ...fallbackGuide, id: post.id, category: post.category, title: post.title, excerpt: post.excerpt, content: post.content, author: post.author.nickname, authorMark: post.author.nickname.slice(0, 1), publishedAt: post.publishedAt, views: String(post.viewCount), replies: post.commentCount, likes: String(post.likeCount), tags: post.tags });
+        setGuide({ ...fallbackGuide, id: post.id, category: post.category, title: post.title, excerpt: post.excerpt, content: post.content, author: post.author.nickname, authorMark: post.author.nickname.slice(0, 1), publishedAt: post.publishedAt, views: formatCount(post.viewCount), replies: post.commentCount, likes: formatCount(post.likeCount), tags: post.tags });
         setApiUnavailable(false);
       }
     }).catch(() => { if (!cancelled) setApiUnavailable(true); });
