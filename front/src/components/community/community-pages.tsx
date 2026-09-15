@@ -7,7 +7,7 @@ import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "rea
 import { CommunityDemoProvider, useCommunityDemo } from "@/components/community/community-interactions";
 import { RightRail, Sidebar, TopNavigation } from "@/components/community/community-home";
 import { characters, echoSets, guides, newsItems, toolItems } from "@/lib/mock";
-import { createPost } from "@/lib/api";
+import { createPost, uploadImage } from "@/lib/api";
 
 type FrameProps = { children: ReactNode; activeNav?: string; query?: string; onQueryChange?: (query: string) => void; hideSidebar?: boolean; hideRail?: boolean; };
 export function CommunityPageFrame(props: FrameProps) { return <CommunityDemoProvider><FrameContent {...props} /></CommunityDemoProvider>; }
@@ -37,12 +37,17 @@ function PublishPageContent() {
   const [error, setError] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function changeImage(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) { setError("仅支持 PNG、JPEG 或 WebP 图片"); return; }
+    if (file.size > 5 * 1024 * 1024) { setError("图片大小不能超过 5 MB"); return; }
     if (imageUrl) URL.revokeObjectURL(imageUrl);
+    setError("");
+    setImageFile(file);
     setImageUrl(URL.createObjectURL(file));
   }
 
@@ -50,11 +55,13 @@ function PublishPageContent() {
     setPublishing(true);
     setError("");
     try {
+      const uploadedImage = imageFile ? await uploadImage(imageFile) : null;
+      const publishedContent = uploadedImage ? `${content.trim()}\n\n![${uploadedImage.originalName ?? "鸣潮社区配图"}](${uploadedImage.url})` : content;
       const post = await createPost({
         type: type === "攻略" ? "GUIDE" : "GENERAL",
         category: type === "攻略" ? "配队攻略" : type,
         title,
-        content,
+        content: publishedContent,
         tags: tags.split(/[，,\s]+/).map((tag) => tag.trim()).filter(Boolean),
       });
       notify("内容已发布");
@@ -73,7 +80,7 @@ function PublishPageContent() {
     void publish();
   }
 
-  return <><PageHeader section="社区 / 发布" title="发布内容" description="分享攻略、心得和创作，让更多漂泊者看到你的答案。" /><form className="publish-form" onSubmit={submit}><div className="publish-form-main"><label>标题<input required maxLength={200} onChange={(event) => setTitle(event.target.value)} placeholder="给这篇内容起一个清晰的标题" value={title} /></label><label>正文<textarea required onChange={(event) => setContent(event.target.value)} placeholder="写下你的攻略、发现或想和大家讨论的问题..." rows={11} value={content} /></label><input accept="image/png,image/jpeg" className="file-input" onChange={changeImage} ref={fileRef} type="file" />{imageUrl ? <div className="upload-preview"><Image alt="待发布的图片预览" fill sizes="500px" src={imageUrl} unoptimized /><button onClick={() => { URL.revokeObjectURL(imageUrl); setImageUrl(""); }} type="button" aria-label="移除图片"><X size={16} /></button></div> : <button className="upload-box" onClick={() => fileRef.current?.click()} type="button"><ImagePlus size={22} /><strong>添加图片</strong><span>图片预览保留在本地，上传功能后续接入</span></button>}</div><aside className="publish-form-side"><label>内容类型<select onChange={(event) => setType(event.target.value)} value={type}><option>攻略</option><option>心得</option><option>同人</option><option>提问</option></select></label><label>添加标签<input onChange={(event) => setTags(event.target.value)} placeholder="例如：长离、声骸" value={tags} /></label><div className="publish-note"><Tag size={16} /><p>选择准确的标签，可以让内容更容易被需要的人找到。</p></div>{error && <p className="login-form-error" role="alert">{error}</p>}<button className="primary-button submit-button" disabled={publishing} type="submit"><Send size={16} />{publishing ? "发布中…" : "保存并发布"}</button></aside></form></>;
+  return <><PageHeader section="社区 / 发布" title="发布内容" description="分享攻略、心得和创作，让更多漂泊者看到你的答案。" /><form className="publish-form" onSubmit={submit}><div className="publish-form-main"><label>标题<input required maxLength={200} onChange={(event) => setTitle(event.target.value)} placeholder="给这篇内容起一个清晰的标题" value={title} /></label><label>正文<textarea required onChange={(event) => setContent(event.target.value)} placeholder="写下你的攻略、发现或想和大家讨论的问题..." rows={11} value={content} /></label><input accept="image/png,image/jpeg,image/webp" className="file-input" onChange={changeImage} ref={fileRef} type="file" />{imageUrl ? <div className="upload-preview"><Image alt="待发布的图片预览" fill sizes="500px" src={imageUrl} unoptimized /><button onClick={() => { URL.revokeObjectURL(imageUrl); setImageUrl(""); setImageFile(null); if (fileRef.current) fileRef.current.value = ""; }} type="button" aria-label="移除图片"><X size={16} /></button></div> : <button className="upload-box" onClick={() => fileRef.current?.click()} type="button"><ImagePlus size={22} /><strong>添加图片</strong><span>选择后发布时会上传到社区</span></button>}</div><aside className="publish-form-side"><label>内容类型<select onChange={(event) => setType(event.target.value)} value={type}><option>攻略</option><option>心得</option><option>同人</option><option>提问</option></select></label><label>添加标签<input onChange={(event) => setTags(event.target.value)} placeholder="例如：长离、声骸" value={tags} /></label><div className="publish-note"><Tag size={16} /><p>选择准确的标签，可以让内容更容易被需要的人找到。</p></div>{error && <p className="login-form-error" role="alert">{error}</p>}<button className="primary-button submit-button" disabled={publishing} type="submit"><Send size={16} />{publishing ? "发布中…" : "保存并发布"}</button></aside></form></>;
 }
 
 export function PublishPage() {

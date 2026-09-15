@@ -8,12 +8,14 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.mock.web.MockMultipartFile;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -172,7 +174,7 @@ class KurosBackendApplicationTests {
     }
 
     @Test
-    @DirtiesContext
+    @DirtiesContext(methodMode = DirtiesContext.MethodMode.BEFORE_METHOD)
     void 浏览器先获取Csrf令牌后可以发表评论() throws Exception {
         Cookie sessionCookie = login("13800000018");
         var csrfResponse = mockMvc.perform(get("/api/v1/auth/csrf").cookie(sessionCookie))
@@ -429,6 +431,37 @@ class KurosBackendApplicationTests {
                         .content("{\"type\":\"UNKNOWN\",\"category\":\"配队攻略\",\"title\":\"测试帖子\",\"content\":\"正文\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("POST_TYPE_INVALID"));
+    }
+
+    @Test
+    void 游客不能上传图片且登录用户上传合法图片() throws Exception {
+        MockMultipartFile image = new MockMultipartFile("file", "tide.png", "image/png", new byte[]{1, 2, 3});
+
+        mockMvc.perform(multipart("/api/v1/files/images").file(image))
+                .andExpect(status().isUnauthorized());
+
+        Cookie sessionCookie = login("13800000008");
+        mockMvc.perform(multipart("/api/v1/files/images")
+                        .file(image)
+                        .cookie(sessionCookie)
+                        .with(csrf()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.url").value(org.hamcrest.Matchers.containsString("/media/")))
+                .andExpect(jsonPath("$.data.contentType").value("image/png"));
+    }
+
+    @Test
+    void 上传图片会拒绝非图片类型和超大文件() throws Exception {
+        Cookie sessionCookie = login("13800000008");
+        MockMultipartFile text = new MockMultipartFile("file", "notes.txt", "text/plain", "not an image".getBytes());
+        MockMultipartFile oversized = new MockMultipartFile("file", "large.png", "image/png", new byte[5 * 1024 * 1024 + 1]);
+
+        mockMvc.perform(multipart("/api/v1/files/images").file(text).cookie(sessionCookie).with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("IMAGE_TYPE_INVALID"));
+        mockMvc.perform(multipart("/api/v1/files/images").file(oversized).cookie(sessionCookie).with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("IMAGE_TOO_LARGE"));
     }
 
     private Cookie login(String phone) throws Exception {

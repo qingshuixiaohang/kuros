@@ -69,7 +69,8 @@ async function ensureCsrfToken() {
 }
 
 async function requestEnvelope<T>(path: string, init: RequestInit = {}): Promise<ApiEnvelope<T> | undefined> {
-  const headers = { ...(init.body ? { "Content-Type": "application/json" } : {}), ...init.headers } as Record<string, string>;
+  const isFormDataBody = typeof FormData !== "undefined" && init.body instanceof FormData;
+  const headers = { ...(init.body && !isFormDataBody ? { "Content-Type": "application/json" } : {}), ...init.headers } as Record<string, string>;
   const method = (init.method ?? "GET").toUpperCase();
   const token = csrfToken();
   if (token && !path.startsWith("/api/v1/auth/") && method !== "GET" && method !== "HEAD") headers["X-XSRF-TOKEN"] = decodeURIComponent(token);
@@ -111,6 +112,14 @@ export type CreatePostInput = { type: "GUIDE" | "GENERAL"; category: string; tit
 
 export function createPost(input: CreatePostInput) {
   return ensureCsrfToken().then(() => request<ApiPost>("/api/v1/posts", { method: "POST", body: JSON.stringify(input) }));
+}
+
+export type UploadedImage = { url: string; originalName: string | null; contentType: string; size: number };
+
+export function uploadImage(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return ensureCsrfToken().then(() => request<UploadedImage>("/api/v1/files/images", { method: "POST", body: formData }));
 }
 
 export type PostInteraction = {
