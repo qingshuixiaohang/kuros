@@ -6,7 +6,7 @@ import { ArrowLeft, Bookmark, Clock3, Eye, Flag, Heart, MessageCircle, Reply, Sh
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
 import { useCommunityDemo } from "@/components/community/community-interactions";
-import { fetchPost } from "@/lib/api";
+import { createComment, deleteComment, fetchComments, fetchPost, type ApiComment } from "@/lib/api";
 import { guides } from "@/lib/mock";
 import type { Guide } from "@/types/community";
 
@@ -18,7 +18,9 @@ const coverByGuide: Record<string, string> = {
 };
 
 type CommentItem = {
-  id: number;
+  id: string;
+  parentId: string | null;
+  authorId?: string;
   author: string;
   mark: string;
   tone: Guide["avatarTone"];
@@ -26,14 +28,32 @@ type CommentItem = {
   floor: string;
   content: string;
   likes: number;
+  deleted?: boolean;
   authorComment?: boolean;
 };
 
 const seedComments: CommentItem[] = [
-  { id: 1, author: "漂泊者玄夜", mark: "玄", tone: "dark", date: "09-13 14:20", floor: "1楼", content: "轮切顺序写得很清楚，尤其是先把声骸触发安排进循环这一点，实战里确实舒服很多。", likes: 61 },
-  { id: 2, author: "潮声档案员", mark: "潮", tone: "blue", date: "09-13 15:06", floor: "楼主", content: "谢谢反馈！低配队伍可以先保证循环完整，再慢慢补面板，不用一开始就追求毕业词条。", likes: 55, authorComment: true },
-  { id: 3, author: "无音区观测者", mark: "观", tone: "lavender", date: "09-14 09:12", floor: "3楼", content: "已收藏，等下一次深塔刷新后按这个思路试一遍。", likes: 18 },
+  { id: "30000000-0000-0000-0000-000000000001", parentId: null, author: "无音区夜行者", mark: "无", tone: "dark", date: "09-13 14:20", floor: "1楼", content: "轮切顺序写得很清楚，尤其是先把声骸触发安排进循环这一点，实战里确实舒服很多。", likes: 61 },
+  { id: "30000000-0000-0000-0000-000000000002", parentId: "30000000-0000-0000-0000-000000000001", author: "潮声档案员", mark: "潮", tone: "blue", date: "09-13 15:06", floor: "楼主", content: "谢谢反馈！低配队伍可以先保证循环完整，再慢慢补面板，不用一开始就追求毕业词条。", likes: 55, authorComment: true },
+  { id: "30000000-0000-0000-0000-000000000003", parentId: null, author: "今汐的留声机", mark: "今", tone: "lavender", date: "09-14 09:12", floor: "3楼", content: "已收藏，等下一次深塔刷新后按这个思路试一遍。", likes: 18 },
 ];
+
+function commentFromApi(comment: ApiComment, authorName: string): CommentItem {
+  return {
+    id: comment.id,
+    parentId: comment.parentId,
+    authorId: comment.author.id,
+    author: comment.author.nickname,
+    mark: comment.author.nickname.slice(0, 1),
+    tone: comment.author.id === "10000000-0000-0000-0000-000000000001" ? "blue" : "dark",
+    date: comment.createdAt.slice(5, 16).replace("T", " "),
+    floor: comment.parentId ? "回复" : "评论",
+    content: comment.content,
+    likes: comment.likeCount,
+    deleted: comment.deleted,
+    authorComment: comment.author.nickname === authorName,
+  };
+}
 
 function formatCount(value: number) {
   if (value >= 10000) return (value / 10000).toFixed(value >= 100000 ? 0 : 1).replace(/\.0$/, "") + "w";
@@ -69,7 +89,7 @@ function PostAuthorCard({ guide }: { guide: Guide }) {
   </aside>;
 }
 
-function CommentComposer({ onComment }: { onComment: (content: string) => void }) {
+function CommentComposer({ onComment, replyTo, replyLabel, onCancel }: { onComment: (content: string, parentId: string | null) => Promise<void>; replyTo: string | null; replyLabel?: string; onCancel: () => void }) {
   const { loggedIn, requestLogin } = useCommunityDemo();
   const [draft, setDraft] = useState("");
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -77,28 +97,71 @@ function CommentComposer({ onComment }: { onComment: (content: string) => void }
     const content = draft.trim();
     if (!content) return;
     requestLogin(() => {
-      onComment(content);
-      setDraft("");
+      void onComment(content, replyTo).then(() => setDraft("")).catch(() => { /* The composer keeps the draft after a failed request. */ });
     });
   }
   return <form className="comment-composer" onSubmit={submit}>
+    {replyTo && <div className="comment-replying"><span>正在回复 {replyLabel ?? "这条评论"}</span><button type="button" onClick={onCancel}>取消回复</button></div>}
     <textarea aria-label="评论内容" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={loggedIn ? "留下你的看法，和漂泊者聊聊这篇攻略..." : "登录后参与讨论，分享你的实战心得..."} maxLength={1000} />
     <div className="comment-composer-tools"><span><Reply size={16} />支持回复与表情</span><span>{draft.length} / 1000</span><button type="submit">评论</button></div>
   </form>;
 }
 
-function PostComments() {
+function PostComments({ postId, authorName }: { postId: string; authorName: string }) {
   const [comments, setComments] = useState(seedComments);
+  const [totalItems, setTotalItems] = useState(seedComments.length);
   const [onlyAuthor, setOnlyAuthor] = useState(false);
   const [sortNewest, setSortNewest] = useState(false);
-  const visibleComments = useMemo(() => {
-    const list = onlyAuthor ? comments.filter((comment) => comment.authorComment) : [...comments];
-    return sortNewest ? list.reverse() : list;
-  }, [comments, onlyAuthor, sortNewest]);
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState("");
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const { loggedIn, user, requestLogin, notify } = useCommunityDemo();
+
+  useEffect(() => {
+    let active = true;
+    fetchComments(postId, { page: 1, pageSize: 20, sort: sortNewest ? "latest" : "hot" }).then((result) => {
+      if (!active) return;
+      setComments(result.items.map((comment) => commentFromApi(comment, authorName)));
+      setTotalItems(result.meta?.totalItems ?? result.items.length);
+      setApiError("");
+    }).catch(() => {
+      if (active) setApiError("后端暂不可用，当前显示本地评论示例。");
+    }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [authorName, postId, sortNewest]);
+
+  const visibleComments = useMemo(() => onlyAuthor ? comments.filter((comment) => comment.authorComment) : comments, [comments, onlyAuthor]);
+
+  async function submitComment(content: string, parentId: string | null) {
+    try {
+      const comment = await createComment(postId, content, parentId);
+      setComments((current) => [commentFromApi(comment, authorName), ...current]);
+      setTotalItems((current) => current + 1);
+      setReplyTo(null);
+      setApiError("");
+      notify(parentId ? "回复已发布" : "评论已发布");
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "评论发布失败，请稍后重试");
+      notify("评论发布失败，请稍后重试");
+    }
+  }
+
+  async function removeComment(commentId: string) {
+    try {
+      await deleteComment(postId, commentId);
+      setComments((current) => current.map((comment) => comment.id === commentId ? { ...comment, content: "该评论已删除", deleted: true } : comment));
+      notify("评论已删除");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "删除失败，请稍后重试");
+    }
+  }
+
   return <section className="post-comments" id="comments">
-    <div className="comments-heading"><div><button className={!onlyAuthor ? "is-active" : ""} onClick={() => setOnlyAuthor(false)} type="button">全部评论<span>{comments.length}</span></button><button className={onlyAuthor ? "is-active" : ""} onClick={() => setOnlyAuthor(true)} type="button">只看楼主</button></div><div><button className={!sortNewest ? "is-active" : ""} onClick={() => setSortNewest(false)} type="button">默认</button><i /> <button className={sortNewest ? "is-active" : ""} onClick={() => setSortNewest(true)} type="button">最新</button></div></div>
-    <CommentComposer onComment={(content) => setComments((current) => [...current, { id: current.length + 1, author: "潮汐拾荒者", mark: "漂", tone: "gold", date: "刚刚", floor: current.length + 1 + "楼", content, likes: 0 }])} />
-    <div className="comment-list">{visibleComments.map((comment) => <article className="comment-item" key={comment.id}><div className={"author-avatar author-avatar--" + comment.tone}>{comment.mark}</div><div className="comment-item-main"><div className="comment-item-meta"><strong>{comment.author}{comment.authorComment && <em>楼主</em>}</strong><span>{comment.floor} · {comment.date}</span></div><p>{comment.content}</p><div className="comment-item-actions"><button type="button"><ThumbsUp size={14} />{comment.likes}</button><button type="button">回复</button><button type="button">举报</button></div></div></article>)}</div>
+    <div className="comments-heading"><div><button className={!onlyAuthor ? "is-active" : ""} onClick={() => setOnlyAuthor(false)} type="button">全部评论<span>{totalItems}</span></button><button className={onlyAuthor ? "is-active" : ""} onClick={() => setOnlyAuthor(true)} type="button">只看楼主</button></div><div><button className={!sortNewest ? "is-active" : ""} onClick={() => setSortNewest(false)} type="button">默认</button><i /> <button className={sortNewest ? "is-active" : ""} onClick={() => setSortNewest(true)} type="button">最新</button></div></div>
+    <CommentComposer onComment={submitComment} onCancel={() => setReplyTo(null)} replyLabel={comments.find((comment) => comment.id === replyTo)?.author} replyTo={replyTo} />
+    {apiError && <p className="comment-inline-status" role="status">{apiError}</p>}
+    {loading && <p className="comment-inline-status">正在整理漂泊者的留言…</p>}
+    <div className="comment-list">{visibleComments.map((comment) => <article className={"comment-item" + (comment.parentId ? " comment-item--reply" : "")} key={comment.id}><div className={"author-avatar author-avatar--" + comment.tone}>{comment.mark}</div><div className="comment-item-main"><div className="comment-item-meta"><strong>{comment.author}{comment.authorComment && <em>楼主</em>}</strong><span>{comment.floor} · {comment.date}</span></div><p className={comment.deleted ? "comment-deleted" : ""}>{comment.content}</p><div className="comment-item-actions"><button type="button"><ThumbsUp size={14} />{comment.likes}</button>{!comment.deleted && !comment.parentId && <button type="button" onClick={() => { if (loggedIn) setReplyTo(comment.id); else requestLogin(() => setReplyTo(comment.id)); }}>回复</button>}<button type="button" onClick={() => notify("举报入口将在社区审核功能接入后开放。")}>举报</button>{user?.id === comment.authorId && !comment.deleted && <button type="button" onClick={() => void removeComment(comment.id)}>删除</button>}</div></div></article>)}</div>
   </section>;
 }
 
@@ -149,7 +212,7 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
       <div className="post-cover"><Image alt={guide.title + "配图"} fill priority sizes="(max-width: 900px) 100vw, 820px" src={coverByGuide[guide.id] ?? coverByGuide[slug] ?? "/art/guide-sword.png"} /></div>
       <GuideArticle content={guide.content} />
       <div className="post-detail-footer"><span>阅读 {guide.views}</span><button type="button" onClick={() => notify("已收到反馈，感谢帮助维护社区。")}><Flag size={14} />举报</button><button type="button" onClick={() => notify("链接已复制，可以分享给你的队友。")}><Share2 size={14} />分享</button></div>
-      <PostComments />
+      <PostComments authorName={guide.author} postId={guide.id} />
       {apiUnavailable && <p className="api-fallback-note">后端暂不可用，当前显示本地 Demo 数据。</p>}
     </article>
     <PostAuthorCard guide={guide} />

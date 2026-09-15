@@ -177,13 +177,17 @@ button, input { font: inherit; } button { border: 0; cursor: pointer; } a { colo
 .comments-heading button span { margin-left: 4px; color: #aab6c1; font-size: 11px; font-weight: 400; }
 .comments-heading i { width: 1px; height: 14px; background: #dbe2e7; }
 .comment-composer { margin: 24px 0 16px; padding: 14px 16px 10px; border-radius: 6px; background: #f6f8fa; }
+.comment-replying { display: flex; align-items: center; justify-content: space-between; margin: -2px 0 9px; color: #0dbbc5; font-size: 11px; }
+.comment-replying button { background: transparent; color: #a1adb9; font-size: 11px; }
 .comment-composer textarea { display: block; width: 100%; min-height: 80px; resize: vertical; border: 0; outline: 0; background: transparent; color: #526373; font: inherit; font-size: 13px; line-height: 1.7; }
 .comment-composer textarea::placeholder { color: #b0bbc5; }
 .comment-composer-tools { display: flex; align-items: center; gap: 15px; color: #9daab6; font-size: 11px; }
 .comment-composer-tools span:first-child { display: inline-flex; align-items: center; gap: 5px; }
 .comment-composer-tools span:nth-child(2) { margin-left: auto; }
 .comment-composer-tools button { min-width: 68px; height: 34px; border-radius: 4px; background: var(--cyan-soft); color: #0dbbc5; font-size: 12px; }
+.comment-inline-status { margin: 0 0 12px; padding: 9px 11px; border-radius: 4px; background: #f5fafb; color: #84939f; font-size: 11px; }
 .comment-item { display: flex; gap: 12px; padding: 20px 0; border-bottom: 1px solid #edf1f4; }
+.comment-item--reply { margin-left: 43px; padding-left: 15px; border-left: 2px solid #e5f4f5; }
 .comment-item:last-child { border-bottom: 0; }
 .comment-item-main { min-width: 0; flex: 1; }
 .comment-item-meta { display: flex; align-items: center; gap: 10px; }
@@ -191,6 +195,7 @@ button, input { font: inherit; } button { border: 0; cursor: pointer; } a { colo
 .comment-item-meta strong em { margin-left: 6px; padding: 2px 4px; border-radius: 2px; background: var(--cyan-soft); color: #0dbbc5; font-size: 9px; font-style: normal; font-weight: 500; }
 .comment-item-meta > span { color: #a9b4bf; font-size: 10px; }
 .comment-item p { margin: 10px 0 11px; color: #6f7e8d; font-size: 13px; line-height: 1.75; }
+.comment-item p.comment-deleted { color: #aeb9c2; }
 .comment-item-actions { display: flex; gap: 16px; }
 .comment-item-actions button { display: inline-flex; align-items: center; gap: 4px; background: transparent; color: #aab5bf; font-size: 10px; }
 .comment-item-actions button:hover { color: var(--cyan); }
