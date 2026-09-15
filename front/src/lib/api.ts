@@ -9,6 +9,8 @@ export type ApiPost = {
   title: string;
   excerpt: string;
   content?: string;
+  /** 列表接口可选返回的首图；旧后端未返回时保持无图卡片。 */
+  coverImageUrl?: string | null;
   author: ApiAuthor;
   publishedAt: string;
   viewCount: number;

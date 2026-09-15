@@ -2,6 +2,8 @@ export type AvatarTone = "blue" | "lavender" | "dark" | "gold";
 
 export interface Guide {
   id: string;
+  /** 演示数据与后端种子数据的稳定关联，仅用于本地回退展示。 */
+  apiId?: string;
   category: string;
   title: string;
   excerpt: string;
@@ -14,6 +16,8 @@ export interface Guide {
   replies: number;
   likes: string;
   tags: string[];
+  /** 首图列表由帖子正文、列表封面字段或演示内容数据提供。 */
+  mediaUrls?: string[];
 }
 
 export interface NewsItem {

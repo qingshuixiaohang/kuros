@@ -3,6 +3,7 @@ import type { Character, EchoSet, Guide, NewsItem, ToolItem } from "@/types/comm
 export const guides: Guide[] = [
   {
     id: "changli-team",
+    apiId: "10000000-0000-0000-0000-000000000001",
     category: "配队攻略",
     title: "长离焚火队：从零到毕业的配队思路",
     excerpt: "围绕共鸣效率、轮切节奏与副 C 选择，整理一套能直接照着练的实战框架。",
@@ -14,9 +15,11 @@ export const guides: Guide[] = [
     replies: 46,
     likes: "3.7k",
     tags: ["长离", "配队", "实战思路", "2.4"],
+    mediaUrls: ["/art/guide-sword.png", "/art/guide-flower.png", "/art/guide-tower.png"],
   },
   {
     id: "tower-24",
+    apiId: "10000000-0000-0000-0000-000000000002",
     category: "深塔攻略",
     title: "2.4 深塔速通：低配阵容与手法拆解",
     excerpt: "按房间记录怪物机制、起手顺序和容错点，附上可替换角色的思路。",
@@ -28,9 +31,11 @@ export const guides: Guide[] = [
     replies: 89,
     likes: "5.1k",
     tags: ["深塔", "低配", "手法"],
+    mediaUrls: ["/art/guide-tower.png", "/art/guide-sword.png", "/art/guide-coast.png"],
   },
   {
     id: "camellya-echo",
+    apiId: "10000000-0000-0000-0000-000000000003",
     category: "角色培养",
     title: "椿的声骸选择与词条优先级",
     excerpt: "从套装、主词条到副词条阈值，说明不同武器与配队下的取舍。",
@@ -42,9 +47,11 @@ export const guides: Guide[] = [
     replies: 63,
     likes: "3.2k",
     tags: ["椿", "声骸", "培养建议"],
+    mediaUrls: ["/art/guide-flower.png", "/art/guide-coast.png", "/art/guide-sword.png"],
   },
   {
     id: "new-player-route",
+    apiId: "10000000-0000-0000-0000-000000000004",
     category: "新手攻略",
     title: "新手开荒指南：从入坑到稳步成长",
     excerpt: "主线推进、体力规划、角色资源和探索优先级，一次理清前两周要做什么。",
@@ -56,6 +63,7 @@ export const guides: Guide[] = [
     replies: 112,
     likes: "8.6k",
     tags: ["新手", "开荒", "资源规划"],
+    mediaUrls: ["/art/guide-coast.png", "/art/guide-flower.png", "/art/guide-tower.png"],
   },
 ];
 
