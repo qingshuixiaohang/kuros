@@ -4,10 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Award, Bookmark, ChevronRight, FileText, LoaderCircle, MapPin, MessageCircle, Pencil, Trash2, UserRound, UsersRound, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Award, Bookmark, ChevronRight, FileText, LoaderCircle, MapPin, MessageCircle, Pencil, Trash2, UserRound, UsersRound, type LucideIcon } from "lucide-react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
+import { CommunityFollowButton } from "@/components/community/community-follow-button";
 import { useCommunityDemo } from "@/components/community/community-interactions";
-import { deletePost, fetchMyProfile, type ApiPost, type ProfileComment, type ProfileOverview } from "@/lib/api";
+import { deletePost, fetchMyProfile, fetchPublicProfile, fetchPublicProfilePosts, type ApiPost, type ProfileComment, type ProfileOverview, type PublicProfile } from "@/lib/api";
 
 const fallbackAvatar = "/art/character-lavender.png";
 const coverByGuide: Record<string, string> = {
@@ -77,7 +78,7 @@ function ProfileEmpty({ icon: Icon, title, description }: { icon: LucideIcon; ti
 }
 
 function FollowingRow({ profile }: { profile: ProfileOverview["following"]["items"][number] }) {
-  return <Link className="profile-following-row" href={`/search?q=${encodeURIComponent(profile.nickname)}`}><div className="author-avatar author-avatar--blue">{profile.nickname.slice(0, 1)}</div><div><strong>{profile.nickname}</strong><span>{profile.bio || "鸣潮漂泊者"}</span></div><small>{profile.postCount} 帖子 · {profile.likeCount} 获赞</small><ChevronRight size={16} /></Link>;
+  return <Link className="profile-following-row" href={`/users/${encodeURIComponent(profile.id)}`}><div className="author-avatar author-avatar--blue">{profile.nickname.slice(0, 1)}</div><div><strong>{profile.nickname}</strong><span>{profile.bio || "鸣潮漂泊者"}</span></div><small>{profile.postCount} 帖子 · {profile.likeCount} 获赞</small><ChevronRight size={16} /></Link>;
 }
 
 function CommentRow({ comment }: { comment: ProfileComment }) {
@@ -121,4 +122,34 @@ export function ProfilePage() {
   }
 
   return <CommunityPageFrame hideRail hideSidebar><div className="profile-page">{loggedIn && loading ? <ProfileState kind="loading" /> : !loggedIn ? <ProfileState kind="login" onLogin={() => requestLogin()} /> : error || !overview ? <ProfileState kind="error" onRetry={reload} /> : <><ProfileHero overview={overview} /><div className="profile-content-grid"><ProfileNavigation activeTab={activeTab} /><ProfilePanel activeTab={activeTab} onPostDeleted={reload} overview={overview} /></div></>}</div></CommunityPageFrame>;
+}
+
+function PublicProfileHero({ profile }: { profile: PublicProfile }) {
+  return <section className="profile-hero"><div className="profile-identity"><div className="profile-avatar"><Image alt={`${profile.nickname}头像`} fill sizes="116px" src={safeAvatar(profile.avatarUrl)} /></div><div className="profile-copy"><div className="profile-name-line"><h1>{profile.nickname}</h1>{profile.postCount > 0 && <span className="profile-author-mark"><Award size={13} />攻略作者</span>}</div><p className="profile-location"><MapPin size={14} />鸣潮 · 漂泊者档案</p><div className="profile-stat-line"><span><b>{profile.postCount}</b>帖子</span><span><b>{profile.likeCount}</b>获赞</span></div><p className="profile-bio">{profile.bio || "还没有留下个人介绍。"}</p><CommunityFollowButton className="profile-follow-button" fallbackKey={profile.nickname} targetUserId={profile.id} /></div></div><div className="profile-game-card"><div className="profile-game-card-top"><div className="profile-mini-avatar">潮</div><div><strong>{profile.nickname}</strong><small>鸣潮社区档案</small></div><span className="profile-game-wave">鸣潮</span></div><div className="profile-game-stats"><span><b>{profile.postCount}</b>公开帖子</span><span><b>{profile.likeCount}</b>累计获赞</span><span><b>社区</b>内容创作者</span><span><b>公开</b>资料状态</span></div></div></section>;
+}
+
+export function PublicProfilePage({ userId }: { userId: string }) {
+  const [profile, setProfile] = useState<PublicProfile | null>(null);
+  const [posts, setPosts] = useState<{ items: ApiPost[]; meta?: ProfileOverview["posts"]["meta"] }>({ items: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void Promise.all([fetchPublicProfile(userId), fetchPublicProfilePosts(userId)]).then(([nextProfile, nextPosts]) => {
+      if (!active) return;
+      setProfile(nextProfile);
+      setPosts(nextPosts);
+    }).catch(() => { if (active) setError(true); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [userId]);
+
+  function reload() {
+    setProfile(null);
+    setLoading(true);
+    setError(false);
+    void Promise.all([fetchPublicProfile(userId), fetchPublicProfilePosts(userId)]).then(([nextProfile, nextPosts]) => { setProfile(nextProfile); setPosts(nextPosts); }).catch(() => setError(true)).finally(() => setLoading(false));
+  }
+
+  return <CommunityPageFrame hideRail hideSidebar><div className="profile-page"><Link className="back-link" href="/"><ArrowLeft size={14} />返回社区</Link>{loading ? <ProfileState kind="loading" /> : error || !profile ? <ProfileState kind="error" onRetry={reload} /> : <><PublicProfileHero profile={profile} /><section className="profile-panel"><header className="profile-panel-heading"><div><h2>公开帖子</h2><p>{profile.nickname} 发布的鸣潮内容。</p></div><span>{posts.meta?.totalItems ?? posts.items.length} 条记录</span></header>{posts.items.length > 0 ? <div className="profile-post-list">{posts.items.map((post) => <ProfilePostRow key={post.id} post={post} />)}</div> : <ProfileEmpty icon={FileText} title="还没有公开帖子" description="这位漂泊者还没有发布公开内容。" />}</section></>}</div></CommunityPageFrame>;
 }
