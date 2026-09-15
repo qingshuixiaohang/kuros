@@ -173,6 +173,25 @@ class KurosBackendApplicationTests {
 
     @Test
     @DirtiesContext
+    void 浏览器先获取Csrf令牌后可以发表评论() throws Exception {
+        Cookie sessionCookie = login("13800000018");
+        var csrfResponse = mockMvc.perform(get("/api/v1/auth/csrf").cookie(sessionCookie))
+                .andExpect(status().isNoContent())
+                .andExpect(cookie().exists("XSRF-TOKEN"))
+                .andReturn();
+        Cookie csrfCookie = csrfResponse.getResponse().getCookie("XSRF-TOKEN");
+
+        mockMvc.perform(post("/api/v1/posts/10000000-0000-0000-0000-000000000001/comments")
+                        .cookie(sessionCookie, csrfCookie)
+                        .header("X-XSRF-TOKEN", csrfCookie.getValue())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"content\":\"浏览器令牌链路正常。\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content").value("浏览器令牌链路正常。"));
+    }
+
+    @Test
+    @DirtiesContext
     void 登录用户可以发表评论但不能创建二级回复() throws Exception {
         Cookie sessionCookie = login("13800000008");
         String commentsPath = "/api/v1/posts/10000000-0000-0000-0000-000000000001/comments";

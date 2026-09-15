@@ -35,6 +35,11 @@ function csrfToken() {
   return document.cookie.split("; ").find((item) => item.startsWith("XSRF-TOKEN="))?.split("=")[1];
 }
 
+async function ensureCsrfToken() {
+  if (typeof document === "undefined" || csrfToken()) return;
+  await requestEnvelope<void>("/api/v1/auth/csrf");
+}
+
 async function requestEnvelope<T>(path: string, init: RequestInit = {}): Promise<ApiEnvelope<T>> {
   const headers = { ...(init.body ? { "Content-Type": "application/json" } : {}), ...init.headers } as Record<string, string>;
   const method = (init.method ?? "GET").toUpperCase();
@@ -94,14 +99,14 @@ export async function fetchComments(postId: string, options: { page?: number; pa
 }
 
 export function createComment(postId: string, content: string, parentId?: string | null) {
-  return request<ApiComment>(`/api/v1/posts/${encodeURIComponent(postId)}/comments`, {
-    method: "POST",
-    body: JSON.stringify({ content, parentId: parentId ?? null }),
-  });
+  return ensureCsrfToken().then(() => request<ApiComment>(`/api/v1/posts/${encodeURIComponent(postId)}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ content, parentId: parentId ?? null }),
+    }));
 }
 
 export function deleteComment(postId: string, commentId: string) {
-  return request<void>(`/api/v1/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`, { method: "DELETE" });
+  return ensureCsrfToken().then(() => request<void>(`/api/v1/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`, { method: "DELETE" }));
 }
 
 export function requestVerificationCode(phone: string) {
