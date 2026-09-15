@@ -347,3 +347,18 @@ button, input { font: inherit; } button { border: 0; cursor: pointer; } a { colo
   .comment-item { gap: 9px; }
   .comment-item p { font-size: 12px; }
 }
+
+.filter-bar { flex-wrap: wrap; }
+.filter-keyword, .filter-sort { display: inline-flex; align-items: center; gap: 6px; color: #91a0ae; font-size: 11px; }
+.filter-keyword input, .filter-sort select { height: 30px; padding: 0 8px; border: 1px solid #e6edf1; border-radius: 4px; outline: 0; background: #fbfcfd; color: #647382; font-size: 11px; }
+.filter-keyword input { width: 90px; }
+.filter-keyword input:focus, .filter-sort select:focus { border-color: var(--cyan); }
+.pagination { display: flex; justify-content: center; gap: 6px; padding: 22px 0 5px; }
+.pagination button { min-width: 30px; height: 30px; border-radius: 4px; background: #f2f6f8; color: #8292a0; font-size: 11px; }
+.pagination button:hover, .pagination button.is-active { background: var(--cyan); color: #fff; }
+@media (max-width: 620px) {
+  .filter-keyword, .filter-sort { flex: 0 0 auto; }
+  .filter-keyword input { width: 80px; }
+  .filter-bar { gap: 10px; }
+  .result-count { margin-left: auto; }
+}
