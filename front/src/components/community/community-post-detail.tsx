@@ -17,6 +17,13 @@ const coverByGuide: Record<string, string> = {
   "new-player-route": "/art/guide-coast.png",
 };
 
+const apiPostIdBySlug: Record<string, string> = {
+  "changli-team": "10000000-0000-0000-0000-000000000001",
+  "tower-24": "10000000-0000-0000-0000-000000000002",
+  "camellya-echo": "10000000-0000-0000-0000-000000000003",
+  "new-player-route": "10000000-0000-0000-0000-000000000004",
+};
+
 type CommentItem = {
   id: string;
   parentId: string | null;
@@ -191,19 +198,20 @@ function GuideArticle({ content }: { content?: string }) {
 
 export function GuidePostDetailPage({ slug }: { slug: string }) {
   const fallbackGuide = guides.find((item) => item.id === slug) ?? guides[0];
+  const apiPostId = apiPostIdBySlug[slug] ?? slug;
   const [guide, setGuide] = useState(fallbackGuide);
   const [apiUnavailable, setApiUnavailable] = useState(false);
   const { notify } = useCommunityDemo();
   useEffect(() => {
     let cancelled = false;
-    fetchPost(slug).then((post) => {
+    fetchPost(apiPostId).then((post) => {
       if (!cancelled) {
         setGuide({ ...fallbackGuide, id: post.id, category: post.category, title: post.title, excerpt: post.excerpt, content: post.content, author: post.author.nickname, authorMark: post.author.nickname.slice(0, 1), publishedAt: post.publishedAt, views: formatCount(post.viewCount), replies: post.commentCount, likes: formatCount(post.likeCount), tags: post.tags });
         setApiUnavailable(false);
       }
     }).catch(() => { if (!cancelled) setApiUnavailable(true); });
     return () => { cancelled = true; };
-  }, [fallbackGuide, slug]);
+  }, [apiPostId, fallbackGuide, slug]);
   return <CommunityPageFrame activeNav="guides" hideRail hideSidebar><div className="post-detail-layout">
     <PostReactionRail guide={guide} />
     <article className="post-detail-page">
@@ -212,7 +220,7 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
       <div className="post-cover"><Image alt={guide.title + "配图"} fill priority sizes="(max-width: 900px) 100vw, 820px" src={coverByGuide[guide.id] ?? coverByGuide[slug] ?? "/art/guide-sword.png"} /></div>
       <GuideArticle content={guide.content} />
       <div className="post-detail-footer"><span>阅读 {guide.views}</span><button type="button" onClick={() => notify("已收到反馈，感谢帮助维护社区。")}><Flag size={14} />举报</button><button type="button" onClick={() => notify("链接已复制，可以分享给你的队友。")}><Share2 size={14} />分享</button></div>
-      <PostComments authorName={guide.author} postId={guide.id} />
+      <PostComments authorName={guide.author} postId={apiPostId} />
       {apiUnavailable && <p className="api-fallback-note">后端暂不可用，当前显示本地 Demo 数据。</p>}
     </article>
     <PostAuthorCard guide={guide} />
