@@ -66,7 +66,7 @@ async function ensureCsrfToken() {
   await requestEnvelope<void>("/api/v1/auth/csrf");
 }
 
-async function requestEnvelope<T>(path: string, init: RequestInit = {}): Promise<ApiEnvelope<T>> {
+async function requestEnvelope<T>(path: string, init: RequestInit = {}): Promise<ApiEnvelope<T> | undefined> {
   const headers = { ...(init.body ? { "Content-Type": "application/json" } : {}), ...init.headers } as Record<string, string>;
   const method = (init.method ?? "GET").toUpperCase();
   const token = csrfToken();
@@ -86,7 +86,8 @@ async function requestEnvelope<T>(path: string, init: RequestInit = {}): Promise
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  return (await requestEnvelope<T>(path, init)).data;
+  const envelope = await requestEnvelope<T>(path, init);
+  return envelope?.data as T;
 }
 
 export async function fetchPosts(options: { category?: string; keyword?: string; tag?: string; page?: number; pageSize?: number; sort?: "latest" | "hot" } = {}) {
@@ -121,7 +122,7 @@ export async function fetchComments(postId: string, options: { page?: number; pa
     sort: options.sort ?? "hot",
   });
   const envelope = await requestEnvelope<ApiComment[]>(`/api/v1/posts/${encodeURIComponent(postId)}/comments?${params.toString()}`);
-  return { items: envelope.data, meta: envelope.meta };
+  return { items: envelope?.data ?? [], meta: envelope?.meta };
 }
 
 export function createComment(postId: string, content: string, parentId?: string | null) {
@@ -157,7 +158,7 @@ export async function fetchPublicProfilePosts(userId: string, options: { page?: 
     pageSize: String(options.pageSize ?? 20),
   });
   const envelope = await requestEnvelope<ApiPost[]>(`/api/v1/users/${encodeURIComponent(userId)}/posts?${params.toString()}`);
-  return { items: envelope.data, meta: envelope.meta };
+  return { items: envelope?.data ?? [], meta: envelope?.meta };
 }
 
 export async function fetchMyProfile(options: { page?: number; pageSize?: number } = {}) {
