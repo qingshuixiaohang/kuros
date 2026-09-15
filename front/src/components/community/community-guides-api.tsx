@@ -5,24 +5,10 @@ import { useSearchParams } from "next/navigation";
 import { Eye, Heart, MessageSquare, MoveRight, PenLine } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CommunityPageFrame, PageHeader } from "@/components/community/community-pages";
-import { fetchPosts, type ApiPost } from "@/lib/api";
+import { fetchPosts } from "@/lib/api";
 import { guides as fallbackGuides } from "@/lib/mock";
+import { toGuide } from "@/lib/post-view";
 import type { Guide } from "@/types/community";
-
-function formatCount(value: number) {
-  if (value >= 10000) return (value / 10000).toFixed(value >= 100000 ? 0 : 1).replace(/\.0$/, "") + "w";
-  return String(value);
-}
-
-function formatPublishedAt(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date).replace(/\//g, "-");
-}
-
-function toGuide(post: ApiPost): Guide {
-  return { id: post.id, category: post.category, title: post.title, excerpt: post.excerpt, content: post.content, author: post.author.nickname, authorMark: post.author.nickname.slice(0, 1), avatarTone: "blue", publishedAt: formatPublishedAt(post.publishedAt), views: formatCount(post.viewCount), replies: post.commentCount, likes: formatCount(post.likeCount), tags: post.tags };
-}
 
 function filterFallback(category: string, query: string) {
   const keyword = query.trim().toLowerCase();
