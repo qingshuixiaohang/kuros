@@ -41,6 +41,11 @@ type CommentItem = {
   authorComment?: boolean;
 };
 
+type ArticleSection = {
+  id: string;
+  title: string;
+};
+
 const seedComments: CommentItem[] = [
   { id: "30000000-0000-0000-0000-000000000001", parentId: null, author: "无音区夜行者", mark: "无", tone: "dark", date: "09-13 14:20", floor: "1楼", content: "轮切顺序写得很清楚，尤其是先把声骸触发安排进循环这一点，实战里确实舒服很多。", likes: 61 },
   { id: "30000000-0000-0000-0000-000000000002", parentId: "30000000-0000-0000-0000-000000000001", author: "潮声档案员", mark: "潮", tone: "blue", date: "09-13 15:06", floor: "楼主", content: "谢谢反馈！低配队伍可以先保证循环完整，再慢慢补面板，不用一开始就追求毕业词条。", likes: 55, authorComment: true },
@@ -67,6 +72,25 @@ function commentFromApi(comment: ApiComment, authorName: string): CommentItem {
 function formatCount(value: number) {
   if (value >= 10000) return (value / 10000).toFixed(value >= 100000 ? 0 : 1).replace(/\.0$/, "") + "w";
   return String(value);
+}
+
+function sectionIdForTitle(title: string, index: number) {
+  if (title.includes("先确定") || title.includes("队伍节奏")) return "section-team-rhythm";
+  if (title.includes("角色与声骸")) return "section-character-echoes";
+  if (title.includes("实战检查")) return "section-checklist";
+  const normalized = title.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-").replace(/^-|-$/g, "");
+  return `section-${normalized || index + 1}`;
+}
+
+function parseMarkdownHeading(value: string) {
+  const match = value.trim().match(/^##\s+(.+)$/);
+  return match?.[1].trim() ?? null;
+}
+
+function getArticleSections(content?: string): ArticleSection[] {
+  const contentHeadings = content?.split("\n").map(parseMarkdownHeading).filter((title): title is string => Boolean(title)) ?? [];
+  const titles = content === undefined ? ["一、先确定队伍节奏", "二、角色与声骸选择", "三、实战检查清单"] : contentHeadings;
+  return titles.map((title, index) => ({ id: sectionIdForTitle(title, index), title }));
 }
 
 function parseCount(value: string) {
@@ -104,13 +128,17 @@ function PostReactionRail({ guide, postId }: { guide: Guide; postId: string }) {
   </aside>;
 }
 
-function PostAuthorCard({ guide, authorId }: { guide: Guide; authorId?: string }) {
-  return <aside className="post-context-rail">
+function PostAuthorCard({ guide, authorId, sections }: { guide: Guide; authorId?: string; sections: ArticleSection[] }) {
+  return <aside aria-label="帖子上下文" className="post-context-rail">
     <section className="post-author-card">
       <div className="post-author-card-top"><div className={"author-avatar author-avatar--" + guide.avatarTone}>{guide.authorMark}</div><div><strong>{guide.author}</strong><span><Eye size={13} /> {guide.views} 阅读</span></div></div>
       <p>一起来记录鸣潮里的配队、探索和实战心得。</p>
       <CommunityFollowButton fallbackKey={guide.author} targetUserId={authorId} />
     </section>
+    {sections.length > 0 && <nav aria-label="帖子目录" className="post-outline">
+      <h2>帖子目录</h2>
+      <ol>{sections.map((section) => <li key={section.id}><a href={`#${section.id}`}>{section.title}</a></li>)}</ol>
+    </nav>}
     <section className="post-topic-card">
       <h2>分区</h2>
       <Link href={"/search?q=" + encodeURIComponent(guide.category)}>{guide.category}</Link>
@@ -187,12 +215,12 @@ function PostComments({ postId, authorName, onReport }: { postId: string; author
     }
   }
 
-  return <section className="post-comments" id="comments">
+  return <section aria-label="评论区" className="post-comments" id="comments">
     <div className="comments-heading"><div><button className={!onlyAuthor ? "is-active" : ""} onClick={() => setOnlyAuthor(false)} type="button">全部评论<span>{totalItems}</span></button><button className={onlyAuthor ? "is-active" : ""} onClick={() => setOnlyAuthor(true)} type="button">只看楼主</button></div><div><button className={!sortNewest ? "is-active" : ""} onClick={() => setSortNewest(false)} type="button">默认</button><i /> <button className={sortNewest ? "is-active" : ""} onClick={() => setSortNewest(true)} type="button">最新</button></div></div>
     <CommentComposer onComment={submitComment} onCancel={() => setReplyTo(null)} replyLabel={comments.find((comment) => comment.id === replyTo)?.author} replyTo={replyTo} />
     {apiError && <p className="comment-inline-status" role="status">{apiError}</p>}
     {loading && <p className="comment-inline-status">正在整理漂泊者的留言…</p>}
-    <div className="comment-list">{visibleComments.map((comment) => <article className={"comment-item" + (comment.parentId ? " comment-item--reply" : "")} key={comment.id}><div className={"author-avatar author-avatar--" + comment.tone}>{comment.mark}</div><div className="comment-item-main"><div className="comment-item-meta"><strong>{comment.author}{comment.authorComment && <em>楼主</em>}</strong><span>{comment.floor} · {comment.date}</span></div><p className={comment.deleted ? "comment-deleted" : ""}>{comment.content}</p><div className="comment-item-actions"><button type="button"><ThumbsUp size={14} />{comment.likes}</button>{!comment.deleted && !comment.parentId && <button type="button" onClick={() => { if (loggedIn) setReplyTo(comment.id); else requestLogin(() => setReplyTo(comment.id)); }}>回复</button>}<button type="button" onClick={() => onReport(comment.id)}>举报</button>{user?.id === comment.authorId && !comment.deleted && <button type="button" onClick={() => void removeComment(comment.id)}>删除</button>}</div></div></article>)}</div>
+    <div className="comment-list">{visibleComments.map((comment) => <article className={"comment-item" + (comment.parentId ? " comment-item--reply" : "")} key={comment.id}><div className={"author-avatar author-avatar--" + comment.tone}>{comment.mark}</div><div className="comment-item-main"><div className="comment-item-meta"><strong>{comment.author}{comment.authorComment && <em>楼主</em>}</strong><span>{comment.floor} · {comment.date}</span></div><p className={comment.deleted ? "comment-deleted" : ""}>{comment.content}</p><div className="comment-item-actions"><span className="comment-like-count"><ThumbsUp size={14} />{comment.likes}</span>{!comment.deleted && !comment.parentId && <button type="button" onClick={() => { if (loggedIn) setReplyTo(comment.id); else requestLogin(() => setReplyTo(comment.id)); }}>回复</button>}<button type="button" onClick={() => onReport(comment.id)}>举报</button>{user?.id === comment.authorId && !comment.deleted && <button type="button" onClick={() => void removeComment(comment.id)}>删除</button>}</div></div></article>)}</div>
   </section>;
 }
 
@@ -206,12 +234,19 @@ function MarkdownImage({ src, alt }: { src: string; alt: string }) {
 }
 
 function renderMarkdown(content: string): ReactNode[] {
+  let headingIndex = 0;
   return content.split(/\n\s*\n/).map((block, index) => {
     const lines = block.split("\n");
     const image = block.match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+["'][^)]*["'])?\)$/);
     if (image && isSafeMarkdownImageUrl(image[2])) return <figure className="post-markdown-image" key={index}><MarkdownImage alt={image[1] || "帖子配图"} src={image[2]} /></figure>;
     if (lines.every((line) => line.startsWith("- "))) return <ul key={index}>{lines.map((line) => <li key={line}>{line.slice(2)}</li>)}</ul>;
-    if (block.startsWith("## ")) return <h2 key={index}>{block.slice(3)}</h2>;
+    const heading = parseMarkdownHeading(block);
+    if (heading) {
+      const title = heading;
+      const id = sectionIdForTitle(title, headingIndex);
+      headingIndex += 1;
+      return <h2 id={id} key={index}>{title}</h2>;
+    }
     return <p key={index}>{block.replace(/^# /, "")}</p>;
   });
 }
@@ -220,13 +255,13 @@ function GuideArticle({ content }: { content?: string }) {
   if (content) return <div className="post-detail-body">{renderMarkdown(content)}</div>;
   return <div className="post-detail-body">
     <p>这篇攻略记录了当前版本下的实战测试结果，适合已经完成主线并准备进一步提升队伍强度的漂泊者。</p>
-    <h2>一、先确定队伍节奏</h2>
+    <h2 id="section-team-rhythm">一、先确定队伍节奏</h2>
     <p>先用主输出完成关键技能循环，再让协同角色补充增益和伤害。不要为了追求面板而牺牲实际的轮切顺序，稳定完成一轮循环通常比单次数字更重要。</p>
     <div className="article-note"><Clock3 size={17} /><span>核心思路：把共鸣效率、技能冷却和声骸触发安排在同一条循环线上。</span></div>
-    <h2>二、角色与声骸选择</h2>
+    <h2 id="section-character-echoes">二、角色与声骸选择</h2>
     <p>优先选择能覆盖队伍空窗期的协同角色。声骸方面，先满足套装效果，再根据主词条和副词条逐步替换。</p>
     <div className="article-table"><div><span>位置</span><strong>推荐方向</strong></div><div><span>主输出</span><strong>优先保证共鸣技能循环</strong></div><div><span>协同位</span><strong>补充增益并缩短空窗期</strong></div><div><span>声骸</span><strong>套装效果优先于单件面板</strong></div></div>
-    <h2>三、实战检查清单</h2>
+    <h2 id="section-checklist">三、实战检查清单</h2>
     <ul><li>进入战斗前确认声骸和武器资源是否已经分配。</li><li>先练习一轮完整循环，再根据实战表现调整顺序。</li><li>深塔环境变化时，优先替换功能位，而不是盲目更换主输出。</li></ul>
   </div>;
 }
@@ -239,6 +274,16 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
   const [apiUnavailable, setApiUnavailable] = useState(false);
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string } | null>(null);
   const { notify, requestLogin } = useCommunityDemo();
+  const sections = useMemo(() => getArticleSections(guide.content), [guide.content]);
+  async function sharePost() {
+    try {
+      if (!navigator.clipboard) throw new Error("clipboard unavailable");
+      await navigator.clipboard.writeText(new URL(`/guides/${apiPostId}`, window.location.origin).href);
+      notify("链接已复制，可以分享给你的队友。");
+    } catch {
+      notify("复制失败，请手动复制当前页面地址。");
+    }
+  }
   useEffect(() => {
     let cancelled = false;
     fetchPost(apiPostId).then((post) => {
@@ -257,11 +302,11 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
       <header className="post-detail-heading"><div className="post-detail-kicker"><span className="guide-type">{guide.category}</span><span>原创</span><time>{guide.publishedAt}</time></div><h1>{guide.title}</h1><p>{guide.excerpt}</p><div className="detail-author"><div className={"author-avatar author-avatar--" + guide.avatarTone}>{guide.authorMark}</div><div><strong>{guide.author}</strong><small>攻略作者 · {guide.views} 阅读</small></div><CommunityFollowButton className="follow-button" fallbackKey={guide.author} targetUserId={authorId} /></div></header>
       <div className="post-cover"><Image alt={guide.title + "配图"} fill priority sizes="(max-width: 900px) 100vw, 820px" src={coverByGuide[guide.id] ?? coverByGuide[slug] ?? "/art/guide-sword.png"} /></div>
       <GuideArticle content={guide.content} />
-      <div className="post-detail-footer"><span>阅读 {guide.views}</span><button type="button" onClick={() => requestLogin(() => setReportTarget({ type: "POST", id: apiPostId }))}><Flag size={14} />举报</button><button type="button" onClick={() => notify("链接已复制，可以分享给你的队友。")}><Share2 size={14} />分享</button></div>
+      <div className="post-detail-footer"><span>阅读 {guide.views}</span><button type="button" onClick={() => requestLogin(() => setReportTarget({ type: "POST", id: apiPostId }))}><Flag size={14} />举报</button><button type="button" onClick={() => void sharePost()}><Share2 size={14} />分享</button></div>
       <PostComments authorName={guide.author} onReport={(commentId) => requestLogin(() => setReportTarget({ type: "COMMENT", id: commentId }))} postId={apiPostId} />
       {apiUnavailable && <p className="api-fallback-note">后端暂不可用，当前显示本地 Demo 数据。</p>}
     </article>
-    <PostAuthorCard authorId={authorId} guide={guide} />
+    <PostAuthorCard authorId={authorId} guide={guide} sections={sections} />
     {reportTarget && <CommunityReportDialog onClose={() => setReportTarget(null)} onSuccess={() => setReportTarget(null)} targetId={reportTarget.id} targetType={reportTarget.type} />}
   </div></CommunityPageFrame>;
 }
