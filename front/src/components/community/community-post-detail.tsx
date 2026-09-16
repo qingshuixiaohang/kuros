@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, Bookmark, Clock3, Eye, Flag, Heart, MessageCircle, Reply, Share2, ThumbsUp } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { AtSign, ArrowLeft, Bookmark, Clock3, Eye, Flag, Heart, ImagePlus, MessageCircle, Share2, Smile, ThumbsUp } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
@@ -154,8 +154,20 @@ function PostAuthorCard({ guide, authorId, sections }: { guide: Guide; authorId?
 }
 
 function CommentComposer({ onComment, replyTo, replyLabel, onCancel }: { onComment: (content: string, parentId: string | null) => Promise<void>; replyTo: string | null; replyLabel?: string; onCancel: () => void }) {
-  const { loggedIn, requestLogin } = useCommunityDemo();
+  const { loggedIn, notify, requestLogin } = useCommunityDemo();
   const [draft, setDraft] = useState("");
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const emojis = ["🙂", "👍", "✨", "😭", "🎉", "❤️"];
+  function insertAtCursor(value: string) {
+    const textarea = textareaRef.current;
+    const start = textarea?.selectionStart ?? draft.length;
+    const end = textarea?.selectionEnd ?? draft.length;
+    const next = draft.slice(0, start) + value + draft.slice(end);
+    setDraft(next);
+    window.requestAnimationFrame(() => { textarea?.focus(); textarea?.setSelectionRange(start + value.length, start + value.length); });
+  }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const content = draft.trim();
@@ -166,8 +178,8 @@ function CommentComposer({ onComment, replyTo, replyLabel, onCancel }: { onComme
   }
   return <form className="comment-composer" onSubmit={submit}>
     {replyTo && <div className="comment-replying"><span>正在回复 {replyLabel ?? "这条评论"}</span><button type="button" onClick={onCancel}>取消回复</button></div>}
-    <textarea aria-label="评论内容" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={loggedIn ? "留下你的看法，和漂泊者聊聊这篇攻略..." : "登录后参与讨论，分享你的实战心得..."} maxLength={1000} />
-    <div className="comment-composer-tools"><span><Reply size={16} />支持回复与表情</span><span>{draft.length} / 1000</span><button type="submit">评论</button></div>
+    <textarea aria-label="评论内容" ref={textareaRef} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={loggedIn ? "留下你的看法，和漂泊者聊聊这篇攻略..." : "登录后参与讨论，分享你的实战心得..."} maxLength={1000} />
+    <div className="comment-composer-tools"><div className="comment-composer-tool-group"><div className="comment-emoji-wrap"><button aria-expanded={emojiOpen} aria-haspopup="menu" aria-label="插入表情" className="comment-tool-button" onClick={() => setEmojiOpen((current) => !current)} type="button"><Smile size={17} /></button>{emojiOpen && <div aria-label="常用表情" className="comment-emoji-picker" role="menu">{emojis.map((emoji) => <button aria-label={`插入${emoji}`} key={emoji} onClick={() => { insertAtCursor(emoji); setEmojiOpen(false); }} role="menuitem" type="button">{emoji}</button>)}</div>}</div><button aria-label="添加图片" className="comment-tool-button" onClick={() => imageInputRef.current?.click()} title="评论图片附件暂未接入" type="button"><ImagePlus size={17} /></button><input accept="image/*" aria-hidden="true" className="comment-image-input" onChange={(event) => { if (event.target.files?.length) { notify("评论暂不支持图片附件，图片上传将在后续版本接入。"); event.target.value = ""; } }} ref={imageInputRef} tabIndex={-1} type="file" /><button aria-label="提及用户" className="comment-tool-button" onClick={() => insertAtCursor("@")} type="button"><AtSign size={17} /></button></div><span>{draft.length} / 1000</span><button type="submit">评论</button></div>
   </form>;
 }
 
