@@ -8,6 +8,8 @@ export interface Guide {
   title: string;
   excerpt: string;
   content?: string;
+  /** 后端详情接口返回的首图；未返回时回退到演示素材。 */
+  coverImageUrl?: string | null;
   author: string;
   authorMark: string;
   avatarTone: AvatarTone;

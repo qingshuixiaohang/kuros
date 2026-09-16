@@ -288,7 +288,7 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
     let cancelled = false;
     fetchPost(apiPostId).then((post) => {
       if (!cancelled) {
-        setGuide({ ...fallbackGuide, id: post.id, category: post.category, title: post.title, excerpt: post.excerpt, content: post.content, author: post.author.nickname, authorMark: post.author.nickname.slice(0, 1), publishedAt: post.publishedAt, views: formatCount(post.viewCount), replies: post.commentCount, likes: formatCount(post.likeCount), tags: post.tags });
+        setGuide({ ...fallbackGuide, id: post.id, category: post.category, title: post.title, excerpt: post.excerpt, content: post.content, coverImageUrl: post.coverImageUrl, author: post.author.nickname, authorMark: post.author.nickname.slice(0, 1), publishedAt: post.publishedAt, views: formatCount(post.viewCount), replies: post.commentCount, likes: formatCount(post.likeCount), tags: post.tags });
         setAuthorId(post.author.id);
         setApiUnavailable(false);
       }
@@ -300,7 +300,7 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
     <article className="post-detail-page">
       <Link className="back-link" href="/guides"><ArrowLeft size={15} />返回攻略列表</Link>
       <header className="post-detail-heading"><div className="post-detail-kicker"><span className="guide-type">{guide.category}</span><span>原创</span><time>{guide.publishedAt}</time></div><h1>{guide.title}</h1><p>{guide.excerpt}</p><div className="detail-author"><div className={"author-avatar author-avatar--" + guide.avatarTone}>{guide.authorMark}</div><div><strong>{guide.author}</strong><small>攻略作者 · {guide.views} 阅读</small></div><CommunityFollowButton className="follow-button" fallbackKey={guide.author} targetUserId={authorId} /></div></header>
-      <div className="post-cover"><Image alt={guide.title + "配图"} fill priority sizes="(max-width: 900px) 100vw, 820px" src={coverByGuide[guide.id] ?? coverByGuide[slug] ?? "/art/guide-sword.png"} /></div>
+      <div className="post-cover"><Image alt={guide.title + "配图"} fill priority sizes="(max-width: 900px) 100vw, 820px" src={guide.coverImageUrl ?? coverByGuide[guide.id] ?? coverByGuide[slug] ?? guide.mediaUrls?.[0] ?? "/art/guide-sword.png"} /></div>
       <GuideArticle content={guide.content} />
       <div className="post-detail-footer"><span>阅读 {guide.views}</span><button type="button" onClick={() => requestLogin(() => setReportTarget({ type: "POST", id: apiPostId }))}><Flag size={14} />举报</button><button type="button" onClick={() => void sharePost()}><Share2 size={14} />分享</button></div>
       <PostComments authorName={guide.author} onReport={(commentId) => requestLogin(() => setReportTarget({ type: "COMMENT", id: commentId }))} postId={apiPostId} />
