@@ -9,6 +9,8 @@ export type ApiPost = {
   title: string;
   excerpt: string;
   content?: string;
+  /** 列表接口可选返回的首图；旧后端未返回时保持无图卡片。 */
+  coverImageUrl?: string | null;
   author: ApiAuthor;
   publishedAt: string;
   viewCount: number;
@@ -50,6 +52,7 @@ export type ProfileOverview = {
   comments: { items: ProfileComment[]; meta?: ApiPageMeta };
   favorites: { items: ApiPost[]; meta?: ApiPageMeta };
   following: { items: PublicProfile[]; meta?: ApiPageMeta };
+  fans: { items: PublicProfile[]; meta?: ApiPageMeta };
 };
 
 export class ApiError extends Error {
@@ -93,7 +96,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return envelope?.data as T;
 }
 
-export async function fetchPosts(options: { category?: string; keyword?: string; tag?: string; page?: number; pageSize?: number; sort?: "latest" | "hot" } = {}) {
+export async function fetchPostPage(options: { category?: string; keyword?: string; tag?: string; page?: number; pageSize?: number; sort?: "latest" | "hot" } = {}) {
   const params = new URLSearchParams();
   params.set("page", String(options.page ?? 1));
   params.set("pageSize", String(options.pageSize ?? 20));
@@ -101,7 +104,12 @@ export async function fetchPosts(options: { category?: string; keyword?: string;
   if (options.category && options.category !== "全部") params.set("category", options.category);
   if (options.keyword?.trim()) params.set("keyword", options.keyword.trim());
   if (options.tag?.trim()) params.set("tag", options.tag.trim());
-  return request<ApiPost[]>("/api/v1/posts?" + params.toString());
+  const envelope = await requestEnvelope<ApiPost[]>("/api/v1/posts?" + params.toString());
+  return { items: envelope?.data ?? [], meta: envelope?.meta };
+}
+
+export async function fetchPosts(options: { category?: string; keyword?: string; tag?: string; page?: number; pageSize?: number; sort?: "latest" | "hot" } = {}) {
+  return (await fetchPostPage(options)).items;
 }
 
 export function fetchPost(id: string) {
@@ -112,6 +120,14 @@ export type CreatePostInput = { type: "GUIDE" | "GENERAL"; category: string; tit
 
 export function createPost(input: CreatePostInput) {
   return ensureCsrfToken().then(() => request<ApiPost>("/api/v1/posts", { method: "POST", body: JSON.stringify(input) }));
+}
+
+export function updatePost(postId: string, input: CreatePostInput) {
+  return ensureCsrfToken().then(() => request<ApiPost>(`/api/v1/posts/${encodeURIComponent(postId)}`, { method: "PUT", body: JSON.stringify(input) }));
+}
+
+export function deletePost(postId: string) {
+  return ensureCsrfToken().then(() => request<void>(`/api/v1/posts/${encodeURIComponent(postId)}`, { method: "DELETE" }));
 }
 
 export type ReportTargetType = "POST" | "COMMENT";
