@@ -104,6 +104,25 @@ public class CommunityPost {
         this.tags.addAll(tags);
     }
 
+    public void update(PostType type, String category, String title, String excerpt, String content, LocalDateTime now) {
+        this.type = type;
+        this.category = category;
+        this.title = title;
+        this.excerpt = excerpt;
+        this.content = content;
+        this.updatedAt = now;
+    }
+
+    public void replaceTags(List<ContentTag> tags) {
+        this.tags.clear();
+        this.tags.addAll(tags);
+    }
+
+    public void delete(LocalDateTime now) {
+        this.status = PostStatus.DELETED;
+        this.updatedAt = now;
+    }
+
     public String getId() {
         return id;
     }
