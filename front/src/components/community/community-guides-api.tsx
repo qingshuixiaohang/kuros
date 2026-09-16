@@ -30,7 +30,7 @@ function filterFallback(category: string, query: string) {
 }
 
 function GuideListItem({ guide }: { guide: Guide }) {
-  return <article className="guide-list-item"><div className="guide-list-top"><span className="guide-type">{guide.category}</span><time>{guide.publishedAt}</time></div><Link href={"/guides/" + guide.id}><h2>{guide.title}</h2></Link><p>{guide.excerpt}</p><div className="guide-list-meta"><span>{guide.author}</span><span><Eye size={14} />{guide.views}</span><span><MessageSquare size={14} />{guide.replies}</span><span><Heart size={14} />{guide.likes}</span></div><Link className="read-link" href={"/guides/" + guide.id}>查看攻略 <MoveRight size={15} /></Link></article>;
+  return <article className="guide-list-item"><div className="guide-list-top"><span className="guide-type">{guide.category}</span><time>{guide.publishedAt}</time></div><Link href={"/guides/" + guide.id} rel="noopener noreferrer" target="_blank"><h2>{guide.title}</h2></Link><p>{guide.excerpt}</p><div className="guide-list-meta"><span>{guide.author}</span><span><Eye size={14} />{guide.views}</span><span><MessageSquare size={14} />{guide.replies}</span><span><Heart size={14} />{guide.likes}</span></div><Link className="read-link" href={"/guides/" + guide.id} rel="noopener noreferrer" target="_blank">查看攻略 <MoveRight size={15} /></Link></article>;
 }
 
 export function GuidesApiPage() {

@@ -191,6 +191,38 @@ class KurosBackendApplicationTests {
     }
 
     @Test
+    void 公开用户资料只展示公开信息和已发布帖子() throws Exception {
+        String userId = "10000000-0000-0000-0000-000000000001";
+        mockMvc.perform(get("/api/v1/users/" + userId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(userId))
+                .andExpect(jsonPath("$.data.nickname").value("潮声档案员"))
+                .andExpect(jsonPath("$.data.phone").doesNotExist())
+                .andExpect(jsonPath("$.data.postCount").value(1));
+
+        mockMvc.perform(get("/api/v1/users/" + userId + "/posts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(1)))
+                .andExpect(jsonPath("$.data[0].title").value("长离焚火队：从零到毕业的配队思路"))
+                .andExpect(jsonPath("$.meta.totalItems").value(1));
+    }
+
+    @Test
+    @DirtiesContext
+    void 当前用户个人中心包含自己的帖子和评论但不暴露手机号() throws Exception {
+        Cookie sessionCookie = login("13800000001");
+
+        mockMvc.perform(get("/api/v1/users/me/profile").cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.profile.nickname").value("潮声档案员"))
+                .andExpect(jsonPath("$.data.profile.phone").doesNotExist())
+                .andExpect(jsonPath("$.data.stats.postCount").value(1))
+                .andExpect(jsonPath("$.data.posts.items", hasSize(1)))
+                .andExpect(jsonPath("$.data.comments.items", hasSize(1)))
+                .andExpect(jsonPath("$.data.comments.items[0].content").value("谢谢反馈！低配队伍可以先保证循环完整，再慢慢补面板，不用一开始就追求毕业词条。"));
+    }
+
+    @Test
     @DirtiesContext
     void 登录用户可以发表评论但不能创建二级回复() throws Exception {
         Cookie sessionCookie = login("13800000008");

@@ -121,6 +121,14 @@ button, input { font: inherit; } button { border: 0; cursor: pointer; } a { colo
 .profile-empty-panel svg { color: #c5d2da; }
 .profile-empty-panel strong { color: #8d9baa; font-size: 15px; }
 .profile-empty-panel span { font-size: 11px; }
+.profile-empty-panel p { margin: 0; color: #a5b1bd; font-size: 12px; }
+.profile-comment-list p.is-deleted { color: #aeb9c2; font-style: italic; }
+.profile-state { display: grid; min-height: 420px; place-items: center; align-content: center; gap: 11px; padding: 38px 20px; border-radius: 9px; background: var(--white); color: #a1aeb9; font-size: 13px; text-align: center; }
+.profile-state strong { color: #53616f; font-size: 16px; font-weight: 600; }
+.profile-state svg:not(.profile-state-spinner) { color: var(--cyan); }
+.profile-state-spinner { color: var(--cyan); animation: profile-state-spin .9s linear infinite; }
+.profile-state-button { min-width: 104px; height: 36px; margin-top: 6px; border-radius: 4px; background: var(--cyan); color: #fff; font-size: 12px; }
+@keyframes profile-state-spin { to { transform: rotate(360deg); } }
 .profile-following-list, .profile-comment-list { display: grid; }
 .profile-following-list > a, .profile-comment-list > a { display: flex; align-items: center; gap: 12px; min-height: 78px; border-bottom: 1px solid #edf1f4; color: inherit; }
 .profile-following-list > a > div:nth-child(2), .profile-comment-list > a > div { display: grid; gap: 5px; flex: 1; }
@@ -154,7 +162,7 @@ button, input { font: inherit; } button { border: 0; cursor: pointer; } a { colo
 .post-detail-footer span { margin-right: auto; }
 .post-detail-footer button { display: inline-flex; align-items: center; gap: 5px; background: transparent; color: inherit; font-size: 11px; }
 .post-detail-footer button:hover { color: var(--cyan); }
-.post-context-rail { display: grid; gap: 13px; }
+.post-context-rail { position: sticky; top: 88px; align-self: start; display: grid; gap: 13px; }
 .post-author-card, .post-topic-card { padding: 19px 18px; border-radius: 9px; background: var(--white); }
 .post-author-card-top { display: flex; align-items: center; gap: 10px; }
 .post-author-card-top > div:last-child { display: grid; gap: 5px; }
