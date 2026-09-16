@@ -16,7 +16,7 @@ function toggle(items: string[], id: string) { return items.includes(id) ? items
 export function CommunityDemoProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<DemoState>(initialState); const [hydrated, setHydrated] = useState(false); const [loginOpen, setLoginOpen] = useState(false); const [pendingAction, setPendingAction] = useState<(() => void) | null>(null); const [toast, setToast] = useState("");
   const [phone, setPhone] = useState(""); const [verification, setVerification] = useState(""); const [agreement, setAgreement] = useState(false); const [codeSent, setCodeSent] = useState(false); const [formError, setFormError] = useState(""); const [sendingCode, setSendingCode] = useState(false); const [loggingIn, setLoggingIn] = useState(false);
-  const previousFocusRef = useRef<HTMLElement | null>(null); const loginCloseRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null); const loginCloseRef = useRef<HTMLButtonElement>(null); const loginWasOpenRef = useRef(false);
   const closeLogin = useCallback(() => { if (!loggingIn && !sendingCode) { setLoginOpen(false); setFormError(""); } }, [loggingIn, sendingCode]);
 
   useEffect(() => { let active = true; const timer = window.setTimeout(() => { try { const saved = window.localStorage.getItem(storageKey); if (saved) { const parsed = JSON.parse(saved) as Partial<DemoState>; setState((current) => ({ ...current, followed: parsed.followed ?? [], liked: parsed.liked ?? [], bookmarked: parsed.bookmarked ?? [] })); } } catch { /* Keep the community usable when storage is unavailable. */ } setHydrated(true); void fetchCurrentUser().then((user) => { if (active && user) setState((current) => ({ ...current, loggedIn: true, user })); }).catch(() => { /* The mock shell remains usable when the backend is offline. */ }); }, 0); return () => { active = false; window.clearTimeout(timer); }; }, []);
@@ -27,10 +27,13 @@ export function CommunityDemoProvider({ children }: { children: ReactNode }) {
       const previous = previousFocusRef.current;
       if (previous) window.requestAnimationFrame(() => previous.focus());
       previousFocusRef.current = null;
+      loginWasOpenRef.current = false;
       return;
     }
-    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const focusFrame = window.requestAnimationFrame(() => loginCloseRef.current?.focus());
+    const justOpened = !loginWasOpenRef.current;
+    if (justOpened) previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    loginWasOpenRef.current = true;
+    const focusFrame = justOpened ? window.requestAnimationFrame(() => loginCloseRef.current?.focus()) : undefined;
     function getFocusableElements() {
       return Array.from(document.querySelectorAll<HTMLElement>(".login-dialog button:not([disabled]), .login-dialog input:not([disabled]), .login-dialog a[href], .login-dialog select, .login-dialog textarea"));
     }
@@ -44,7 +47,7 @@ export function CommunityDemoProvider({ children }: { children: ReactNode }) {
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     }
     document.addEventListener("keydown", handleKeyDown);
-    return () => { window.cancelAnimationFrame(focusFrame); document.removeEventListener("keydown", handleKeyDown); };
+    return () => { if (focusFrame !== undefined) window.cancelAnimationFrame(focusFrame); document.removeEventListener("keydown", handleKeyDown); };
   }, [closeLogin, loginOpen]);
 
   const notify = useCallback((message: string) => setToast(message), []);

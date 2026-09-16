@@ -31,6 +31,9 @@ test("窄桌面频道抽屉可以用键盘打开并关闭", async ({ page }) => 
   await openButton.focus();
   await page.keyboard.press("Enter");
   await expect(page.locator(".drawer-sidebar")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "社区频道" }).getByRole("button", { name: "关闭导航" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect.poll(() => page.evaluate(() => Boolean(document.activeElement?.closest(".mobile-drawer")))).toBe(true);
   await page.keyboard.press("Escape");
   await expect(page.locator(".drawer-sidebar")).toBeHidden();
   await expect(openButton).toBeFocused();
@@ -55,7 +58,8 @@ test("登录弹窗打开后焦点留在弹窗内，Escape 关闭并恢复触发�
   await page.goto("/");
 
   const loginButton = page.getByRole("button", { name: "登录" });
-  await loginButton.click();
+  await loginButton.focus();
+  await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog", { name: "登录鸣潮社区" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("button", { name: "关闭登录" })).toBeFocused();
@@ -64,6 +68,26 @@ test("登录弹窗打开后焦点留在弹窗内，Escape 关闭并恢复触发�
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(loginButton).toBeFocused();
+});
+
+test("减少动画偏好下发布编辑器设置滚动使用 auto", async ({ page }) => {
+  await page.route("**/api/v1/auth/me", (route) => route.fulfill({ json: { data: {
+    id: "user-100", phone: "13800000001", nickname: "潮声档案员", avatarUrl: null, bio: "记录鸣潮实战", role: "USER",
+  } } }));
+  await page.addInitScript(() => {
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (options) {
+      const values = (window as typeof window & { scrollBehaviors?: unknown[] }).scrollBehaviors ?? [];
+      values.push(typeof options === "object" && options ? (options as ScrollIntoViewOptions).behavior : undefined);
+      (window as typeof window & { scrollBehaviors?: unknown[] }).scrollBehaviors = values;
+      original.call(this, options);
+    };
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/publish");
+  await page.getByRole("button", { name: "帖子设置" }).click();
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { scrollBehaviors?: unknown[] }).scrollBehaviors?.at(-1))).toBe("auto");
 });
 
 test("减少动画偏好下帖子互动滚动使用 auto", async ({ page }) => {

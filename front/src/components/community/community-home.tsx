@@ -132,5 +132,40 @@ export function RightRail() {
     <div className="right-quote"><span>“</span><p>潮水会记得每一个漂泊者的足迹。</p><small>— 鸣潮</small></div>
   </aside>;
 }
-function HomeContent() { const [drawerOpen, setDrawerOpen] = useState(false); const [query, setQuery] = useState(""); useEffect(() => { if (!drawerOpen) return; function closeWithFocus() { setDrawerOpen(false); window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(".mobile-menu-button")?.focus()); } function handleKeyDown(event: KeyboardEvent) { if (event.key === "Escape") { event.preventDefault(); closeWithFocus(); } } document.addEventListener("keydown", handleKeyDown); return () => document.removeEventListener("keydown", handleKeyDown); }, [drawerOpen]); return <main className="app-shell"><TopNavigation query={query} onQueryChange={setQuery} onMenu={() => setDrawerOpen(true)} />{drawerOpen && <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)}><div className="mobile-drawer" onClick={(event) => event.stopPropagation()}><div className="drawer-header"><span>频道</span><button onClick={() => setDrawerOpen(false)} type="button" aria-label="关闭导航"><X size={20} /></button></div><Sidebar drawer /></div></div>}<div className="page-grid"><Sidebar /><div className="main-column"><Feed query={query} /></div><RightRail /></div></main>; }
+export function useCommunityDrawer(open: boolean, setOpen: (value: boolean) => void) {
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const drawerCloseRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) {
+      const previous = previousFocusRef.current;
+      if (previous) window.requestAnimationFrame(() => previous.focus());
+      previousFocusRef.current = null;
+      return;
+    }
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusFrame = window.requestAnimationFrame(() => drawerCloseRef.current?.focus());
+    function getFocusableElements() {
+      return Array.from(drawerRef.current?.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), input:not([disabled]), select, textarea") ?? []);
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = getFocusableElements();
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => { window.cancelAnimationFrame(focusFrame); document.removeEventListener("keydown", handleKeyDown); };
+  }, [open, setOpen]);
+  return { drawerCloseRef, drawerRef };
+}
+function HomeContent() { const [drawerOpen, setDrawerOpen] = useState(false); const [query, setQuery] = useState(""); const { drawerCloseRef, drawerRef } = useCommunityDrawer(drawerOpen, setDrawerOpen); return <main className="app-shell"><TopNavigation query={query} onQueryChange={setQuery} onMenu={() => setDrawerOpen(true)} />{drawerOpen && <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)}><div aria-label="社区频道" aria-modal="true" className="mobile-drawer" onClick={(event) => event.stopPropagation()} ref={drawerRef} role="dialog"><div className="drawer-header"><span>频道</span><button onClick={() => setDrawerOpen(false)} ref={drawerCloseRef} type="button" aria-label="关闭导航"><X size={20} /></button></div><Sidebar drawer /></div></div>}<div className="page-grid"><Sidebar /><div className="main-column"><Feed query={query} /></div><RightRail /></div></main>; }
 export function CommunityHome() { return <CommunityDemoProvider><HomeContent /></CommunityDemoProvider>; }
