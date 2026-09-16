@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const coreRoutes = ["/", "/guides/10000000-0000-0000-0000-000000000001", "/profile", "/publish"];
 const targetViewports = [
@@ -8,6 +8,10 @@ const targetViewports = [
   { name: "narrow-desktop", width: 768, height: 900 },
   { name: "mobile", width: 390, height: 844 },
 ];
+
+function floatingEmojiPicker(page: Page) {
+  return page.locator('[data-floating-ui-portal] [role="menu"]', { hasText: "🙂" });
+}
 
 for (const route of coreRoutes) {
   for (const viewport of targetViewports) {
@@ -144,11 +148,11 @@ test("评论编辑器提供表情、图片和提及工具", async ({ page }) => 
   await expect(composer.getByRole("button", { name: "提及用户" })).toBeFocused();
   await textarea.fill("准备出发 ");
   await composer.getByRole("button", { name: "插入表情" }).click();
-  const emojiPicker = composer.getByRole("menu", { name: "常用表情" });
+  const emojiPicker = floatingEmojiPicker(page);
   await expect(emojiPicker).toBeVisible();
-  await expect(composer.locator(".comment-emoji-wrap").getByRole("menuitem", { name: "插入🙂" })).toBeVisible();
-  await page.keyboard.press("Tab");
-  await expect(composer.getByRole("menuitem", { name: "插入🙂" })).toBeFocused();
+  await expect(composer.getByRole("menu", { name: "常用表情" })).toHaveCount(0);
+  await expect(emojiPicker.getByRole("menuitem", { name: "插入🙂" })).toBeVisible();
+  await expect(emojiPicker.getByRole("menuitem", { name: "插入🙂" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(emojiPicker).toBeHidden();
   await expect(textarea).toHaveValue(/准备出发/);
@@ -166,4 +170,37 @@ test("评论编辑器提供表情、图片和提及工具", async ({ page }) => 
   const chooser = await chooserPromise;
   await chooser.setFiles({ name: "echo.png", mimeType: "image/png", buffer: Buffer.from("demo") });
   await expect(page.getByRole("status")).toContainText("评论暂不支持图片附件");
+});
+
+test("窄视口下表情浮层脱离帖子裁剪且可以插入", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/guides/10000000-0000-0000-0000-000000000001");
+  const composer = page.getByRole("region", { name: "评论区" });
+  const textarea = composer.getByRole("textbox", { name: "评论内容" });
+  await textarea.scrollIntoViewIfNeeded();
+  await textarea.fill("窄屏测试 ");
+  await composer.getByRole("button", { name: "插入表情" }).click();
+
+  const emojiPicker = floatingEmojiPicker(page);
+  await expect(emojiPicker).toBeVisible();
+  await expect(emojiPicker).toHaveCSS("position", "fixed");
+  await expect(composer.getByRole("menu", { name: "常用表情" })).toHaveCount(0);
+  const trigger = composer.getByRole("button", { name: "插入表情" });
+  await page.evaluate(() => window.scrollBy(0, -120));
+  await expect.poll(async () => {
+    const anchorBox = await trigger.boundingBox();
+    const pickerBox = await emojiPicker.boundingBox();
+    if (!anchorBox || !pickerBox) return false;
+    const pickerBottom = pickerBox.y + pickerBox.height;
+    const anchorBottom = anchorBox.y + anchorBox.height;
+    return Math.abs(pickerBottom - anchorBox.y + 8) < 2 || Math.abs(pickerBox.y - anchorBottom - 8) < 2;
+  }).toBe(true);
+  const pickerBox = await emojiPicker.boundingBox();
+  if (!pickerBox) throw new Error("表情浮层没有可测量的边界");
+  expect(pickerBox.x).toBeGreaterThanOrEqual(0);
+  expect(pickerBox.x + pickerBox.width).toBeLessThanOrEqual(390);
+  expect(pickerBox.y).toBeGreaterThanOrEqual(0);
+  expect(pickerBox.y + pickerBox.height).toBeLessThanOrEqual(844);
+  await emojiPicker.getByRole("menuitem", { name: "插入🙂" }).click();
+  await expect(textarea).toHaveValue(/窄屏测试 .*🙂/);
 });

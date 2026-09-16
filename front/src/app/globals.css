@@ -486,14 +486,12 @@ select:focus-visible {
 .comment-composer textarea { display: block; width: 100%; min-height: 80px; resize: vertical; border: 0; outline: 0; background: transparent; color: #526373; font: inherit; font-size: 13px; line-height: 1.7; }
 .comment-composer textarea::placeholder { color: #b0bbc5; }
 .comment-composer-tools { position: relative; z-index: 3; display: flex; align-items: center; gap: 15px; color: #9daab6; font-size: 11px; }
-.comment-composer-tools--emoji-open { align-items: flex-end; }
-.comment-composer-tools--emoji-open .comment-composer-tool-group { align-items: flex-end; }
 .comment-composer-tool-group { position: relative; display: inline-flex; align-items: center; gap: 5px; }
 .comment-tool-button { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 4px; background: transparent; color: #8e9dac; }
 .comment-tool-button:hover, .comment-tool-button:focus-visible { background: #e8f8f9; color: var(--cyan); }
-.comment-emoji-wrap { position: relative; z-index: 4; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px; }
-.comment-emoji-picker { position: relative; z-index: 20; display: grid; grid-template-columns: repeat(3, 32px); gap: 3px; padding: 6px; border: 1px solid #e5edf1; border-radius: 6px; background: #fff; box-shadow: 0 8px 20px rgba(38, 55, 68, .14); }
+.comment-emoji-picker { position: fixed; z-index: 1000; display: grid; grid-template-columns: repeat(3, 32px); gap: 3px; padding: 6px; border: 1px solid #e5edf1; border-radius: 6px; background: #fff; box-shadow: 0 8px 20px rgba(38, 55, 68, .14); }
 .comment-emoji-picker::after { position: absolute; bottom: -5px; left: 15px; width: 8px; height: 8px; border-right: 1px solid #e5edf1; border-bottom: 1px solid #e5edf1; background: #fff; content: ""; transform: rotate(45deg); }
+.comment-emoji-picker[data-placement^="bottom"]::after { top: -5px; right: auto; bottom: auto; transform: rotate(225deg); }
 .comment-emoji-picker button { display: grid; width: 32px; height: 30px; place-items: center; border-radius: 4px; background: transparent; font-size: 16px; }
 .comment-emoji-picker button:hover, .comment-emoji-picker button:focus-visible { background: #effbfc; }
 .comment-image-input { display: none; }
