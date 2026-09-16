@@ -33,6 +33,10 @@ public class CommunityUser {
     @Column(length = 32, nullable = false)
     private UserStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 32, nullable = false)
+    private UserRole role;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -42,8 +46,22 @@ public class CommunityUser {
     protected CommunityUser() {
     }
 
+    public CommunityUser(String id, String phone, String nickname, UserStatus status, LocalDateTime now) {
+        this.id = id;
+        this.phone = phone;
+        this.nickname = nickname;
+        this.status = status;
+        this.role = UserRole.USER;
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
     public String getId() {
         return id;
+    }
+
+    public String getPhone() {
+        return phone;
     }
 
     public String getNickname() {
@@ -60,5 +78,9 @@ public class CommunityUser {
 
     public UserStatus getStatus() {
         return status;
+    }
+
+    public UserRole getRole() {
+        return role;
     }
 }

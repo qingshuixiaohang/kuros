@@ -33,6 +33,7 @@
 
 # backend build output
 /kuros-backend/target/
+/kuros-backend/storage/
 
 # debug
 npm-debug.log*
