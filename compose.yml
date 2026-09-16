@@ -1,0 +1,70 @@
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-kuros}
+      MYSQL_USER: ${MYSQL_USER:-kuros}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-kuros_dev_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-kuros_dev_root_password}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    ports:
+      - "${MYSQL_PORT:-3307}:3306"
+    volumes:
+      - kuros_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build:
+      context: ./kuros-backend
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-kuros}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8
+      DB_USERNAME: ${MYSQL_USER:-kuros}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-kuros_dev_password}
+      APP_CORS_ALLOWED_ORIGIN: ${APP_CORS_ALLOWED_ORIGIN:-http://localhost:3000}
+      APP_AUTH_DEV_CODE: ${APP_AUTH_DEV_CODE:-}
+      APP_AUTH_DEV_CODE_EXPOSED: ${APP_AUTH_DEV_CODE_EXPOSED:-false}
+      APP_AUTH_SESSION_COOKIE_SECURE: ${APP_AUTH_SESSION_COOKIE_SECURE:-false}
+      APP_STORAGE_LOCAL_DIR: ${APP_STORAGE_LOCAL_DIR:-/app/storage}
+      APP_STORAGE_PUBLIC_BASE_URL: ${APP_STORAGE_PUBLIC_BASE_URL:-http://localhost:8080}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - kuros_storage:${APP_STORAGE_LOCAL_DIR:-/app/storage}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  frontend:
+    build:
+      context: ./front
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+    restart: unless-stopped
+    environment:
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/ >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  kuros_mysql_data:
+  kuros_storage:
