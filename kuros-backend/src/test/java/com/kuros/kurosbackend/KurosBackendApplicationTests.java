@@ -8,12 +8,15 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.mock.web.MockMultipartFile;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -172,7 +175,7 @@ class KurosBackendApplicationTests {
     }
 
     @Test
-    @DirtiesContext
+    @DirtiesContext(methodMode = DirtiesContext.MethodMode.BEFORE_METHOD)
     void 浏览器先获取Csrf令牌后可以发表评论() throws Exception {
         Cookie sessionCookie = login("13800000018");
         var csrfResponse = mockMvc.perform(get("/api/v1/auth/csrf").cookie(sessionCookie))
@@ -237,7 +240,14 @@ class KurosBackendApplicationTests {
                 .andExpect(jsonPath("$.data.favorites.items", hasSize(1)))
                 .andExpect(jsonPath("$.data.favorites.items[0].id").value("10000000-0000-0000-0000-000000000001"))
                 .andExpect(jsonPath("$.data.following.items", hasSize(1)))
-                .andExpect(jsonPath("$.data.following.items[0].nickname").value("无音区夜行者"));
+                .andExpect(jsonPath("$.data.following.items[0].nickname").value("无音区夜行者"))
+                .andExpect(jsonPath("$.data.fans.items", hasSize(0)));
+
+        Cookie followedUserSession = login("13800000002");
+        mockMvc.perform(get("/api/v1/users/me/profile").cookie(followedUserSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.fans.items", hasSize(1)))
+                .andExpect(jsonPath("$.data.fans.items[0].id").exists());
     }
 
     @Test
@@ -372,6 +382,205 @@ class KurosBackendApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[?(@.id == '" + commentId + "')].content").value("该评论已删除"))
                 .andExpect(jsonPath("$.data[?(@.id == '" + commentId + "')].deleted").value(true));
+    }
+
+    @Test
+    void 游客不能发布帖子() throws Exception {
+        mockMvc.perform(post("/api/v1/posts")
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"游客帖子\",\"content\":\"不应该发布\",\"tags\":[\"测试\"]}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DirtiesContext
+    void 登录用户发布帖子后可以在公开列表查看且作者绑定当前用户() throws Exception {
+        Cookie sessionCookie = login("13800000008");
+
+        var created = mockMvc.perform(post("/api/v1/posts")
+                        .cookie(sessionCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"长离实战循环记录\",\"content\":\"循环内容\",\"tags\":[\"长离\",\"实战\"]}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.type").value("GUIDE"))
+                .andExpect(jsonPath("$.data.author.nickname").value("漂泊者0008"))
+                .andExpect(jsonPath("$.data.likeCount").value(0))
+                .andExpect(jsonPath("$.data.favoriteCount").value(0))
+                .andReturn();
+
+        String responseBody = created.getResponse().getContentAsString();
+        int idStart = responseBody.indexOf("\"id\":\"") + 6;
+        String postId = responseBody.substring(idStart, responseBody.indexOf('"', idStart));
+        mockMvc.perform(get("/api/v1/posts/" + postId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.title").value("长离实战循环记录"))
+                .andExpect(jsonPath("$.data.author.nickname").value("漂泊者0008"));
+    }
+
+    @Test
+    void 发布帖子会校验必填字段和内容类型() throws Exception {
+        Cookie sessionCookie = login("13800000008");
+
+        mockMvc.perform(post("/api/v1/posts")
+                        .cookie(sessionCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\" \",\"content\":\"正文\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("POST_TITLE_REQUIRED"));
+
+        mockMvc.perform(post("/api/v1/posts")
+                        .cookie(sessionCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"UNKNOWN\",\"category\":\"配队攻略\",\"title\":\"测试帖子\",\"content\":\"正文\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("POST_TYPE_INVALID"));
+    }
+
+    @Test
+    @DirtiesContext
+    void 作者可以编辑自己的帖子但其他用户不能操作并且可以软删除() throws Exception {
+        Cookie ownerCookie = login("13800000008");
+        var created = mockMvc.perform(post("/api/v1/posts")
+                        .cookie(ownerCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"待维护的帖子\",\"content\":\"原始正文\",\"tags\":[\"长离\"]}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String responseBody = created.getResponse().getContentAsString();
+        int idStart = responseBody.indexOf("\"id\":\"") + 6;
+        String postId = responseBody.substring(idStart, responseBody.indexOf('"', idStart));
+        String path = "/api/v1/posts/" + postId;
+
+        Cookie otherCookie = login("13800000010");
+        mockMvc.perform(put(path)
+                        .cookie(otherCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"不应被修改\",\"content\":\"正文\"}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put(path)
+                        .cookie(ownerCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GENERAL\",\"category\":\"心得\",\"title\":\"已更新的帖子\",\"content\":\"更新后的正文\",\"tags\":[\"实战\",\"轮切\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.title").value("已更新的帖子"))
+                .andExpect(jsonPath("$.data.content").value("更新后的正文"))
+                .andExpect(jsonPath("$.data.tags", hasSize(2)));
+
+        mockMvc.perform(delete(path).cookie(ownerCookie).with(csrf()))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(delete(path).cookie(ownerCookie).with(csrf()))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get(path)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void 游客不能上传图片且登录用户上传合法图片() throws Exception {
+        MockMultipartFile image = new MockMultipartFile("file", "tide.png", "image/png", new byte[]{1, 2, 3});
+
+        mockMvc.perform(multipart("/api/v1/files/images").file(image))
+                .andExpect(status().isUnauthorized());
+
+        Cookie sessionCookie = login("13800000008");
+        mockMvc.perform(multipart("/api/v1/files/images")
+                        .file(image)
+                        .cookie(sessionCookie)
+                        .with(csrf()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.url").value(org.hamcrest.Matchers.containsString("/media/")))
+                .andExpect(jsonPath("$.data.contentType").value("image/png"));
+    }
+
+    @Test
+    void 上传图片会拒绝非图片类型和超大文件() throws Exception {
+        Cookie sessionCookie = login("13800000008");
+        MockMultipartFile text = new MockMultipartFile("file", "notes.txt", "text/plain", "not an image".getBytes());
+        MockMultipartFile oversized = new MockMultipartFile("file", "large.png", "image/png", new byte[5 * 1024 * 1024 + 1]);
+
+        mockMvc.perform(multipart("/api/v1/files/images").file(text).cookie(sessionCookie).with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("IMAGE_TYPE_INVALID"));
+        mockMvc.perform(multipart("/api/v1/files/images").file(oversized).cookie(sessionCookie).with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("IMAGE_TOO_LARGE"));
+    }
+
+    @Test
+    @DirtiesContext
+    void 用户可以举报内容且同一目标不能重复提交待处理举报() throws Exception {
+        mockMvc.perform(post("/api/v1/reports/POST/10000000-0000-0000-0000-000000000002")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"reason\":\"SPAM\"}"))
+                .andExpect(status().isUnauthorized());
+
+        Cookie userCookie = login("13800000008");
+        mockMvc.perform(post("/api/v1/reports/POST/10000000-0000-0000-0000-000000000002")
+                        .cookie(userCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"reason\":\"SPAM\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
+
+        mockMvc.perform(post("/api/v1/reports/POST/10000000-0000-0000-0000-000000000002")
+                        .cookie(userCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"reason\":\"ABUSE\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REPORT_DUPLICATE"));
+    }
+
+    @Test
+    @DirtiesContext
+    void 管理员可以处理举报并处置帖子() throws Exception {
+        Cookie userCookie = login("13800000008");
+        var created = mockMvc.perform(post("/api/v1/reports/POST/10000000-0000-0000-0000-000000000002")
+                        .cookie(userCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"reason\":\"MISINFORMATION\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String reportBody = created.getResponse().getContentAsString();
+        int idStart = reportBody.indexOf("\"id\":\"") + 6;
+        String reportId = reportBody.substring(idStart, reportBody.indexOf('"', idStart));
+
+        Cookie normalCookie = login("13800000009");
+        mockMvc.perform(get("/api/v1/admin/reports").cookie(normalCookie))
+                .andExpect(status().isForbidden());
+
+        Cookie adminCookie = login("13800000001");
+        mockMvc.perform(get("/api/v1/admin/reports").cookie(adminCookie)
+                        .param("status", "PENDING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].id").value(reportId));
+
+        mockMvc.perform(post("/api/v1/admin/reports/" + reportId + "/handle")
+                        .cookie(adminCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"action\":\"CONFIRM\",\"note\":\"确认内容不实\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CONFIRMED"));
+
+        mockMvc.perform(get("/api/v1/posts/10000000-0000-0000-0000-000000000002"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/v1/admin/reports/" + reportId + "/handle")
+                        .cookie(adminCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"action\":\"REJECT\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REPORT_ALREADY_HANDLED"));
     }
 
     private Cookie login(String phone) throws Exception {

@@ -74,6 +74,11 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public AuthUserResponse currentUser(String rawToken) {
+        return toResponse(currentUserEntity(rawToken));
+    }
+
+    @Transactional(readOnly = true)
+    public CommunityUser currentUserEntity(String rawToken) {
         if (rawToken == null || rawToken.isBlank()) {
             throw new UnauthorizedException("请先登录");
         }
@@ -82,7 +87,7 @@ public class AuthService {
                 .orElseThrow(() -> new UnauthorizedException("登录已过期，请重新登录"));
         CommunityUser user = userRepository.findById(session.getUserId())
                 .orElseThrow(() -> new UnauthorizedException("用户不存在，请重新登录"));
-        return toResponse(user);
+        return user;
     }
 
     @Transactional
@@ -107,7 +112,7 @@ public class AuthService {
     }
 
     private AuthUserResponse toResponse(CommunityUser user) {
-        return new AuthUserResponse(user.getId(), user.getPhone(), user.getNickname(), user.getAvatarUrl(), user.getBio());
+        return new AuthUserResponse(user.getId(), user.getPhone(), user.getNickname(), user.getAvatarUrl(), user.getBio(), user.getRole());
     }
 
     private String randomToken() {

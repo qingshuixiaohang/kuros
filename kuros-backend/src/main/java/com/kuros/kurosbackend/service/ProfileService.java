@@ -70,6 +70,7 @@ public class ProfileService {
         PageResult<ProfileCommentResponse> comments = findOwnComments(userId, page, pageSize);
         PageResult<com.kuros.kurosbackend.api.PostSummaryResponse> favorites = postService.findPublishedByIds(favoriteRepository.findVisiblePostIds(userId, PostStatus.PUBLISHED, pageRequest(page, pageSize)));
         PageResult<PublicProfileResponse> following = findFollowing(userId, page, pageSize);
+        PageResult<PublicProfileResponse> fans = findFans(userId, page, pageSize);
         long postCount = postService.publishedPostCount(userId);
         long likeCount = postService.publishedPostLikeCount(userId);
         return new ProfileOverviewResponse(
@@ -78,7 +79,8 @@ public class ProfileService {
                 posts,
                 comments,
                 favorites,
-                following
+                following,
+                fans
         );
     }
 
@@ -87,6 +89,14 @@ public class ProfileService {
         java.util.Map<String, CommunityUser> usersById = userRepository.findAllById(follows.getContent().stream().map(com.kuros.kurosbackend.domain.UserFollow::getFollowedId).toList())
                 .stream().collect(java.util.stream.Collectors.toMap(CommunityUser::getId, user -> user));
         List<PublicProfileResponse> items = follows.getContent().stream().map(com.kuros.kurosbackend.domain.UserFollow::getFollowedId).map(usersById::get).filter(java.util.Objects::nonNull).map(this::toPublic).toList();
+        return new PageResult<>(items, new PageMeta(follows.getNumber() + 1, follows.getSize(), follows.getTotalElements(), follows.getTotalPages()));
+    }
+
+    private PageResult<PublicProfileResponse> findFans(String userId, int page, int pageSize) {
+        Page<com.kuros.kurosbackend.domain.UserFollow> follows = followRepository.findByFollowedIdOrderByCreatedAtDesc(userId, pageRequest(page, pageSize));
+        java.util.Map<String, CommunityUser> usersById = userRepository.findAllById(follows.getContent().stream().map(com.kuros.kurosbackend.domain.UserFollow::getFollowerId).toList())
+                .stream().collect(java.util.stream.Collectors.toMap(CommunityUser::getId, user -> user));
+        List<PublicProfileResponse> items = follows.getContent().stream().map(com.kuros.kurosbackend.domain.UserFollow::getFollowerId).map(usersById::get).filter(java.util.Objects::nonNull).map(this::toPublic).toList();
         return new PageResult<>(items, new PageMeta(follows.getNumber() + 1, follows.getSize(), follows.getTotalElements(), follows.getTotalPages()));
     }
 

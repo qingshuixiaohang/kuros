@@ -9,6 +9,8 @@ export type ApiPost = {
   title: string;
   excerpt: string;
   content?: string;
+  /** 列表接口可选返回的首图；旧后端未返回时保持无图卡片。 */
+  coverImageUrl?: string | null;
   author: ApiAuthor;
   publishedAt: string;
   viewCount: number;
@@ -21,7 +23,7 @@ export type ApiPost = {
 export type ApiPageMeta = { page: number; pageSize: number; totalItems: number; totalPages: number };
 type ApiEnvelope<T> = { data: T; meta?: ApiPageMeta };
 
-export type AuthUser = { id: string; phone: string; nickname: string; avatarUrl: string | null; bio: string | null };
+export type AuthUser = { id: string; phone: string; nickname: string; avatarUrl: string | null; bio: string | null; role: "USER" | "ADMIN" };
 export type VerificationCode = { expiresIn: number; retryAfter: number; devCode?: string | null };
 
 export type PublicProfile = {
@@ -50,6 +52,7 @@ export type ProfileOverview = {
   comments: { items: ProfileComment[]; meta?: ApiPageMeta };
   favorites: { items: ApiPost[]; meta?: ApiPageMeta };
   following: { items: PublicProfile[]; meta?: ApiPageMeta };
+  fans: { items: PublicProfile[]; meta?: ApiPageMeta };
 };
 
 export class ApiError extends Error {
@@ -69,7 +72,8 @@ async function ensureCsrfToken() {
 }
 
 async function requestEnvelope<T>(path: string, init: RequestInit = {}): Promise<ApiEnvelope<T> | undefined> {
-  const headers = { ...(init.body ? { "Content-Type": "application/json" } : {}), ...init.headers } as Record<string, string>;
+  const isFormDataBody = typeof FormData !== "undefined" && init.body instanceof FormData;
+  const headers = { ...(init.body && !isFormDataBody ? { "Content-Type": "application/json" } : {}), ...init.headers } as Record<string, string>;
   const method = (init.method ?? "GET").toUpperCase();
   const token = csrfToken();
   if (token && !path.startsWith("/api/v1/auth/") && method !== "GET" && method !== "HEAD") headers["X-XSRF-TOKEN"] = decodeURIComponent(token);
@@ -92,7 +96,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return envelope?.data as T;
 }
 
-export async function fetchPosts(options: { category?: string; keyword?: string; tag?: string; page?: number; pageSize?: number; sort?: "latest" | "hot" } = {}) {
+export async function fetchPostPage(options: { category?: string; keyword?: string; tag?: string; page?: number; pageSize?: number; sort?: "latest" | "hot" } = {}) {
   const params = new URLSearchParams();
   params.set("page", String(options.page ?? 1));
   params.set("pageSize", String(options.pageSize ?? 20));
@@ -100,11 +104,61 @@ export async function fetchPosts(options: { category?: string; keyword?: string;
   if (options.category && options.category !== "全部") params.set("category", options.category);
   if (options.keyword?.trim()) params.set("keyword", options.keyword.trim());
   if (options.tag?.trim()) params.set("tag", options.tag.trim());
-  return request<ApiPost[]>("/api/v1/posts?" + params.toString());
+  const envelope = await requestEnvelope<ApiPost[]>("/api/v1/posts?" + params.toString());
+  return { items: envelope?.data ?? [], meta: envelope?.meta };
+}
+
+export async function fetchPosts(options: { category?: string; keyword?: string; tag?: string; page?: number; pageSize?: number; sort?: "latest" | "hot" } = {}) {
+  return (await fetchPostPage(options)).items;
 }
 
 export function fetchPost(id: string) {
   return request<ApiPost>("/api/v1/posts/" + encodeURIComponent(id));
+}
+
+export type CreatePostInput = { type: "GUIDE" | "GENERAL"; category: string; title: string; excerpt?: string; content: string; tags: string[] };
+
+export function createPost(input: CreatePostInput) {
+  return ensureCsrfToken().then(() => request<ApiPost>("/api/v1/posts", { method: "POST", body: JSON.stringify(input) }));
+}
+
+export function updatePost(postId: string, input: CreatePostInput) {
+  return ensureCsrfToken().then(() => request<ApiPost>(`/api/v1/posts/${encodeURIComponent(postId)}`, { method: "PUT", body: JSON.stringify(input) }));
+}
+
+export function deletePost(postId: string) {
+  return ensureCsrfToken().then(() => request<void>(`/api/v1/posts/${encodeURIComponent(postId)}`, { method: "DELETE" }));
+}
+
+export type ReportTargetType = "POST" | "COMMENT";
+export type ReportReason = "SPAM" | "ABUSE" | "MISINFORMATION" | "OTHER";
+export type ReportStatus = "PENDING" | "CONFIRMED" | "REJECTED";
+export type ApiReport = { id: string; reporterId: string; targetType: ReportTargetType; targetId: string; reason: ReportReason; status: ReportStatus; handledBy: string | null; handledAt: string | null; handlingNote: string | null; createdAt: string };
+
+export function createReport(targetType: ReportTargetType, targetId: string, reason: ReportReason) {
+  return ensureCsrfToken().then(() => request<ApiReport>(`/api/v1/reports/${targetType}/${encodeURIComponent(targetId)}`, {
+    method: "POST", body: JSON.stringify({ reason }),
+  }));
+}
+
+export function fetchAdminReports(status?: ReportStatus) {
+  const params = new URLSearchParams({ page: "1", pageSize: "50" });
+  if (status) params.set("status", status);
+  return request<ApiReport[]>(`/api/v1/admin/reports?${params.toString()}`);
+}
+
+export function handleReport(reportId: string, action: "CONFIRM" | "REJECT", note?: string) {
+  return ensureCsrfToken().then(() => request<ApiReport>(`/api/v1/admin/reports/${encodeURIComponent(reportId)}/handle`, {
+    method: "POST", body: JSON.stringify({ action, note: note?.trim() || null }),
+  }));
+}
+
+export type UploadedImage = { url: string; originalName: string | null; contentType: string; size: number };
+
+export function uploadImage(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return ensureCsrfToken().then(() => request<UploadedImage>("/api/v1/files/images", { method: "POST", body: formData }));
 }
 
 export type PostInteraction = {

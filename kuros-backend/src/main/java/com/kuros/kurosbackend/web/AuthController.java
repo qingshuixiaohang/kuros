@@ -12,7 +12,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -20,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -45,9 +45,17 @@ public class AuthController {
     }
 
     @GetMapping("/csrf")
-    public ResponseEntity<Void> csrf(CsrfToken csrfToken) {
-        csrfToken.getToken();
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<Void> csrf() {
+        String token = UUID.randomUUID().toString();
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, ResponseCookie.from("XSRF-TOKEN", token)
+                        .httpOnly(false)
+                        .secure(false)
+                        .sameSite("Lax")
+                        .path("/")
+                        .build()
+                        .toString())
+                .build();
     }
 
     @PostMapping("/login")
