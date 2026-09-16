@@ -144,7 +144,13 @@ test("评论编辑器提供表情、图片和提及工具", async ({ page }) => 
   await expect(composer.getByRole("button", { name: "提及用户" })).toBeFocused();
   await textarea.fill("准备出发 ");
   await composer.getByRole("button", { name: "插入表情" }).click();
-  await expect(composer.getByRole("menu", { name: "常用表情" })).toBeVisible();
+  const emojiPicker = composer.getByRole("menu", { name: "常用表情" });
+  await expect(emojiPicker).toBeVisible();
+  const pickerBox = await emojiPicker.boundingBox();
+  const toolsBox = await composer.locator(".comment-composer-tools").boundingBox();
+  expect(pickerBox).not.toBeNull();
+  expect(toolsBox).not.toBeNull();
+  expect((pickerBox?.y ?? 0) + (pickerBox?.height ?? 0)).toBeLessThanOrEqual((toolsBox?.y ?? 0) + 1);
   await composer.getByRole("menuitem", { name: "插入🙂" }).click();
   await expect(textarea).toHaveValue(/准备出发/);
   await composer.getByRole("button", { name: "提及用户" }).click();

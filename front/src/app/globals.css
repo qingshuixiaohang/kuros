@@ -480,17 +480,17 @@ select:focus-visible {
 .comments-heading button.is-active::after { position: absolute; right: 5px; bottom: -23px; left: 5px; height: 2px; background: var(--cyan); content: ""; }
 .comments-heading button span { margin-left: 4px; color: #aab6c1; font-size: 11px; font-weight: 400; }
 .comments-heading i { width: 1px; height: 14px; background: #dbe2e7; }
-.comment-composer { margin: 24px 0 16px; padding: 14px 16px 10px; border-radius: 6px; background: #f6f8fa; }
+.comment-composer { position: relative; z-index: 2; isolation: isolate; overflow: visible; margin: 24px 0 16px; padding: 14px 16px 10px; border-radius: 6px; background: #f6f8fa; }
 .comment-replying { display: flex; align-items: center; justify-content: space-between; margin: -2px 0 9px; color: #0dbbc5; font-size: 11px; }
 .comment-replying button { background: transparent; color: #a1adb9; font-size: 11px; }
 .comment-composer textarea { display: block; width: 100%; min-height: 80px; resize: vertical; border: 0; outline: 0; background: transparent; color: #526373; font: inherit; font-size: 13px; line-height: 1.7; }
 .comment-composer textarea::placeholder { color: #b0bbc5; }
-.comment-composer-tools { display: flex; align-items: center; gap: 15px; color: #9daab6; font-size: 11px; }
+.comment-composer-tools { position: relative; z-index: 3; display: flex; align-items: center; gap: 15px; color: #9daab6; font-size: 11px; }
 .comment-composer-tool-group { position: relative; display: inline-flex; align-items: center; gap: 5px; }
 .comment-tool-button { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 4px; background: transparent; color: #8e9dac; }
 .comment-tool-button:hover, .comment-tool-button:focus-visible { background: #e8f8f9; color: var(--cyan); }
-.comment-emoji-wrap { position: relative; }
-.comment-emoji-picker { position: absolute; z-index: 8; bottom: 35px; left: -5px; display: grid; grid-template-columns: repeat(3, 32px); gap: 3px; padding: 6px; border: 1px solid #e5edf1; border-radius: 6px; background: #fff; box-shadow: 0 8px 20px rgba(38, 55, 68, .14); }
+.comment-emoji-wrap { position: relative; z-index: 4; }
+.comment-emoji-picker { position: absolute; z-index: 20; bottom: calc(100% + 8px); left: 0; display: grid; grid-template-columns: repeat(3, 32px); gap: 3px; padding: 6px; border: 1px solid #e5edf1; border-radius: 6px; background: #fff; box-shadow: 0 8px 20px rgba(38, 55, 68, .14); }
 .comment-emoji-picker::after { position: absolute; bottom: -5px; left: 15px; width: 8px; height: 8px; border-right: 1px solid #e5edf1; border-bottom: 1px solid #e5edf1; background: #fff; content: ""; transform: rotate(45deg); }
 .comment-emoji-picker button { display: grid; width: 32px; height: 30px; place-items: center; border-radius: 4px; background: transparent; font-size: 16px; }
 .comment-emoji-picker button:hover, .comment-emoji-picker button:focus-visible { background: #effbfc; }
