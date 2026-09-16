@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, Bookmark, Clock3, Eye, Flag, Heart, MessageCircle, Reply, Share2, ThumbsUp } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { autoUpdate, flip, FloatingFocusManager, FloatingPortal, offset, shift, useClick, useDismiss, useFloating, useInteractions, useRole } from "@floating-ui/react";
+import { AtSign, ArrowLeft, Bookmark, Clock3, Eye, Flag, Heart, ImagePlus, MessageCircle, Share2, Smile, ThumbsUp } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
@@ -45,6 +46,8 @@ type ArticleSection = {
   id: string;
   title: string;
 };
+
+const commentEmojis = ["🙂", "👍", "✨", "😭", "🎉", "❤️"];
 
 const seedComments: CommentItem[] = [
   { id: "30000000-0000-0000-0000-000000000001", parentId: null, author: "无音区夜行者", mark: "无", tone: "dark", date: "09-13 14:20", floor: "1楼", content: "轮切顺序写得很清楚，尤其是先把声骸触发安排进循环这一点，实战里确实舒服很多。", likes: 61 },
@@ -154,8 +157,32 @@ function PostAuthorCard({ guide, authorId, sections }: { guide: Guide; authorId?
 }
 
 function CommentComposer({ onComment, replyTo, replyLabel, onCancel }: { onComment: (content: string, parentId: string | null) => Promise<void>; replyTo: string | null; replyLabel?: string; onCancel: () => void }) {
-  const { loggedIn, requestLogin } = useCommunityDemo();
+  const { loggedIn, notify, requestLogin } = useCommunityDemo();
   const [draft, setDraft] = useState("");
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const { context, refs, floatingStyles } = useFloating({
+    open: emojiOpen,
+    onOpenChange: setEmojiOpen,
+    placement: "top-start",
+    strategy: "fixed",
+    middleware: [offset(8), flip({ padding: 8 }), shift({ padding: 8 })],
+    whileElementsMounted: autoUpdate,
+  });
+  const { setReference, setFloating } = refs;
+  const click = useClick(context);
+  const dismiss = useDismiss(context, { outsidePressEvent: "pointerdown" });
+  const role = useRole(context, { role: "menu" });
+  const { getReferenceProps, getFloatingProps } = useInteractions([click, dismiss, role]);
+  function insertAtCursor(value: string) {
+    const textarea = textareaRef.current;
+    const start = textarea?.selectionStart ?? draft.length;
+    const end = textarea?.selectionEnd ?? draft.length;
+    const next = draft.slice(0, start) + value + draft.slice(end);
+    setDraft(next);
+    window.requestAnimationFrame(() => { textarea?.focus(); textarea?.setSelectionRange(start + value.length, start + value.length); });
+  }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const content = draft.trim();
@@ -166,8 +193,8 @@ function CommentComposer({ onComment, replyTo, replyLabel, onCancel }: { onComme
   }
   return <form className="comment-composer" onSubmit={submit}>
     {replyTo && <div className="comment-replying"><span>正在回复 {replyLabel ?? "这条评论"}</span><button type="button" onClick={onCancel}>取消回复</button></div>}
-    <textarea aria-label="评论内容" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={loggedIn ? "留下你的看法，和漂泊者聊聊这篇攻略..." : "登录后参与讨论，分享你的实战心得..."} maxLength={1000} />
-    <div className="comment-composer-tools"><span><Reply size={16} />支持回复与表情</span><span>{draft.length} / 1000</span><button type="submit">评论</button></div>
+    <textarea aria-label="评论内容" ref={textareaRef} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={loggedIn ? "留下你的看法，和漂泊者聊聊这篇攻略..." : "登录后参与讨论，分享你的实战心得..."} maxLength={1000} />
+    <div className="comment-composer-tools"><div className="comment-composer-tool-group"><button aria-label="插入表情" className="comment-tool-button" ref={setReference} type="button" {...getReferenceProps()}><Smile size={17} /></button><FloatingPortal>{emojiOpen && <FloatingFocusManager context={context} modal={false} initialFocus={0} returnFocus><div aria-label="常用表情" className="comment-emoji-picker" data-placement={context.placement} ref={setFloating} style={floatingStyles} {...getFloatingProps()}>{commentEmojis.map((emoji) => <button aria-label={`插入${emoji}`} key={emoji} onClick={() => { insertAtCursor(emoji); setEmojiOpen(false); }} role="menuitem" type="button">{emoji}</button>)}</div></FloatingFocusManager>}</FloatingPortal><button aria-label="添加图片" className="comment-tool-button" onClick={() => imageInputRef.current?.click()} title="评论图片附件暂未接入" type="button"><ImagePlus size={17} /></button><input accept="image/*" aria-hidden="true" className="comment-image-input" onChange={(event) => { if (event.target.files?.length) { notify("评论暂不支持图片附件，图片上传将在后续版本接入。"); event.target.value = ""; } }} ref={imageInputRef} tabIndex={-1} type="file" /><button aria-label="提及用户" className="comment-tool-button" onClick={() => insertAtCursor("@")} type="button"><AtSign size={17} /></button></div><span>{draft.length} / 1000</span><button type="submit">评论</button></div>
   </form>;
 }
 

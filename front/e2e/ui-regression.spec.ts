@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const coreRoutes = ["/", "/guides/10000000-0000-0000-0000-000000000001", "/profile", "/publish"];
 const targetViewports = [
@@ -8,6 +8,10 @@ const targetViewports = [
   { name: "narrow-desktop", width: 768, height: 900 },
   { name: "mobile", width: 390, height: 844 },
 ];
+
+function floatingEmojiPicker(page: Page) {
+  return page.locator('[data-floating-ui-portal] [role="menu"]', { hasText: "🙂" });
+}
 
 for (const route of coreRoutes) {
   for (const viewport of targetViewports) {
@@ -106,4 +110,97 @@ test("减少动画偏好下帖子互动滚动使用 auto", async ({ page }) => {
 
   await page.getByRole("button", { name: /查看 .* 条评论/ }).click();
   await expect.poll(() => page.evaluate(() => (window as typeof window & { scrollBehaviors?: unknown[] }).scrollBehaviors?.at(-1))).toBe("auto");
+});
+
+test("桌面端已登录账户区清晰区分个人中心与退出", async ({ page }) => {
+  await page.route("**/api/v1/auth/me", (route) => route.fulfill({ json: { data: {
+    id: "user-100", phone: "13800000001", nickname: "潮声档案员", avatarUrl: null, bio: "记录鸣潮实战", role: "USER",
+  } } }));
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/");
+  const avatarLink = page.getByRole("link", { name: "打开个人中心" });
+  const profileLink = page.getByRole("link", { name: "个人中心", exact: true });
+  const logoutButton = page.getByRole("button", { name: "退出登录" });
+  await expect(profileLink).toBeVisible();
+  await expect(logoutButton).toBeVisible();
+  await expect(profileLink).toHaveAttribute("href", "/profile");
+  await avatarLink.focus();
+  await page.keyboard.press("Tab");
+  await expect(profileLink).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(logoutButton).toBeFocused();
+});
+
+test("评论编辑器提供表情、图片和提及工具", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/guides/10000000-0000-0000-0000-000000000001");
+  const composer = page.getByRole("region", { name: "评论区" });
+  const textarea = composer.getByRole("textbox", { name: "评论内容" });
+  await expect(composer.getByRole("button", { name: "插入表情" })).toBeVisible();
+  await expect(composer.getByRole("button", { name: "添加图片" })).toBeVisible();
+  await expect(composer.getByRole("button", { name: "提及用户" })).toBeVisible();
+  await textarea.focus();
+  await page.keyboard.press("Tab");
+  await expect(composer.getByRole("button", { name: "插入表情" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(composer.getByRole("button", { name: "添加图片" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(composer.getByRole("button", { name: "提及用户" })).toBeFocused();
+  await textarea.fill("准备出发 ");
+  await composer.getByRole("button", { name: "插入表情" }).click();
+  const emojiPicker = floatingEmojiPicker(page);
+  await expect(emojiPicker).toBeVisible();
+  await expect(composer.getByRole("menu", { name: "常用表情" })).toHaveCount(0);
+  await expect(emojiPicker.getByRole("menuitem", { name: "插入🙂" })).toBeVisible();
+  await expect(emojiPicker.getByRole("menuitem", { name: "插入🙂" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(emojiPicker).toBeHidden();
+  await expect(textarea).toHaveValue(/准备出发/);
+  await composer.getByRole("button", { name: "插入表情" }).click();
+  await page.keyboard.press("Escape");
+  await expect(emojiPicker).toBeHidden();
+  await expect(composer.getByRole("button", { name: "插入表情" })).toBeFocused();
+  await composer.getByRole("button", { name: "插入表情" }).click();
+  await textarea.click();
+  await expect(emojiPicker).toBeHidden();
+  await composer.getByRole("button", { name: "提及用户" }).click();
+  await expect(textarea).toHaveValue(/准备出发 .*@$/);
+  const chooserPromise = page.waitForEvent("filechooser");
+  await composer.getByRole("button", { name: "添加图片" }).click();
+  const chooser = await chooserPromise;
+  await chooser.setFiles({ name: "echo.png", mimeType: "image/png", buffer: Buffer.from("demo") });
+  await expect(page.getByRole("status")).toContainText("评论暂不支持图片附件");
+});
+
+test("窄视口下表情浮层脱离帖子裁剪且可以插入", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/guides/10000000-0000-0000-0000-000000000001");
+  const composer = page.getByRole("region", { name: "评论区" });
+  const textarea = composer.getByRole("textbox", { name: "评论内容" });
+  await textarea.scrollIntoViewIfNeeded();
+  await textarea.fill("窄屏测试 ");
+  await composer.getByRole("button", { name: "插入表情" }).click();
+
+  const emojiPicker = floatingEmojiPicker(page);
+  await expect(emojiPicker).toBeVisible();
+  await expect(emojiPicker).toHaveCSS("position", "fixed");
+  await expect(composer.getByRole("menu", { name: "常用表情" })).toHaveCount(0);
+  const trigger = composer.getByRole("button", { name: "插入表情" });
+  await page.evaluate(() => window.scrollBy(0, -120));
+  await expect.poll(async () => {
+    const anchorBox = await trigger.boundingBox();
+    const pickerBox = await emojiPicker.boundingBox();
+    if (!anchorBox || !pickerBox) return false;
+    const pickerBottom = pickerBox.y + pickerBox.height;
+    const anchorBottom = anchorBox.y + anchorBox.height;
+    return Math.abs(pickerBottom - anchorBox.y + 8) < 2 || Math.abs(pickerBox.y - anchorBottom - 8) < 2;
+  }).toBe(true);
+  const pickerBox = await emojiPicker.boundingBox();
+  if (!pickerBox) throw new Error("表情浮层没有可测量的边界");
+  expect(pickerBox.x).toBeGreaterThanOrEqual(0);
+  expect(pickerBox.x + pickerBox.width).toBeLessThanOrEqual(390);
+  expect(pickerBox.y).toBeGreaterThanOrEqual(0);
+  expect(pickerBox.y + pickerBox.height).toBeLessThanOrEqual(844);
+  await emojiPicker.getByRole("menuitem", { name: "插入🙂" }).click();
+  await expect(textarea).toHaveValue(/窄屏测试 .*🙂/);
 });
