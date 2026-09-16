@@ -114,3 +114,11 @@ _避免_：发布表单（只描述控件形态，不能覆盖编辑与草稿行
 
 **本地草稿**：发布编辑器保存在当前浏览器中的未发布内容，不进入服务端，也不属于已发布帖子。
 _避免_：草稿帖子（当前后端不存在草稿状态）
+
+## 2026-09-16 单体部署基线决策
+
+- 当前 MVP 先保持单个 Spring Boot 后端和独立 Next.js 前端，不提前拆分微服务。
+- 下一阶段目标是 Docker Compose 本地可重复启动，服务包含 MySQL、后端和前端。
+- MySQL 使用数据卷，后端上传目录使用持久化卷，Flyway 仍是唯一数据库迁移入口。
+- 本阶段保持 Cookie 会话和现有 REST API，不引入 Redis、MQ、MinIO、Elasticsearch、Nacos 或 Gateway。
+- 部署规格写入 `docs/specs/single-monolith-deployment-baseline.md`。

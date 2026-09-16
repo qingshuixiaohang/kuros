@@ -13,6 +13,7 @@
 
 # testing
 /coverage
+/.compose-smoke-state.json
 
 # next.js
 /front/.next/
@@ -43,6 +44,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 /front/.env*
+/.env
+/.env.*
+!/.env.example
+!/.env.production.example
 
 # vercel
 /front/.vercel

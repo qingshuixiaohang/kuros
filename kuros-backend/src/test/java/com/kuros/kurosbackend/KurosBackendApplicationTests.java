@@ -31,6 +31,14 @@ class KurosBackendApplicationTests {
     private MockMvc mockMvc;
 
     @Test
+    void 健康检查只返回服务状态而不暴露敏感详情() throws Exception {
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(jsonPath("$.components").doesNotExist());
+    }
+
+    @Test
     void 游客可以按分类分页浏览已发布帖子() throws Exception {
         mockMvc.perform(get("/api/v1/posts")
                         .param("category", "配队攻略")
