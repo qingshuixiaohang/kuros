@@ -6,9 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@floating-ui/react": "^0.27.20",
     "@hookform/resolvers": "^5.9.1",
     "@tanstack/react-query": "^5.102.8",
     "lucide-react": "^1.45.0",
@@ -19,6 +21,7 @@
     "zod": "^4.6.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
