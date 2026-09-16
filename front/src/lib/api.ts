@@ -48,6 +48,8 @@ export type ProfileOverview = {
   stats: { postCount: number; likeCount: number; commentCount: number };
   posts: { items: ApiPost[]; meta?: ApiPageMeta };
   comments: { items: ProfileComment[]; meta?: ApiPageMeta };
+  favorites: { items: ApiPost[]; meta?: ApiPageMeta };
+  following: { items: PublicProfile[]; meta?: ApiPageMeta };
 };
 
 export class ApiError extends Error {
@@ -105,6 +107,34 @@ export function fetchPost(id: string) {
   return request<ApiPost>("/api/v1/posts/" + encodeURIComponent(id));
 }
 
+export type PostInteraction = {
+  postId: string;
+  likeCount: number;
+  favoriteCount: number;
+  liked: boolean;
+  favorited: boolean;
+};
+
+export function fetchPostInteractions(postId: string) {
+  return request<PostInteraction>(`/api/v1/posts/${encodeURIComponent(postId)}/interactions`);
+}
+
+export function likePost(postId: string) {
+  return ensureCsrfToken().then(() => request<PostInteraction>(`/api/v1/posts/${encodeURIComponent(postId)}/interactions/like`, { method: "POST" }));
+}
+
+export function unlikePost(postId: string) {
+  return ensureCsrfToken().then(() => request<PostInteraction>(`/api/v1/posts/${encodeURIComponent(postId)}/interactions/like`, { method: "DELETE" }));
+}
+
+export function favoritePost(postId: string) {
+  return ensureCsrfToken().then(() => request<PostInteraction>(`/api/v1/posts/${encodeURIComponent(postId)}/interactions/favorite`, { method: "POST" }));
+}
+
+export function unfavoritePost(postId: string) {
+  return ensureCsrfToken().then(() => request<PostInteraction>(`/api/v1/posts/${encodeURIComponent(postId)}/interactions/favorite`, { method: "DELETE" }));
+}
+
 export type ApiComment = {
   id: string;
   parentId: string | null;
@@ -150,6 +180,20 @@ export async function fetchCurrentUser() {
 
 export function fetchPublicProfile(userId: string) {
   return request<PublicProfile>(`/api/v1/users/${encodeURIComponent(userId)}`);
+}
+
+export type UserFollow = { targetUserId: string; followerCount: number; followed: boolean };
+
+export function fetchUserFollow(userId: string) {
+  return request<UserFollow>(`/api/v1/users/${encodeURIComponent(userId)}/follow`);
+}
+
+export function followUser(userId: string) {
+  return ensureCsrfToken().then(() => request<UserFollow>(`/api/v1/users/${encodeURIComponent(userId)}/follow`, { method: "POST" }));
+}
+
+export function unfollowUser(userId: string) {
+  return ensureCsrfToken().then(() => request<UserFollow>(`/api/v1/users/${encodeURIComponent(userId)}/follow`, { method: "DELETE" }));
 }
 
 export async function fetchPublicProfilePosts(userId: string, options: { page?: number; pageSize?: number } = {}) {

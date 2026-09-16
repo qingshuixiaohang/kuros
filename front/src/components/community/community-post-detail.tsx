@@ -5,8 +5,9 @@ import Link from "next/link";
 import { ArrowLeft, Bookmark, Clock3, Eye, Flag, Heart, MessageCircle, Reply, Share2, ThumbsUp } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
+import { CommunityFollowButton } from "@/components/community/community-follow-button";
 import { useCommunityDemo } from "@/components/community/community-interactions";
-import { createComment, deleteComment, fetchComments, fetchPost, type ApiComment } from "@/lib/api";
+import { createComment, deleteComment, favoritePost, fetchComments, fetchPost, fetchPostInteractions, likePost, unfavoritePost, unlikePost, type ApiComment, type PostInteraction } from "@/lib/api";
 import { guides } from "@/lib/mock";
 import type { Guide } from "@/types/community";
 
@@ -67,25 +68,47 @@ function formatCount(value: number) {
   return String(value);
 }
 
-function PostReactionRail({ guide }: { guide: Guide }) {
-  const { liked, bookmarked, toggleLike, toggleBookmark } = useCommunityDemo();
-  const isLiked = liked.includes(guide.id);
-  const isBookmarked = bookmarked.includes(guide.id);
+function parseCount(value: string) {
+  const number = Number.parseFloat(value.replace(/[万w]/gi, ""));
+  if (!Number.isFinite(number)) return 0;
+  return /[万w]/i.test(value) ? Math.round(number * 10000) : /k/i.test(value) ? Math.round(number * 1000) : Math.round(number);
+}
+
+function PostReactionRail({ guide, postId }: { guide: Guide; postId: string }) {
+  const { requestLogin, notify } = useCommunityDemo();
+  const [interaction, setInteraction] = useState<PostInteraction>({ postId, likeCount: parseCount(guide.likes), favoriteCount: 0, liked: false, favorited: false });
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    let active = true;
+    fetchPostInteractions(postId).then((result) => { if (active) setInteraction(result); }).catch(() => { /* Keep the local guide counts when the API is unavailable. */ });
+    return () => { active = false; };
+  }, [postId]);
+  async function change(kind: "like" | "favorite") {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const next = kind === "like"
+        ? (interaction.liked ? await unlikePost(postId) : await likePost(postId))
+        : (interaction.favorited ? await unfavoritePost(postId) : await favoritePost(postId));
+      setInteraction(next);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "操作失败，请稍后重试");
+    } finally { setLoading(false); }
+  }
+  function protect(action: () => void) { requestLogin(action); }
   return <aside className="post-reaction-rail" aria-label="帖子互动">
     <button type="button" onClick={() => document.getElementById("comments")?.scrollIntoView({ behavior: "smooth" })} aria-label={"查看 " + guide.replies + " 条评论"}><MessageCircle size={26} /><span>{guide.replies}</span></button>
-    <button className={isLiked ? "is-active" : ""} type="button" onClick={() => toggleLike(guide.id)} aria-label={isLiked ? "取消点赞" : "点赞"}><Heart fill={isLiked ? "currentColor" : "none"} size={27} /><span>{isLiked ? "已赞" : guide.likes}</span></button>
-    <button className={isBookmarked ? "is-active is-bookmarked" : ""} type="button" onClick={() => toggleBookmark(guide.id)} aria-label={isBookmarked ? "取消收藏" : "收藏"}><Bookmark fill={isBookmarked ? "currentColor" : "none"} size={27} /><span>{isBookmarked ? "已藏" : "收藏"}</span></button>
+    <button className={interaction.liked ? "is-active" : ""} disabled={loading} type="button" onClick={() => protect(() => { void change("like"); })} aria-label={interaction.liked ? "取消点赞" : "点赞"}><Heart fill={interaction.liked ? "currentColor" : "none"} size={27} /><span>{interaction.likeCount}</span></button>
+    <button className={interaction.favorited ? "is-active is-bookmarked" : ""} disabled={loading} type="button" onClick={() => protect(() => { void change("favorite"); })} aria-label={interaction.favorited ? "取消收藏" : "收藏"}><Bookmark fill={interaction.favorited ? "currentColor" : "none"} size={27} /><span>{interaction.favorited ? "已藏" : "收藏"}</span></button>
   </aside>;
 }
 
-function PostAuthorCard({ guide }: { guide: Guide }) {
-  const { followed, toggleFollow } = useCommunityDemo();
-  const isFollowed = followed.includes(guide.author);
+function PostAuthorCard({ guide, authorId }: { guide: Guide; authorId?: string }) {
   return <aside className="post-context-rail">
     <section className="post-author-card">
       <div className="post-author-card-top"><div className={"author-avatar author-avatar--" + guide.avatarTone}>{guide.authorMark}</div><div><strong>{guide.author}</strong><span><Eye size={13} /> {guide.views} 阅读</span></div></div>
       <p>一起来记录鸣潮里的配队、探索和实战心得。</p>
-      <button className={isFollowed ? "is-followed" : ""} onClick={() => toggleFollow(guide.author)} type="button">{isFollowed ? "已关注" : "＋关注"}</button>
+      <CommunityFollowButton fallbackKey={guide.author} targetUserId={authorId} />
     </section>
     <section className="post-topic-card">
       <h2>分区</h2>
@@ -200,6 +223,7 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
   const fallbackGuide = guides.find((item) => item.id === slug) ?? guides[0];
   const apiPostId = apiPostIdBySlug[slug] ?? slug;
   const [guide, setGuide] = useState(fallbackGuide);
+  const [authorId, setAuthorId] = useState<string>();
   const [apiUnavailable, setApiUnavailable] = useState(false);
   const { notify } = useCommunityDemo();
   useEffect(() => {
@@ -207,22 +231,23 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
     fetchPost(apiPostId).then((post) => {
       if (!cancelled) {
         setGuide({ ...fallbackGuide, id: post.id, category: post.category, title: post.title, excerpt: post.excerpt, content: post.content, author: post.author.nickname, authorMark: post.author.nickname.slice(0, 1), publishedAt: post.publishedAt, views: formatCount(post.viewCount), replies: post.commentCount, likes: formatCount(post.likeCount), tags: post.tags });
+        setAuthorId(post.author.id);
         setApiUnavailable(false);
       }
     }).catch(() => { if (!cancelled) setApiUnavailable(true); });
     return () => { cancelled = true; };
   }, [apiPostId, fallbackGuide, slug]);
   return <CommunityPageFrame activeNav="guides" hideRail hideSidebar><div className="post-detail-layout">
-    <PostReactionRail guide={guide} />
+    <PostReactionRail guide={guide} postId={apiPostId} />
     <article className="post-detail-page">
       <Link className="back-link" href="/guides"><ArrowLeft size={15} />返回攻略列表</Link>
-      <header className="post-detail-heading"><div className="post-detail-kicker"><span className="guide-type">{guide.category}</span><span>原创</span><time>{guide.publishedAt}</time></div><h1>{guide.title}</h1><p>{guide.excerpt}</p><div className="detail-author"><div className={"author-avatar author-avatar--" + guide.avatarTone}>{guide.authorMark}</div><div><strong>{guide.author}</strong><small>攻略作者 · {guide.views} 阅读</small></div><button className="follow-button" type="button">＋关注</button></div></header>
+      <header className="post-detail-heading"><div className="post-detail-kicker"><span className="guide-type">{guide.category}</span><span>原创</span><time>{guide.publishedAt}</time></div><h1>{guide.title}</h1><p>{guide.excerpt}</p><div className="detail-author"><div className={"author-avatar author-avatar--" + guide.avatarTone}>{guide.authorMark}</div><div><strong>{guide.author}</strong><small>攻略作者 · {guide.views} 阅读</small></div><CommunityFollowButton className="follow-button" fallbackKey={guide.author} targetUserId={authorId} /></div></header>
       <div className="post-cover"><Image alt={guide.title + "配图"} fill priority sizes="(max-width: 900px) 100vw, 820px" src={coverByGuide[guide.id] ?? coverByGuide[slug] ?? "/art/guide-sword.png"} /></div>
       <GuideArticle content={guide.content} />
       <div className="post-detail-footer"><span>阅读 {guide.views}</span><button type="button" onClick={() => notify("已收到反馈，感谢帮助维护社区。")}><Flag size={14} />举报</button><button type="button" onClick={() => notify("链接已复制，可以分享给你的队友。")}><Share2 size={14} />分享</button></div>
       <PostComments authorName={guide.author} postId={apiPostId} />
       {apiUnavailable && <p className="api-fallback-note">后端暂不可用，当前显示本地 Demo 数据。</p>}
     </article>
-    <PostAuthorCard guide={guide} />
+    <PostAuthorCard authorId={authorId} guide={guide} />
   </div></CommunityPageFrame>;
 }

@@ -82,6 +82,18 @@ public class CommunityPostService {
         return new PageResult<>(items, new PageMeta(normalizedPage, normalizedPageSize, posts.getTotalElements(), posts.getTotalPages()));
     }
 
+    public PageResult<PostSummaryResponse> findPublishedByIds(Page<String> ids) {
+        List<CommunityPost> posts = postRepository.findAllById(ids.getContent());
+        Map<String, CommunityPost> postsById = posts.stream().collect(Collectors.toMap(CommunityPost::getId, Function.identity()));
+        Map<String, CommunityUser> authors = authorsById(posts);
+        List<PostSummaryResponse> items = ids.getContent().stream()
+                .map(postsById::get)
+                .filter(java.util.Objects::nonNull)
+                .map(post -> toSummary(post, authors.get(post.getAuthorId())))
+                .toList();
+        return new PageResult<>(items, new PageMeta(ids.getNumber() + 1, ids.getSize(), ids.getTotalElements(), ids.getTotalPages()));
+    }
+
     public long publishedPostCount(String authorId) {
         return postRepository.countByAuthorIdAndStatus(authorId, PostStatus.PUBLISHED);
     }
