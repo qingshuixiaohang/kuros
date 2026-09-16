@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 for (const viewport of [
   { name: "desktop", width: 1440, height: 1000 },
+  { name: "wide-tablet", width: 1280, height: 900 },
   { name: "tablet", width: 1024, height: 900 },
   { name: "mobile", width: 390, height: 844 },
 ]) {
@@ -89,4 +90,15 @@ test("首页分享会将帖子的独立地址写入剪贴板", async ({ page }) 
   const expectedUrl = new URL(await detailLink.getAttribute("href") ?? "", "http://localhost:3000").href;
   await firstPost.getByRole("button", { name: "分享" }).click();
   await expect.poll(() => page.evaluate(() => (window as typeof window & { sharedText?: string }).sharedText)).toBe(expectedUrl);
+});
+
+test("窄桌面端可以通过菜单打开频道抽屉", async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 900 });
+  await page.goto("/guides");
+
+  await expect(page.getByRole("button", { name: "打开导航" })).toBeVisible();
+  await page.getByRole("button", { name: "打开导航" }).click();
+  await expect(page.locator(".drawer-sidebar")).toBeVisible();
+  await page.getByRole("button", { name: "关闭导航" }).click();
+  await expect(page.locator(".drawer-sidebar")).toBeHidden();
 });
