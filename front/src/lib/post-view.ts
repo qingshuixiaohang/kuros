@@ -1,6 +1,14 @@
 import type { ApiPost } from "@/lib/api";
 import type { Guide } from "@/types/community";
 
+const markdownImage = /!\[[^\]]*\]\(([^)\s]+)(?:\s+["'][^)]*["'])?\)/g;
+
+export function extractMarkdownImages(content?: string) {
+  if (!content) return [];
+  return Array.from(content.matchAll(markdownImage), (match) => match[1])
+    .filter((source) => source.startsWith("/media/") || source.startsWith("/art/") || /^https?:\/\//i.test(source));
+}
+
 export function formatPostCount(value: number) {
   if (value >= 10000) return (value / 10000).toFixed(value >= 100000 ? 0 : 1).replace(/\.0$/, "") + "w";
   if (value >= 1000) return (value / 1000).toFixed(1).replace(/\.0$/, "") + "k";
@@ -28,5 +36,6 @@ export function toGuide(post: ApiPost): Guide {
     replies: post.commentCount,
     likes: formatPostCount(post.likeCount),
     tags: post.tags,
+    mediaUrls: post.coverImageUrl ? [post.coverImageUrl] : extractMarkdownImages(post.content),
   };
 }
