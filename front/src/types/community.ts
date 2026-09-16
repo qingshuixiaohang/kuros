@@ -5,6 +5,7 @@ export interface Guide {
   category: string;
   title: string;
   excerpt: string;
+  content?: string;
   author: string;
   authorMark: string;
   avatarTone: AvatarTone;

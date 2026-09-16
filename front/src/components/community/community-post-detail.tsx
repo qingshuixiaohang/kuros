@@ -3,9 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, Bookmark, Clock3, Eye, Flag, Heart, MessageCircle, Reply, Share2, ThumbsUp } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
 import { useCommunityDemo } from "@/components/community/community-interactions";
+import { fetchPost } from "@/lib/api";
 import { guides } from "@/lib/mock";
 import type { Guide } from "@/types/community";
 
@@ -33,6 +34,11 @@ const seedComments: CommentItem[] = [
   { id: 2, author: "潮声档案员", mark: "潮", tone: "blue", date: "09-13 15:06", floor: "楼主", content: "谢谢反馈！低配队伍可以先保证循环完整，再慢慢补面板，不用一开始就追求毕业词条。", likes: 55, authorComment: true },
   { id: 3, author: "无音区观测者", mark: "观", tone: "lavender", date: "09-14 09:12", floor: "3楼", content: "已收藏，等下一次深塔刷新后按这个思路试一遍。", likes: 18 },
 ];
+
+function formatCount(value: number) {
+  if (value >= 10000) return (value / 10000).toFixed(value >= 100000 ? 0 : 1).replace(/\.0$/, "") + "w";
+  return String(value);
+}
 
 function PostReactionRail({ guide }: { guide: Guide }) {
   const { liked, bookmarked, toggleLike, toggleBookmark } = useCommunityDemo();
@@ -96,7 +102,17 @@ function PostComments() {
   </section>;
 }
 
-function GuideArticle() {
+function renderMarkdown(content: string): ReactNode[] {
+  return content.split(/\n\s*\n/).map((block, index) => {
+    const lines = block.split("\n");
+    if (lines.every((line) => line.startsWith("- "))) return <ul key={index}>{lines.map((line) => <li key={line}>{line.slice(2)}</li>)}</ul>;
+    if (block.startsWith("## ")) return <h2 key={index}>{block.slice(3)}</h2>;
+    return <p key={index}>{block.replace(/^# /, "")}</p>;
+  });
+}
+
+function GuideArticle({ content }: { content?: string }) {
+  if (content) return <div className="post-detail-body">{renderMarkdown(content)}</div>;
   return <div className="post-detail-body">
     <p>这篇攻略记录了当前版本下的实战测试结果，适合已经完成主线并准备进一步提升队伍强度的漂泊者。</p>
     <h2>一、先确定队伍节奏</h2>
@@ -111,17 +127,30 @@ function GuideArticle() {
 }
 
 export function GuidePostDetailPage({ slug }: { slug: string }) {
-  const guide = guides.find((item) => item.id === slug) ?? guides[0];
+  const fallbackGuide = guides.find((item) => item.id === slug) ?? guides[0];
+  const [guide, setGuide] = useState(fallbackGuide);
+  const [apiUnavailable, setApiUnavailable] = useState(false);
   const { notify } = useCommunityDemo();
+  useEffect(() => {
+    let cancelled = false;
+    fetchPost(slug).then((post) => {
+      if (!cancelled) {
+        setGuide({ ...fallbackGuide, id: post.id, category: post.category, title: post.title, excerpt: post.excerpt, content: post.content, author: post.author.nickname, authorMark: post.author.nickname.slice(0, 1), publishedAt: post.publishedAt, views: formatCount(post.viewCount), replies: post.commentCount, likes: formatCount(post.likeCount), tags: post.tags });
+        setApiUnavailable(false);
+      }
+    }).catch(() => { if (!cancelled) setApiUnavailable(true); });
+    return () => { cancelled = true; };
+  }, [fallbackGuide, slug]);
   return <CommunityPageFrame activeNav="guides" hideRail hideSidebar><div className="post-detail-layout">
     <PostReactionRail guide={guide} />
     <article className="post-detail-page">
       <Link className="back-link" href="/guides"><ArrowLeft size={15} />返回攻略列表</Link>
-      <header className="post-detail-heading"><div className="post-detail-kicker"><span className="guide-type">{guide.category}</span><span>原创</span><time>2026-09-14 10:24 · 重庆</time></div><h1>{guide.title}</h1><p>{guide.excerpt}</p><div className="detail-author"><div className={"author-avatar author-avatar--" + guide.avatarTone}>{guide.authorMark}</div><div><strong>{guide.author}</strong><small>攻略作者 · {guide.views} 阅读</small></div><button className="follow-button" type="button">＋关注</button></div></header>
-      <div className="post-cover"><Image alt={guide.title + "配图"} fill priority sizes="(max-width: 900px) 100vw, 820px" src={coverByGuide[guide.id]} /></div>
-      <GuideArticle />
+      <header className="post-detail-heading"><div className="post-detail-kicker"><span className="guide-type">{guide.category}</span><span>原创</span><time>{guide.publishedAt}</time></div><h1>{guide.title}</h1><p>{guide.excerpt}</p><div className="detail-author"><div className={"author-avatar author-avatar--" + guide.avatarTone}>{guide.authorMark}</div><div><strong>{guide.author}</strong><small>攻略作者 · {guide.views} 阅读</small></div><button className="follow-button" type="button">＋关注</button></div></header>
+      <div className="post-cover"><Image alt={guide.title + "配图"} fill priority sizes="(max-width: 900px) 100vw, 820px" src={coverByGuide[guide.id] ?? coverByGuide[slug] ?? "/art/guide-sword.png"} /></div>
+      <GuideArticle content={guide.content} />
       <div className="post-detail-footer"><span>阅读 {guide.views}</span><button type="button" onClick={() => notify("已收到反馈，感谢帮助维护社区。")}><Flag size={14} />举报</button><button type="button" onClick={() => notify("链接已复制，可以分享给你的队友。")}><Share2 size={14} />分享</button></div>
       <PostComments />
+      {apiUnavailable && <p className="api-fallback-note">后端暂不可用，当前显示本地 Demo 数据。</p>}
     </article>
     <PostAuthorCard guide={guide} />
   </div></CommunityPageFrame>;
