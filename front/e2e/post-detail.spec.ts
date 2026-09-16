@@ -69,3 +69,52 @@ test("帖子详情移动端没有页面级横向滚动并保留互动操作条",
   await expect(page.getByRole("complementary", { name: "帖子互动" })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "帖子上下文" })).toBeHidden();
 });
+
+test("帖子详情可以渲染混合 Markdown，并且不为无标题正文生成失效目录", async ({ page }) => {
+  await page.route("http://localhost:8080/api/v1/posts/plain-markdown", (route) => route.fulfill({
+    json: {
+      data: {
+        id: "plain-markdown",
+        type: "GENERAL",
+        category: "心得",
+        title: "混合 Markdown 帖子",
+        excerpt: "验证正文格式展示。",
+        content: "# 混合 Markdown 标题\n正文里的 **重点** 需要保留。\n\n> 一段引用\n\n1. 第一项\n2. 第二项",
+        author: { id: "user-100", nickname: "潮声档案员", avatarUrl: null, bio: "记录鸣潮实战" },
+        publishedAt: "2026-09-15T10:24:00",
+        viewCount: 12,
+        likeCount: 3,
+        favoriteCount: 1,
+        commentCount: 0,
+        tags: ["心得"],
+      },
+    },
+  }));
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/guides/plain-markdown");
+
+  await expect(page.getByRole("heading", { name: "混合 Markdown 标题", level: 1 })).toBeVisible();
+  await expect(page.locator(".post-detail-body strong").filter({ hasText: "重点" })).toHaveCount(1);
+  await expect(page.locator(".post-detail-body blockquote")).toHaveText("一段引用");
+  await expect(page.locator(".post-detail-body ol li")).toHaveCount(2);
+  await expect(page.locator(".post-outline")).toHaveCount(1);
+  await expect(page.locator(".post-outline li")).toHaveCount(1);
+});
+
+test("帖子详情的无标题正文不生成失效目录", async ({ page }) => {
+  await page.route("**/api/v1/posts/plain-markdown-no-heading**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ data: {
+        id: "plain-markdown-no-heading", type: "GENERAL", category: "心得", title: "无标题 Markdown 帖子",
+        excerpt: "只有正文的帖子", content: "正文没有标题，因此不应该出现空目录。\n\n**重点** 仍然需要保留。", coverImageUrl: null,
+        author: { id: "author-plain", nickname: "潮声档案员" }, publishedAt: "2026-09-15T10:24:00Z", viewCount: 12, commentCount: 0, likeCount: 0,
+        tags: ["心得"],
+      } }),
+    });
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/guides/plain-markdown-no-heading");
+  await expect(page.locator(".post-detail-body strong").filter({ hasText: "重点" })).toHaveCount(1);
+  await expect(page.locator(".post-outline")).toHaveCount(0);
+});

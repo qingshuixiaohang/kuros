@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, Bookmark, Clock3, Eye, Flag, Heart, MessageCircle, Reply, Share2, ThumbsUp } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { autoUpdate, flip, FloatingFocusManager, FloatingPortal, offset, shift, useClick, useDismiss, useFloating, useInteractions, useRole } from "@floating-ui/react";
+import { AtSign, ArrowLeft, Bookmark, Clock3, Eye, Flag, Heart, ImagePlus, MessageCircle, Share2, Smile, ThumbsUp } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
@@ -46,6 +47,8 @@ type ArticleSection = {
   title: string;
 };
 
+const commentEmojis = ["🙂", "👍", "✨", "😭", "🎉", "❤️"];
+
 const seedComments: CommentItem[] = [
   { id: "30000000-0000-0000-0000-000000000001", parentId: null, author: "无音区夜行者", mark: "无", tone: "dark", date: "09-13 14:20", floor: "1楼", content: "轮切顺序写得很清楚，尤其是先把声骸触发安排进循环这一点，实战里确实舒服很多。", likes: 61 },
   { id: "30000000-0000-0000-0000-000000000002", parentId: "30000000-0000-0000-0000-000000000001", author: "潮声档案员", mark: "潮", tone: "blue", date: "09-13 15:06", floor: "楼主", content: "谢谢反馈！低配队伍可以先保证循环完整，再慢慢补面板，不用一开始就追求毕业词条。", likes: 55, authorComment: true },
@@ -83,7 +86,7 @@ function sectionIdForTitle(title: string, index: number) {
 }
 
 function parseMarkdownHeading(value: string) {
-  const match = value.trim().match(/^##\s+(.+)$/);
+  const match = value.trim().match(/^#{1,2}\s+(.+)$/);
   return match?.[1].trim() ?? null;
 }
 
@@ -97,6 +100,11 @@ function parseCount(value: string) {
   const number = Number.parseFloat(value.replace(/[万w]/gi, ""));
   if (!Number.isFinite(number)) return 0;
   return /[万w]/i.test(value) ? Math.round(number * 10000) : /k/i.test(value) ? Math.round(number * 1000) : Math.round(number);
+}
+
+function scrollToElement(element: HTMLElement | null) {
+  if (!element) return;
+  element.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
 }
 
 function PostReactionRail({ guide, postId }: { guide: Guide; postId: string }) {
@@ -122,7 +130,7 @@ function PostReactionRail({ guide, postId }: { guide: Guide; postId: string }) {
   }
   function protect(action: () => void) { requestLogin(action); }
   return <aside className="post-reaction-rail" aria-label="帖子互动">
-    <button type="button" onClick={() => document.getElementById("comments")?.scrollIntoView({ behavior: "smooth" })} aria-label={"查看 " + guide.replies + " 条评论"}><MessageCircle size={26} /><span>{guide.replies}</span></button>
+    <button type="button" onClick={() => scrollToElement(document.getElementById("comments"))} aria-label={"查看 " + guide.replies + " 条评论"}><MessageCircle size={26} /><span>{guide.replies}</span></button>
     <button className={interaction.liked ? "is-active" : ""} disabled={loading} type="button" onClick={() => protect(() => { void change("like"); })} aria-label={interaction.liked ? "取消点赞" : "点赞"}><Heart fill={interaction.liked ? "currentColor" : "none"} size={27} /><span>{interaction.likeCount}</span></button>
     <button className={interaction.favorited ? "is-active is-bookmarked" : ""} disabled={loading} type="button" onClick={() => protect(() => { void change("favorite"); })} aria-label={interaction.favorited ? "取消收藏" : "收藏"}><Bookmark fill={interaction.favorited ? "currentColor" : "none"} size={27} /><span>{interaction.favorited ? "已藏" : "收藏"}</span></button>
   </aside>;
@@ -149,8 +157,32 @@ function PostAuthorCard({ guide, authorId, sections }: { guide: Guide; authorId?
 }
 
 function CommentComposer({ onComment, replyTo, replyLabel, onCancel }: { onComment: (content: string, parentId: string | null) => Promise<void>; replyTo: string | null; replyLabel?: string; onCancel: () => void }) {
-  const { loggedIn, requestLogin } = useCommunityDemo();
+  const { loggedIn, notify, requestLogin } = useCommunityDemo();
   const [draft, setDraft] = useState("");
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const { context, refs, floatingStyles } = useFloating({
+    open: emojiOpen,
+    onOpenChange: setEmojiOpen,
+    placement: "top-start",
+    strategy: "fixed",
+    middleware: [offset(8), flip({ padding: 8 }), shift({ padding: 8 })],
+    whileElementsMounted: autoUpdate,
+  });
+  const { setReference, setFloating } = refs;
+  const click = useClick(context);
+  const dismiss = useDismiss(context, { outsidePressEvent: "pointerdown" });
+  const role = useRole(context, { role: "menu" });
+  const { getReferenceProps, getFloatingProps } = useInteractions([click, dismiss, role]);
+  function insertAtCursor(value: string) {
+    const textarea = textareaRef.current;
+    const start = textarea?.selectionStart ?? draft.length;
+    const end = textarea?.selectionEnd ?? draft.length;
+    const next = draft.slice(0, start) + value + draft.slice(end);
+    setDraft(next);
+    window.requestAnimationFrame(() => { textarea?.focus(); textarea?.setSelectionRange(start + value.length, start + value.length); });
+  }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const content = draft.trim();
@@ -161,8 +193,8 @@ function CommentComposer({ onComment, replyTo, replyLabel, onCancel }: { onComme
   }
   return <form className="comment-composer" onSubmit={submit}>
     {replyTo && <div className="comment-replying"><span>正在回复 {replyLabel ?? "这条评论"}</span><button type="button" onClick={onCancel}>取消回复</button></div>}
-    <textarea aria-label="评论内容" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={loggedIn ? "留下你的看法，和漂泊者聊聊这篇攻略..." : "登录后参与讨论，分享你的实战心得..."} maxLength={1000} />
-    <div className="comment-composer-tools"><span><Reply size={16} />支持回复与表情</span><span>{draft.length} / 1000</span><button type="submit">评论</button></div>
+    <textarea aria-label="评论内容" ref={textareaRef} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={loggedIn ? "留下你的看法，和漂泊者聊聊这篇攻略..." : "登录后参与讨论，分享你的实战心得..."} maxLength={1000} />
+    <div className="comment-composer-tools"><div className="comment-composer-tool-group"><button aria-label="插入表情" className="comment-tool-button" ref={setReference} type="button" {...getReferenceProps()}><Smile size={17} /></button><FloatingPortal>{emojiOpen && <FloatingFocusManager context={context} modal={false} initialFocus={0} returnFocus><div aria-label="常用表情" className="comment-emoji-picker" data-placement={context.placement} ref={setFloating} style={floatingStyles} {...getFloatingProps()}>{commentEmojis.map((emoji) => <button aria-label={`插入${emoji}`} key={emoji} onClick={() => { insertAtCursor(emoji); setEmojiOpen(false); }} role="menuitem" type="button">{emoji}</button>)}</div></FloatingFocusManager>}</FloatingPortal><button aria-label="添加图片" className="comment-tool-button" onClick={() => imageInputRef.current?.click()} title="评论图片附件暂未接入" type="button"><ImagePlus size={17} /></button><input accept="image/*" aria-hidden="true" className="comment-image-input" onChange={(event) => { if (event.target.files?.length) { notify("评论暂不支持图片附件，图片上传将在后续版本接入。"); event.target.value = ""; } }} ref={imageInputRef} tabIndex={-1} type="file" /><button aria-label="提及用户" className="comment-tool-button" onClick={() => insertAtCursor("@")} type="button"><AtSign size={17} /></button></div><span>{draft.length} / 1000</span><button type="submit">评论</button></div>
   </form>;
 }
 
@@ -233,22 +265,65 @@ function MarkdownImage({ src, alt }: { src: string; alt: string }) {
   return <img alt={alt} loading="lazy" src={src} />;
 }
 
+function isSafeMarkdownLinkUrl(value: string) {
+  return value.startsWith("/") || /^https?:\/\//i.test(value);
+}
+
+function renderInlineMarkdown(value: string, keyPrefix: string): ReactNode[] {
+  const pattern = /(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(`([^`]+)`)|(\[([^\]]+)\]\(([^)\s]+)\))/g;
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  let nodeIndex = 0;
+  while ((match = pattern.exec(value)) !== null) {
+    if (match.index > cursor) nodes.push(value.slice(cursor, match.index));
+    if (match[2]) nodes.push(<strong key={`${keyPrefix}-${nodeIndex}`}>{match[2]}</strong>);
+    else if (match[4]) nodes.push(<em key={`${keyPrefix}-${nodeIndex}`}>{match[4]}</em>);
+    else if (match[6]) nodes.push(<code key={`${keyPrefix}-${nodeIndex}`}>{match[6]}</code>);
+    else if (match[8] && isSafeMarkdownLinkUrl(match[9])) nodes.push(<a href={match[9]} key={`${keyPrefix}-${nodeIndex}`}>{match[8]}</a>);
+    else nodes.push(match[0]);
+    cursor = match.index + match[0].length;
+    nodeIndex += 1;
+  }
+  if (cursor < value.length) nodes.push(value.slice(cursor));
+  return nodes;
+}
+
+function renderMarkdownText(lines: string[], keyPrefix: string) {
+  return lines.flatMap((line, index) => index === 0 ? renderInlineMarkdown(line, `${keyPrefix}-${index}`) : [<br key={`${keyPrefix}-br-${index}`} />, ...renderInlineMarkdown(line, `${keyPrefix}-${index}`)]);
+}
+
 function renderMarkdown(content: string): ReactNode[] {
   let headingIndex = 0;
   return content.split(/\n\s*\n/).map((block, index) => {
     const lines = block.split("\n");
     const image = block.match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+["'][^)]*["'])?\)$/);
     if (image && isSafeMarkdownImageUrl(image[2])) return <figure className="post-markdown-image" key={index}><MarkdownImage alt={image[1] || "帖子配图"} src={image[2]} /></figure>;
-    if (lines.every((line) => line.startsWith("- "))) return <ul key={index}>{lines.map((line) => <li key={line}>{line.slice(2)}</li>)}</ul>;
-    const heading = parseMarkdownHeading(block);
-    if (heading) {
-      const title = heading;
-      const id = sectionIdForTitle(title, headingIndex);
-      headingIndex += 1;
-      return <h2 id={id} key={index}>{title}</h2>;
+    if (lines.every((line) => line.startsWith("- "))) return <ul key={index}>{lines.map((line, lineIndex) => <li key={`${index}-${lineIndex}`}>{renderInlineMarkdown(line.slice(2), `${index}-${lineIndex}`)}</li>)}</ul>;
+    if (lines.every((line) => /^\d+\.\s/.test(line))) return <ol key={index}>{lines.map((line, lineIndex) => <li key={`${index}-${lineIndex}`}>{renderInlineMarkdown(line.replace(/^\d+\.\s/, ""), `${index}-${lineIndex}`)}</li>)}</ol>;
+    if (lines.every((line) => line.startsWith("> "))) return <blockquote key={index}>{renderMarkdownText(lines.map((line) => line.slice(2)), `${index}-quote`)}</blockquote>;
+    if (lines.some((line) => parseMarkdownHeading(line))) {
+      const nodes: ReactNode[] = [];
+      let paragraphLines: string[] = [];
+      const flushParagraph = () => {
+        if (paragraphLines.length > 0) {
+          nodes.push(<p key={`${index}-paragraph-${nodes.length}`}>{renderMarkdownText(paragraphLines, `${index}-paragraph-${nodes.length}`)}</p>);
+          paragraphLines = [];
+        }
+      };
+      lines.forEach((line, lineIndex) => {
+        const heading = parseMarkdownHeading(line);
+        if (!heading) { paragraphLines.push(line); return; }
+        flushParagraph();
+        const id = sectionIdForTitle(heading, headingIndex);
+        headingIndex += 1;
+        nodes.push(line.trimStart().startsWith("# ") ? <h1 id={id} key={`${index}-heading-${lineIndex}`}>{heading}</h1> : <h2 id={id} key={`${index}-heading-${lineIndex}`}>{heading}</h2>);
+      });
+      flushParagraph();
+      return nodes;
     }
-    return <p key={index}>{block.replace(/^# /, "")}</p>;
-  });
+    return <p key={index}>{renderMarkdownText(lines, `${index}-paragraph`)}</p>;
+  }).flat();
 }
 
 function GuideArticle({ content }: { content?: string }) {
