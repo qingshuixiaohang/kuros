@@ -10,6 +10,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -37,8 +39,10 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
         String token = findToken(request);
         if (token != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             try {
-                var user = authService.currentUser(token);
-                var authentication = new UsernamePasswordAuthenticationToken(user.id(), null, List.of());
+                var user = authService.currentUserEntity(token);
+                List<GrantedAuthority> authorities = user.getRole() == com.kuros.kurosbackend.domain.UserRole.ADMIN
+                        ? List.of(new SimpleGrantedAuthority("ROLE_ADMIN")) : List.of();
+                var authentication = new UsernamePasswordAuthenticationToken(user.getId(), null, authorities);
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (UnauthorizedException ignored) {
