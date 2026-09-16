@@ -99,6 +99,11 @@ function parseCount(value: string) {
   return /[万w]/i.test(value) ? Math.round(number * 10000) : /k/i.test(value) ? Math.round(number * 1000) : Math.round(number);
 }
 
+function scrollToElement(element: HTMLElement | null) {
+  if (!element) return;
+  element.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}
+
 function PostReactionRail({ guide, postId }: { guide: Guide; postId: string }) {
   const { requestLogin, notify } = useCommunityDemo();
   const [interaction, setInteraction] = useState<PostInteraction>({ postId, likeCount: parseCount(guide.likes), favoriteCount: 0, liked: false, favorited: false });
@@ -122,7 +127,7 @@ function PostReactionRail({ guide, postId }: { guide: Guide; postId: string }) {
   }
   function protect(action: () => void) { requestLogin(action); }
   return <aside className="post-reaction-rail" aria-label="帖子互动">
-    <button type="button" onClick={() => document.getElementById("comments")?.scrollIntoView({ behavior: "smooth" })} aria-label={"查看 " + guide.replies + " 条评论"}><MessageCircle size={26} /><span>{guide.replies}</span></button>
+    <button type="button" onClick={() => scrollToElement(document.getElementById("comments"))} aria-label={"查看 " + guide.replies + " 条评论"}><MessageCircle size={26} /><span>{guide.replies}</span></button>
     <button className={interaction.liked ? "is-active" : ""} disabled={loading} type="button" onClick={() => protect(() => { void change("like"); })} aria-label={interaction.liked ? "取消点赞" : "点赞"}><Heart fill={interaction.liked ? "currentColor" : "none"} size={27} /><span>{interaction.likeCount}</span></button>
     <button className={interaction.favorited ? "is-active is-bookmarked" : ""} disabled={loading} type="button" onClick={() => protect(() => { void change("favorite"); })} aria-label={interaction.favorited ? "取消收藏" : "收藏"}><Bookmark fill={interaction.favorited ? "currentColor" : "none"} size={27} /><span>{interaction.favorited ? "已藏" : "收藏"}</span></button>
   </aside>;
@@ -270,15 +275,28 @@ function renderMarkdown(content: string): ReactNode[] {
     if (lines.every((line) => line.startsWith("- "))) return <ul key={index}>{lines.map((line, lineIndex) => <li key={`${index}-${lineIndex}`}>{renderInlineMarkdown(line.slice(2), `${index}-${lineIndex}`)}</li>)}</ul>;
     if (lines.every((line) => /^\d+\.\s/.test(line))) return <ol key={index}>{lines.map((line, lineIndex) => <li key={`${index}-${lineIndex}`}>{renderInlineMarkdown(line.replace(/^\d+\.\s/, ""), `${index}-${lineIndex}`)}</li>)}</ol>;
     if (lines.every((line) => line.startsWith("> "))) return <blockquote key={index}>{renderMarkdownText(lines.map((line) => line.slice(2)), `${index}-quote`)}</blockquote>;
-    const heading = parseMarkdownHeading(block);
-    if (heading) {
-      const title = heading;
-      const id = sectionIdForTitle(title, headingIndex);
-      headingIndex += 1;
-      return block.trimStart().startsWith("# ") ? <h1 id={id} key={index}>{title}</h1> : <h2 id={id} key={index}>{title}</h2>;
+    if (lines.some((line) => parseMarkdownHeading(line))) {
+      const nodes: ReactNode[] = [];
+      let paragraphLines: string[] = [];
+      const flushParagraph = () => {
+        if (paragraphLines.length > 0) {
+          nodes.push(<p key={`${index}-paragraph-${nodes.length}`}>{renderMarkdownText(paragraphLines, `${index}-paragraph-${nodes.length}`)}</p>);
+          paragraphLines = [];
+        }
+      };
+      lines.forEach((line, lineIndex) => {
+        const heading = parseMarkdownHeading(line);
+        if (!heading) { paragraphLines.push(line); return; }
+        flushParagraph();
+        const id = sectionIdForTitle(heading, headingIndex);
+        headingIndex += 1;
+        nodes.push(line.trimStart().startsWith("# ") ? <h1 id={id} key={`${index}-heading-${lineIndex}`}>{heading}</h1> : <h2 id={id} key={`${index}-heading-${lineIndex}`}>{heading}</h2>);
+      });
+      flushParagraph();
+      return nodes;
     }
     return <p key={index}>{renderMarkdownText(lines, `${index}-paragraph`)}</p>;
-  });
+  }).flat();
 }
 
 function GuideArticle({ content }: { content?: string }) {

@@ -162,7 +162,7 @@ test("编辑模式回填现有帖子并使用保存修改提交", async ({ page 
   await expect(page).toHaveURL(new RegExp(`/guides/${postId}$`));
 });
 
-for (const viewport of [{ width: 1024, height: 900 }, { width: 768, height: 900 }, { width: 390, height: 844 }]) {
+for (const viewport of [{ width: 1280, height: 900 }, { width: 1024, height: 900 }, { width: 768, height: 900 }, { width: 390, height: 844 }]) {
   test(`发布编辑器在 ${viewport.width}px 保持可用且没有横向滚动`, async ({ page }) => {
     await mockAuth(page);
     await page.setViewportSize(viewport);

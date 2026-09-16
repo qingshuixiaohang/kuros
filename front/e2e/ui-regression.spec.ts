@@ -1,0 +1,85 @@
+import { expect, test } from "@playwright/test";
+
+const coreRoutes = ["/", "/guides/10000000-0000-0000-0000-000000000001", "/profile", "/publish"];
+const targetViewports = [
+  { name: "desktop", width: 1440, height: 1000 },
+  { name: "wide-tablet", width: 1280, height: 900 },
+  { name: "tablet", width: 1024, height: 900 },
+  { name: "narrow-desktop", width: 768, height: 900 },
+  { name: "mobile", width: 390, height: 844 },
+];
+
+for (const route of coreRoutes) {
+  for (const viewport of targetViewports) {
+    test(`${route} 在 ${viewport.name} 不产生页面级横向滚动`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await page.goto(route);
+      const dimensions = await page.evaluate(() => ({
+        clientWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+      }));
+      expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
+    });
+  }
+}
+
+test("窄桌面频道抽屉可以用键盘打开并关闭", async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 900 });
+  await page.goto("/guides");
+
+  const openButton = page.getByRole("button", { name: "打开导航" });
+  await openButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".drawer-sidebar")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".drawer-sidebar")).toBeHidden();
+  await expect(openButton).toBeFocused();
+});
+
+test("更多菜单可以用键盘打开、关闭并恢复焦点", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/");
+
+  const moreButton = page.getByRole("button", { name: "更多", exact: true });
+  await moreButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("menu")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toBeHidden();
+  await expect(moreButton).toBeFocused();
+});
+
+test("登录弹窗打开后焦点留在弹窗内，Escape 关闭并恢复触发焦点", async ({ page }) => {
+  await page.route("**/api/v1/auth/me", (route) => route.fulfill({ status: 401 }));
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/");
+
+  const loginButton = page.getByRole("button", { name: "登录" });
+  await loginButton.click();
+  const dialog = page.getByRole("dialog", { name: "登录鸣潮社区" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "关闭登录" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect.poll(() => page.evaluate(() => Boolean(document.activeElement?.closest(".login-dialog")))).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(loginButton).toBeFocused();
+});
+
+test("减少动画偏好下帖子互动滚动使用 auto", async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (options) {
+      const values = (window as typeof window & { scrollBehaviors?: unknown[] }).scrollBehaviors ?? [];
+      values.push(typeof options === "object" && options ? (options as ScrollIntoViewOptions).behavior : undefined);
+      (window as typeof window & { scrollBehaviors?: unknown[] }).scrollBehaviors = values;
+      original.call(this, options);
+    };
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/guides/10000000-0000-0000-0000-000000000001");
+
+  await page.getByRole("button", { name: /查看 .* 条评论/ }).click();
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { scrollBehaviors?: unknown[] }).scrollBehaviors?.at(-1))).toBe("auto");
+});
