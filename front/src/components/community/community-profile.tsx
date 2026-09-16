@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Award, Bookmark, ChevronRight, FileText, LoaderCircle, MapPin, MessageCircle, Pencil, Trash2, UserRound, UsersRound, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Award, Bookmark, ChevronRight, ExternalLink, FileText, LoaderCircle, MapPin, MessageCircle, Pencil, Trash2, UserRound, UsersRound, type LucideIcon } from "lucide-react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
 import { useCommunityDemo } from "@/components/community/community-interactions";
@@ -38,17 +38,17 @@ function postSlug(postId: string) { return slugByPostId[postId] ?? postId; }
 function formatDate(value: string) { return value.length >= 10 ? value.slice(5, 10).replace("-", "/") : value; }
 function safeAvatar(avatarUrl: string | null) { return avatarUrl?.startsWith("/") ? avatarUrl : fallbackAvatar; }
 
-function ProfileFollowButton() {
-  return <button className="profile-follow-button is-followed" disabled type="button">我的主页</button>;
+function ProfileHomeLink() {
+  return <Link className="profile-follow-button profile-home-link" href="/profile">个人中心<ExternalLink aria-hidden="true" size={14} /></Link>;
 }
 
 function ProfileNavigation({ activeTab }: { activeTab: ProfileTab }) {
-  return <aside className="profile-navigation"><div className="profile-navigation-heading"><UserRound size={19} /><h2>个人中心</h2></div><nav aria-label="个人中心导航">{profileTabs.map(({ key, label, icon: Icon }) => <Link className={activeTab === key ? "is-active" : ""} href={`/profile?tab=${key}`} key={key}><Icon size={18} strokeWidth={1.8} /><span>{label}</span>{activeTab === key && <ChevronRight size={15} />}</Link>)}</nav></aside>;
+  return <aside aria-label="个人中心导航" className="profile-navigation"><div className="profile-navigation-heading"><UserRound size={19} /><h2>个人中心</h2></div><nav aria-label="个人中心分区">{profileTabs.map(({ key, label, icon: Icon }) => <Link aria-current={activeTab === key ? "page" : undefined} className={activeTab === key ? "is-active" : ""} href={`/profile?tab=${key}`} key={key}><Icon size={18} strokeWidth={1.8} /><span>{label}</span>{activeTab === key && <ChevronRight size={15} />}</Link>)}</nav></aside>;
 }
 
 function ProfileHero({ overview }: { overview: ProfileOverview }) {
   const { profile, stats } = overview;
-  return <section className="profile-hero"><div className="profile-identity"><div className="profile-avatar"><Image alt={`${profile.nickname}头像`} fill sizes="116px" src={safeAvatar(profile.avatarUrl)} /></div><div className="profile-copy"><div className="profile-name-line"><h1>{profile.nickname}</h1>{profile.postCount > 0 && <span className="profile-author-mark"><Award size={13} />攻略作者</span>}</div><p className="profile-location"><MapPin size={14} />鸣潮 · 漂泊者档案</p><div className="profile-stat-line"><span><b>{stats.postCount}</b>帖子</span><span><b>{stats.commentCount}</b>评论</span><span><b>{stats.likeCount}</b>获赞</span></div><p className="profile-bio">{profile.bio || "还没有留下个人介绍。"}</p><ProfileFollowButton /></div></div><div className="profile-game-card"><div className="profile-game-card-top"><div className="profile-mini-avatar">潮</div><div><strong>{profile.nickname}</strong><small>鸣潮社区档案</small></div><span className="profile-game-wave">鸣潮</span></div><div className="profile-game-stats"><span><b>{stats.postCount}</b>公开帖子</span><span><b>{stats.commentCount}</b>评论记录</span><span><b>{stats.likeCount}</b>累计获赞</span><span><b>{profile.postCount > 0 ? "作者" : "玩家"}</b>社区身份</span></div></div></section>;
+  return <section aria-label="个人资料概览" className="profile-hero"><div className="profile-identity"><div className="profile-avatar"><Image alt={`${profile.nickname}头像`} fill sizes="116px" src={safeAvatar(profile.avatarUrl)} /></div><div className="profile-copy"><div className="profile-name-line"><h1>{profile.nickname}</h1>{profile.postCount > 0 && <span className="profile-author-mark"><Award size={13} />攻略作者</span>}</div><p className="profile-location"><MapPin size={14} />鸣潮 · 漂泊者档案</p><div className="profile-stat-line"><span><b>{stats.postCount}</b>帖子</span><span><b>{stats.commentCount}</b>评论</span><span><b>{stats.likeCount}</b>获赞</span></div><p className="profile-bio">{profile.bio || "还没有留下个人介绍。"}</p><ProfileHomeLink /></div></div><div className="profile-game-card"><div className="profile-game-card-top"><div className="profile-mini-avatar">潮</div><div><strong>{profile.nickname}</strong><small>鸣潮社区档案</small></div><span className="profile-game-wave">鸣潮</span></div><div className="profile-game-stats"><span><b>{stats.postCount}</b>公开帖子</span><span><b>{stats.commentCount}</b>评论记录</span><span><b>{stats.likeCount}</b>累计获赞</span><span><b>{profile.postCount > 0 ? "作者" : "玩家"}</b>社区身份</span></div></div></section>;
 }
 
 function ProfilePostRow({ post, manageable = false, onDeleted }: { post: ApiPost; manageable?: boolean; onDeleted?: () => void }) {
@@ -70,7 +70,7 @@ function ProfilePostRow({ post, manageable = false, onDeleted }: { post: ApiPost
     }
   }
 
-  return <div className="profile-post-row"><Link className="profile-post-row-main" href={`/guides/${slug}`} rel="noopener noreferrer" target="_blank"><div className="author-avatar author-avatar--dark">{post.author.nickname.slice(0, 1)}</div><div className="profile-post-row-copy"><div className="profile-post-row-meta"><strong>{post.author.nickname}</strong><time>{formatDate(post.publishedAt)} · 鸣潮</time></div><h3>{post.title}</h3><p>{post.excerpt}</p><div className="profile-post-row-stats"><span>{post.category}</span><span>{post.viewCount} 阅读</span><span>{post.commentCount} 评论</span></div></div><div className="profile-post-thumbnail"><Image alt="" fill sizes="140px" src={coverByGuide[slug] ?? "/art/guide-coast.png"} /></div><ChevronRight className="profile-row-arrow" size={17} /></Link>{manageable && <div className="profile-post-actions"><Link aria-label={`编辑《${post.title}》`} href={`/publish?edit=${encodeURIComponent(post.id)}`}><Pencil size={14} />编辑</Link><button aria-label={`删除《${post.title}》`} disabled={deleting} onClick={() => { void removePost(); }} type="button"><Trash2 size={14} />{deleting ? "删除中" : "删除"}</button></div>}</div>;
+  return <div className="profile-post-row"><Link className="profile-post-row-main" href={`/guides/${slug}`} rel="noopener noreferrer" target="_blank"><div className="author-avatar author-avatar--dark">{post.author.nickname.slice(0, 1)}</div><div className="profile-post-row-copy"><div className="profile-post-row-meta"><strong>{post.author.nickname}</strong><time>{formatDate(post.publishedAt)} · 鸣潮</time></div><h3>{post.title}</h3><p>{post.excerpt}</p><div className="profile-post-row-stats"><span>{post.category}</span><span>{post.viewCount} 阅读</span><span>{post.commentCount} 评论</span></div></div><div className="profile-post-thumbnail"><Image alt="" fill sizes="140px" src={post.coverImageUrl ?? coverByGuide[slug] ?? "/art/guide-coast.png"} /></div><ChevronRight className="profile-row-arrow" size={17} /></Link>{manageable && <div className="profile-post-actions"><Link aria-label={`编辑《${post.title}》`} href={`/publish?edit=${encodeURIComponent(post.id)}`}><Pencil size={14} />编辑</Link><button aria-label={`删除《${post.title}》`} disabled={deleting} onClick={() => { void removePost(); }} type="button"><Trash2 size={14} />{deleting ? "删除中" : "删除"}</button></div>}</div>;
 }
 
 function ProfileEmpty({ icon: Icon, title, description }: { icon: LucideIcon; title: string; description: string }) {
