@@ -20,9 +20,27 @@ export type ApiPost = {
 
 type ApiEnvelope<T> = { data: T; meta?: { page: number; pageSize: number; totalItems: number; totalPages: number } };
 
-async function request<T>(path: string): Promise<T> {
-  const response = await fetch(API_BASE_URL + path, { credentials: "include" });
-  if (!response.ok) throw new Error("API request failed: " + response.status);
+export type AuthUser = { id: string; phone: string; nickname: string; avatarUrl: string | null; bio: string | null };
+export type VerificationCode = { expiresIn: number; retryAfter: number; devCode?: string | null };
+
+export class ApiError extends Error {
+  constructor(public readonly status: number, public readonly code?: string, message = "API request failed") {
+    super(message);
+  }
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(API_BASE_URL + path, {
+    ...init,
+    credentials: "include",
+    headers: { ...(init.body ? { "Content-Type": "application/json" } : {}), ...init.headers },
+  });
+  if (!response.ok) {
+    let error: { code?: string; message?: string } = {};
+    try { error = await response.json() as { code?: string; message?: string }; } catch { /* Keep the HTTP status. */ }
+    throw new ApiError(response.status, error.code, error.message ?? "API request failed");
+  }
+  if (response.status === 204) return undefined as T;
   const envelope = await response.json() as ApiEnvelope<T>;
   return envelope.data;
 }
@@ -40,4 +58,20 @@ export async function fetchPosts(options: { category?: string; keyword?: string;
 
 export function fetchPost(id: string) {
   return request<ApiPost>("/api/v1/posts/" + encodeURIComponent(id));
+}
+
+export function requestVerificationCode(phone: string) {
+  return request<VerificationCode>("/api/v1/auth/code", { method: "POST", body: JSON.stringify({ phone }) });
+}
+
+export function loginWithPhone(phone: string, code: string) {
+  return request<AuthUser>("/api/v1/auth/login", { method: "POST", body: JSON.stringify({ phone, code }) });
+}
+
+export async function fetchCurrentUser() {
+  try { return await request<AuthUser>("/api/v1/auth/me"); } catch (error) { if (error instanceof ApiError && error.status === 401) return null; throw error; }
+}
+
+export function logoutFromApi() {
+  return request<void>("/api/v1/auth/logout", { method: "POST" });
 }

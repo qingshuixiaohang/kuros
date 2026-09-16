@@ -42,8 +42,21 @@ public class CommunityUser {
     protected CommunityUser() {
     }
 
+    public CommunityUser(String id, String phone, String nickname, UserStatus status, LocalDateTime now) {
+        this.id = id;
+        this.phone = phone;
+        this.nickname = nickname;
+        this.status = status;
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
     public String getId() {
         return id;
+    }
+
+    public String getPhone() {
+        return phone;
     }
 
     public String getNickname() {

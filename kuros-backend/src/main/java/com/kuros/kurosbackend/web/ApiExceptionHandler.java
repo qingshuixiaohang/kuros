@@ -2,10 +2,14 @@ package com.kuros.kurosbackend.web;
 
 import com.kuros.kurosbackend.api.ErrorResponse;
 import com.kuros.kurosbackend.exception.ResourceNotFoundException;
+import com.kuros.kurosbackend.exception.AuthRequestException;
+import com.kuros.kurosbackend.exception.UnauthorizedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.Map;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -14,5 +18,17 @@ public class ApiExceptionHandler {
     public ResponseEntity<ErrorResponse> resourceNotFound(ResourceNotFoundException exception) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(new ErrorResponse("POST_NOT_FOUND", exception.getMessage(), null));
+    }
+
+    @ExceptionHandler(AuthRequestException.class)
+    public ResponseEntity<ErrorResponse> authRequest(AuthRequestException exception) {
+        return ResponseEntity.badRequest()
+                .body(new ErrorResponse(exception.getCode(), exception.getMessage(), Map.of()));
+    }
+
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ErrorResponse> unauthorized(UnauthorizedException exception) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ErrorResponse("UNAUTHORIZED", exception.getMessage(), null));
     }
 }
