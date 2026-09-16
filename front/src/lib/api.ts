@@ -18,7 +18,8 @@ export type ApiPost = {
   tags: string[];
 };
 
-type ApiEnvelope<T> = { data: T; meta?: { page: number; pageSize: number; totalItems: number; totalPages: number } };
+export type ApiPageMeta = { page: number; pageSize: number; totalItems: number; totalPages: number };
+type ApiEnvelope<T> = { data: T; meta?: ApiPageMeta };
 
 export type AuthUser = { id: string; phone: string; nickname: string; avatarUrl: string | null; bio: string | null };
 export type VerificationCode = { expiresIn: number; retryAfter: number; devCode?: string | null };
@@ -29,20 +30,37 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+function csrfToken() {
+  if (typeof document === "undefined") return undefined;
+  return document.cookie.split("; ").find((item) => item.startsWith("XSRF-TOKEN="))?.split("=")[1];
+}
+
+async function ensureCsrfToken() {
+  if (typeof document === "undefined" || csrfToken()) return;
+  await requestEnvelope<void>("/api/v1/auth/csrf");
+}
+
+async function requestEnvelope<T>(path: string, init: RequestInit = {}): Promise<ApiEnvelope<T>> {
+  const headers = { ...(init.body ? { "Content-Type": "application/json" } : {}), ...init.headers } as Record<string, string>;
+  const method = (init.method ?? "GET").toUpperCase();
+  const token = csrfToken();
+  if (token && !path.startsWith("/api/v1/auth/") && method !== "GET" && method !== "HEAD") headers["X-XSRF-TOKEN"] = decodeURIComponent(token);
   const response = await fetch(API_BASE_URL + path, {
     ...init,
     credentials: "include",
-    headers: { ...(init.body ? { "Content-Type": "application/json" } : {}), ...init.headers },
+    headers,
   });
   if (!response.ok) {
     let error: { code?: string; message?: string } = {};
     try { error = await response.json() as { code?: string; message?: string }; } catch { /* Keep the HTTP status. */ }
     throw new ApiError(response.status, error.code, error.message ?? "API request failed");
   }
-  if (response.status === 204) return undefined as T;
-  const envelope = await response.json() as ApiEnvelope<T>;
-  return envelope.data;
+  if (response.status === 204) return undefined as unknown as ApiEnvelope<T>;
+  return await response.json() as ApiEnvelope<T>;
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return (await requestEnvelope<T>(path, init)).data;
 }
 
 export async function fetchPosts(options: { category?: string; keyword?: string; tag?: string; page?: number; pageSize?: number; sort?: "latest" | "hot" } = {}) {
@@ -58,6 +76,37 @@ export async function fetchPosts(options: { category?: string; keyword?: string;
 
 export function fetchPost(id: string) {
   return request<ApiPost>("/api/v1/posts/" + encodeURIComponent(id));
+}
+
+export type ApiComment = {
+  id: string;
+  parentId: string | null;
+  author: ApiAuthor;
+  content: string;
+  deleted: boolean;
+  likeCount: number;
+  createdAt: string;
+};
+
+export async function fetchComments(postId: string, options: { page?: number; pageSize?: number; sort?: "latest" | "hot" } = {}) {
+  const params = new URLSearchParams({
+    page: String(options.page ?? 1),
+    pageSize: String(options.pageSize ?? 20),
+    sort: options.sort ?? "hot",
+  });
+  const envelope = await requestEnvelope<ApiComment[]>(`/api/v1/posts/${encodeURIComponent(postId)}/comments?${params.toString()}`);
+  return { items: envelope.data, meta: envelope.meta };
+}
+
+export function createComment(postId: string, content: string, parentId?: string | null) {
+  return ensureCsrfToken().then(() => request<ApiComment>(`/api/v1/posts/${encodeURIComponent(postId)}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ content, parentId: parentId ?? null }),
+    }));
+}
+
+export function deleteComment(postId: string, commentId: string) {
+  return ensureCsrfToken().then(() => request<void>(`/api/v1/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`, { method: "DELETE" }));
 }
 
 export function requestVerificationCode(phone: string) {
