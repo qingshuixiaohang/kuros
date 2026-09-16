@@ -156,6 +156,9 @@ test("评论编辑器提供表情、图片和提及工具", async ({ page }) => 
   await page.keyboard.press("Escape");
   await expect(emojiPicker).toBeHidden();
   await expect(composer.getByRole("button", { name: "插入表情" })).toBeFocused();
+  await composer.getByRole("button", { name: "插入表情" }).click();
+  await textarea.click();
+  await expect(emojiPicker).toBeHidden();
   await composer.getByRole("button", { name: "提及用户" }).click();
   await expect(textarea).toHaveValue(/准备出发 .*@$/);
   const chooserPromise = page.waitForEvent("filechooser");
