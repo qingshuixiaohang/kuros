@@ -159,7 +159,26 @@ function CommentComposer({ onComment, replyTo, replyLabel, onCancel }: { onComme
   const [emojiOpen, setEmojiOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const emojiWrapRef = useRef<HTMLDivElement>(null);
+  const emojiButtonRef = useRef<HTMLButtonElement>(null);
   const emojis = ["🙂", "👍", "✨", "😭", "🎉", "❤️"];
+  useEffect(() => {
+    if (!emojiOpen) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setEmojiOpen(false);
+      window.requestAnimationFrame(() => emojiButtonRef.current?.focus());
+    }
+    function closeOnOutsidePointer(event: PointerEvent) {
+      if (event.target instanceof Node && !emojiWrapRef.current?.contains(event.target)) setEmojiOpen(false);
+    }
+    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+    };
+  }, [emojiOpen]);
   function insertAtCursor(value: string) {
     const textarea = textareaRef.current;
     const start = textarea?.selectionStart ?? draft.length;
@@ -179,7 +198,7 @@ function CommentComposer({ onComment, replyTo, replyLabel, onCancel }: { onComme
   return <form className="comment-composer" onSubmit={submit}>
     {replyTo && <div className="comment-replying"><span>正在回复 {replyLabel ?? "这条评论"}</span><button type="button" onClick={onCancel}>取消回复</button></div>}
     <textarea aria-label="评论内容" ref={textareaRef} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={loggedIn ? "留下你的看法，和漂泊者聊聊这篇攻略..." : "登录后参与讨论，分享你的实战心得..."} maxLength={1000} />
-    <div className={"comment-composer-tools" + (emojiOpen ? " comment-composer-tools--emoji-open" : "")}><div className="comment-composer-tool-group"><div className="comment-emoji-wrap"><button aria-expanded={emojiOpen} aria-haspopup="menu" aria-label="插入表情" className="comment-tool-button" onClick={() => setEmojiOpen((current) => !current)} type="button"><Smile size={17} /></button>{emojiOpen && <div aria-label="常用表情" className="comment-emoji-picker" role="menu">{emojis.map((emoji) => <button aria-label={`插入${emoji}`} key={emoji} onClick={() => { insertAtCursor(emoji); setEmojiOpen(false); }} role="menuitem" type="button">{emoji}</button>)}</div>}</div><button aria-label="添加图片" className="comment-tool-button" onClick={() => imageInputRef.current?.click()} title="评论图片附件暂未接入" type="button"><ImagePlus size={17} /></button><input accept="image/*" aria-hidden="true" className="comment-image-input" onChange={(event) => { if (event.target.files?.length) { notify("评论暂不支持图片附件，图片上传将在后续版本接入。"); event.target.value = ""; } }} ref={imageInputRef} tabIndex={-1} type="file" /><button aria-label="提及用户" className="comment-tool-button" onClick={() => insertAtCursor("@")} type="button"><AtSign size={17} /></button></div><span>{draft.length} / 1000</span><button type="submit">评论</button></div>
+    <div className={"comment-composer-tools" + (emojiOpen ? " comment-composer-tools--emoji-open" : "")}><div className="comment-composer-tool-group"><div className="comment-emoji-wrap" ref={emojiWrapRef}><button aria-expanded={emojiOpen} aria-haspopup="menu" aria-label="插入表情" className="comment-tool-button" onClick={() => setEmojiOpen((current) => !current)} ref={emojiButtonRef} type="button"><Smile size={17} /></button>{emojiOpen && <div aria-label="常用表情" className="comment-emoji-picker" role="menu">{emojis.map((emoji) => <button aria-label={`插入${emoji}`} key={emoji} onClick={() => { insertAtCursor(emoji); setEmojiOpen(false); }} role="menuitem" type="button">{emoji}</button>)}</div>}</div><button aria-label="添加图片" className="comment-tool-button" onClick={() => imageInputRef.current?.click()} title="评论图片附件暂未接入" type="button"><ImagePlus size={17} /></button><input accept="image/*" aria-hidden="true" className="comment-image-input" onChange={(event) => { if (event.target.files?.length) { notify("评论暂不支持图片附件，图片上传将在后续版本接入。"); event.target.value = ""; } }} ref={imageInputRef} tabIndex={-1} type="file" /><button aria-label="提及用户" className="comment-tool-button" onClick={() => insertAtCursor("@")} type="button"><AtSign size={17} /></button></div><span>{draft.length} / 1000</span><button type="submit">评论</button></div>
   </form>;
 }
 
