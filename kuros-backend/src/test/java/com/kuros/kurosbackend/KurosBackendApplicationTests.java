@@ -240,7 +240,14 @@ class KurosBackendApplicationTests {
                 .andExpect(jsonPath("$.data.favorites.items", hasSize(1)))
                 .andExpect(jsonPath("$.data.favorites.items[0].id").value("10000000-0000-0000-0000-000000000001"))
                 .andExpect(jsonPath("$.data.following.items", hasSize(1)))
-                .andExpect(jsonPath("$.data.following.items[0].nickname").value("无音区夜行者"));
+                .andExpect(jsonPath("$.data.following.items[0].nickname").value("无音区夜行者"))
+                .andExpect(jsonPath("$.data.fans.items", hasSize(0)));
+
+        Cookie followedUserSession = login("13800000002");
+        mockMvc.perform(get("/api/v1/users/me/profile").cookie(followedUserSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.fans.items", hasSize(1)))
+                .andExpect(jsonPath("$.data.fans.items[0].id").exists());
     }
 
     @Test
