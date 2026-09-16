@@ -2,16 +2,21 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Bell, ChevronRight, Eye, Heart, ImagePlus, MessageSquare, MoveRight, PenLine, Search, Send, Share2, Sparkles, Tag, Wrench, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { ArrowLeft, Bell, Bold, ChevronDown, ChevronRight, Eye, Heart, Heading1, Heading2, ImagePlus, Italic, Link2, List, ListOrdered, MessageSquare, MoveRight, PenLine, Quote, Redo2, Search, Send, Share2, Sparkles, Undo2, Wrench, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent as ReactDragEvent, type ReactNode } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm, useWatch } from "react-hook-form";
+import { z } from "zod";
 import { CommunityDemoProvider, useCommunityDemo } from "@/components/community/community-interactions";
-import { RightRail, Sidebar, TopNavigation } from "@/components/community/community-home";
+import { RightRail, Sidebar, TopNavigation, useCommunityDrawer } from "@/components/community/community-home";
 import { characters, echoSets, guides, newsItems, toolItems } from "@/lib/mock";
 import { createPost, fetchPost, updatePost, uploadImage } from "@/lib/api";
+import { useCommunityPostQuery } from "@/lib/community-queries";
+import { toGuide } from "@/lib/post-view";
 
 type FrameProps = { children: ReactNode; activeNav?: string; query?: string; onQueryChange?: (query: string) => void; hideSidebar?: boolean; hideRail?: boolean; };
 export function CommunityPageFrame(props: FrameProps) { return <CommunityDemoProvider><FrameContent {...props} /></CommunityDemoProvider>; }
-function FrameContent({ children, activeNav = "community", query, onQueryChange, hideSidebar = false, hideRail = false }: FrameProps) { const [drawerOpen, setDrawerOpen] = useState(false); const [localQuery, setLocalQuery] = useState(""); const value = query ?? localQuery; return <main className="app-shell"><TopNavigation query={value} onQueryChange={onQueryChange ?? setLocalQuery} onMenu={() => setDrawerOpen(true)} activeNav={activeNav} />{drawerOpen && <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)}><div className="mobile-drawer" onClick={(event) => event.stopPropagation()}><div className="drawer-header"><span>频道</span><button onClick={() => setDrawerOpen(false)} type="button" aria-label="关闭导航"><X size={20} /></button></div><Sidebar drawer /></div></div>}<div className={"page-grid " + (hideSidebar && hideRail ? "page-grid--focused" : "")}>{!hideSidebar && <Sidebar />}<div className="main-column page-content">{children}</div>{!hideRail && <RightRail />}</div></main>; }
+function FrameContent({ children, activeNav = "community", query, onQueryChange, hideSidebar = false, hideRail = false }: FrameProps) { const [drawerOpen, setDrawerOpen] = useState(false); const [localQuery, setLocalQuery] = useState(""); const value = query ?? localQuery; const { drawerCloseRef, drawerRef } = useCommunityDrawer(drawerOpen, setDrawerOpen); return <main className="app-shell"><TopNavigation query={value} onQueryChange={onQueryChange ?? setLocalQuery} onMenu={() => setDrawerOpen(true)} activeNav={activeNav} />{drawerOpen && <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)}><div aria-label="社区频道" aria-modal="true" className="mobile-drawer" onClick={(event) => event.stopPropagation()} ref={drawerRef} role="dialog"><div className="drawer-header"><span>频道</span><button onClick={() => setDrawerOpen(false)} ref={drawerCloseRef} type="button" aria-label="关闭导航"><X size={20} /></button></div><Sidebar drawer /></div></div>}<div className={"page-grid " + (hideSidebar && hideRail ? "page-grid--focused" : "")}>{!hideSidebar && <Sidebar />}<div className="main-column page-content">{children}</div>{!hideRail && <RightRail />}</div></main>; }
 export function PageHeader({ section, title, description, action }: { section: string; title: string; description: string; action?: ReactNode }) { return <header className="subpage-header"><div><p className="page-breadcrumb">鸣潮社区 <ChevronRight size={13} /> {section}</p><h1>{title}</h1><p>{description}</p></div>{action}</header>; }
 function GuideListItem({ guide }: { guide: (typeof guides)[number] }) { return <article className="guide-list-item"><div className="guide-list-top"><span className="guide-type">{guide.category}</span><time>{guide.publishedAt}</time></div><Link href={"/guides/" + guide.id}><h2>{guide.title}</h2></Link><p>{guide.excerpt}</p><div className="guide-list-meta"><span>{guide.author}</span><span><Eye size={14} />{guide.views}</span><span><MessageSquare size={14} />{guide.replies}</span><span><Heart size={14} />{guide.likes}</span></div><Link className="read-link" href={"/guides/" + guide.id}>查看攻略 <MoveRight size={15} /></Link></article>; }
 export function GuidesPage() { const params = useSearchParams(); const [query, setQuery] = useState(""); const defaultCategory = params.get("category") ?? "全部"; const [category, setCategory] = useState(defaultCategory); const categories = ["全部", "配队攻略", "深塔攻略", "角色培养", "新手攻略"]; const filtered = useMemo(() => guides.filter((guide) => (category === "全部" || guide.category === category) && (guide.title + guide.excerpt + guide.tags.join("")).toLowerCase().includes(query.trim().toLowerCase())), [category, query]); return <CommunityPageFrame activeNav="guides" query={query} onQueryChange={setQuery}><PageHeader section="攻略" title="攻略" description="从角色培养到深塔挑战，找到适合当前版本的解法。" action={<Link className="primary-button" href="/publish?type=guide"><PenLine size={16} />发布攻略</Link>} /><div className="filter-bar"><div className="filter-tabs">{categories.map((item) => <button className={category === item ? "is-active" : ""} key={item} onClick={() => setCategory(item)} type="button">{item}</button>)}</div><span className="result-count">共 {filtered.length} 篇</span></div><section className="guide-list-page">{filtered.length ? filtered.map((guide) => <GuideListItem guide={guide} key={guide.id} />) : <p className="empty-state">没有找到匹配的攻略。</p>}</section></CommunityPageFrame>; }
@@ -25,84 +30,301 @@ export function NewsDetailPage({ id }: { id: string }) { const item = newsItems.
 export function CreationsPage() { return <CommunityPageFrame activeNav="creations"><PageHeader section="同人创作" title="同人创作" description="收录绘画、摄影、剪辑和世界观相关的玩家创作。" action={<Link className="primary-button" href="/publish?type=creation"><PenLine size={16} />发布创作</Link>} /><section className="creation-list">{characters.map((item, index) => <Link className="creation-card" href={"/characters/" + item.id} key={item.id}><div className="creation-image"><Image alt={item.name + "创作预览"} fill sizes="(max-width: 620px) 50vw, 420px" src={item.image} /></div><div><span>玩家创作 · {index === 1 ? "摄影" : "绘画"}</span><h2>{item.name} · 潮声片段</h2><p>以原创角色意象为灵感的社区作品展示。</p><small>查看作品 <ChevronRight size={13} /></small></div></Link>)}</section></CommunityPageFrame>; }
 export function ToolsPage() { return <CommunityPageFrame activeNav="tools"><PageHeader section="实用工具" title="漂泊者工具箱" description="把常用的养成计算、声骸查询与配队思路收在同一处。" /><section className="tools-page-grid">{toolItems.map((tool) => { const href = tool.slug === "echo" ? "/echoes" : "/tools/" + tool.slug; return <Link href={href} key={tool.slug}><article className="tool-page-card"><span>{tool.icon === "calculator" ? "算" : tool.icon === "echo" ? "骸" : "队"}</span><h2>{tool.title}</h2><p>{tool.description}</p><small>打开工具 <ChevronRight size={13} /></small></article></Link>; })}</section></CommunityPageFrame>; }
 export function ToolDetailPage({ slug }: { slug: string }) { const tool = toolItems.find((item) => item.slug === slug) ?? toolItems[0]; const [level, setLevel] = useState(1); const [weapon, setWeapon] = useState(1); const [members, setMembers] = useState<string[]>([]); const isTeam = tool.slug === "team-builder"; const total = (level * 1200 + weapon * 780).toLocaleString(); function toggleMember(id: string) { setMembers((current) => current.includes(id) ? current.filter((entry) => entry !== id) : current.length === 3 ? [...current.slice(1), id] : [...current, id]); } return <CommunityPageFrame activeNav="tools"><PageHeader section={"实用工具 / " + tool.title} title={tool.title} description={tool.description} /><section className="tool-workspace">{isTeam ? <><div className="team-slots">{[0, 1, 2].map((index) => <div className="team-slot" key={index}>{members[index] ? characters.find((item) => item.id === members[index])?.name : "选择角色"}</div>)}</div><div className="tool-choice-list">{characters.map((item) => <button className={members.includes(item.id) ? "is-active" : ""} key={item.id} onClick={() => toggleMember(item.id)} type="button">{item.name}<small>{item.role}</small></button>)}</div><p className="tool-result">{members.length ? "当前队伍已记录 " + members.length + " 位角色。Demo 版用于梳理轮切思路。" : "从下方选择至多三位角色，开始构建队伍。"}</p></> : <><div className="calculator-fields"><label>角色等级<input max="90" min="1" onChange={(event) => setLevel(Number(event.target.value))} type="number" value={level} /></label><label>武器等级<input max="90" min="1" onChange={(event) => setWeapon(Number(event.target.value))} type="number" value={weapon} /></label></div><div className="tool-result"><span>预计养成素材</span><strong>{total}</strong><small>按当前等级差估算；接入数据服务后可展示真实材料明细。</small></div></>}</section></CommunityPageFrame>; }
-export function SearchResultsPage() { const params = useSearchParams(); const term = params.get("q")?.trim() ?? ""; const results = guides.filter((guide) => (guide.title + guide.excerpt + guide.tags.join("")).includes(term)); return <CommunityPageFrame><PageHeader section="搜索" title={term ? "“" + term + "” 的结果" : "搜索"} description={term ? "优先展示匹配的攻略与社区内容。" : "输入关键词寻找攻略、声骸和玩家讨论。"} /><section className="guide-list-page">{results.length ? results.map((guide) => <GuideListItem guide={guide} key={guide.id} />) : <div className="empty-state"><Search size={20} /><p>没有找到匹配内容，试试角色名、声骸或攻略标签。</p></div>}</section></CommunityPageFrame>; }
+export function SearchResultsPage() { const params = useSearchParams(); const initialTerm = params.get("q")?.trim() ?? ""; const [term, setTerm] = useState(initialTerm); const [page, setPage] = useState(1); const result = useCommunityPostQuery({ keyword: term, page, pageSize: 10, sort: "latest" }); const fallback = guides.filter((guide) => (guide.title + guide.excerpt + guide.tags.join("")).toLowerCase().includes(term.toLowerCase())); const items = result.error ? fallback : result.data?.items.map(toGuide) ?? []; const totalPages = result.error ? 1 : result.data?.meta?.totalPages ?? 1; return <CommunityPageFrame query={term} onQueryChange={(value) => { setTerm(value); setPage(1); window.history.replaceState(null, "", value ? "/search?q=" + encodeURIComponent(value) : "/search"); }}><PageHeader section="搜索" title={term ? "“" + term + "” 的结果" : "搜索"} description={term ? "优先展示匹配的攻略与社区内容。" : "输入关键词寻找攻略、声骸和玩家讨论。"} /><section className="guide-list-page">{result.isLoading ? <div className="feed-status">正在搜索鸣潮社区…</div> : items.length ? items.map((guide) => <GuideListItem guide={guide} key={guide.id} />) : <div className="empty-state"><Search size={20} /><p>没有找到匹配内容，试试角色名、声骸或攻略标签。</p></div>}{result.error && <p className="api-fallback-note">后端暂不可用，当前显示本地 Demo 数据。</p>}{totalPages > 1 && <nav className="pagination" aria-label="搜索结果分页">{Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => <button className={page === pageNumber ? "is-active" : ""} key={pageNumber} onClick={() => setPage(pageNumber)} type="button">{pageNumber}</button>)}</nav>}</section></CommunityPageFrame>; }
+const publishFormSchema = z.object({
+  title: z.string().trim().min(1, "请输入帖子标题").max(200, "标题长度不能超过 200 个字符"),
+  content: z.string().trim().min(1, "请输入帖子正文").max(50000, "正文长度不能超过 50000 个字符"),
+  type: z.enum(["攻略", "心得", "同人", "提问"]),
+  tags: z.string().superRefine((value, context) => {
+    const tags = value.split(/[，,\s]+/).map((tag) => tag.trim()).filter(Boolean);
+    if (tags.length > 10) context.addIssue({ code: "custom", message: "最多添加 10 个标签" });
+    if (tags.some((tag) => tag.length > 64)) context.addIssue({ code: "custom", message: "单个标签长度不能超过 64 个字符" });
+  }),
+});
+type PublishFormValues = z.infer<typeof publishFormSchema>;
+const publishDraftKey = "wuthering-community-publish-draft-v2";
+const emptyPublishValues: PublishFormValues = { title: "", content: "", type: "心得", tags: "" };
+const publishDraftValuesSchema = z.object({ title: z.string().max(200), content: z.string().max(50000), type: z.enum(["攻略", "心得", "同人", "提问"]), tags: z.string() });
+
+type PublishDraft = { version: 2; savedAt: string; values: PublishFormValues };
+
+function readPublishDraft() {
+  try {
+    const saved = window.localStorage.getItem(publishDraftKey);
+    if (!saved) return null;
+    const parsed = JSON.parse(saved) as Partial<PublishDraft>;
+    if (parsed.version !== 2 || !parsed.values) {
+      window.localStorage.removeItem(publishDraftKey);
+      return null;
+    }
+    const result = publishDraftValuesSchema.safeParse(parsed.values);
+    if (!result.success) window.localStorage.removeItem(publishDraftKey);
+    return result.success ? result.data : null;
+  } catch {
+    return null;
+  }
+}
+
+type ToolbarButtonProps = { label: string; icon: ReactNode; disabled?: boolean; onClick: () => void };
+
+function PublishToolbarButton({ label, icon, disabled = false, onClick }: ToolbarButtonProps) {
+  return <button aria-label={label} className="publish-toolbar-button" disabled={disabled} onClick={onClick} title={label} type="button">{icon}</button>;
+}
+
 function PublishPageContent() {
   const params = useSearchParams();
   const router = useRouter();
   const { loggedIn, requestLogin, notify } = useCommunityDemo();
   const editPostId = params.get("edit");
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [type, setType] = useState(params.get("type") === "guide" ? "攻略" : params.get("type") === "creation" ? "同人" : "心得");
-  const [tags, setTags] = useState("");
+  const defaultType = params.get("type") === "guide" ? "攻略" : params.get("type") === "creation" ? "同人" : "心得";
+  const { control, register, handleSubmit, reset, getValues, setValue, formState: { errors } } = useForm<PublishFormValues>({
+    resolver: zodResolver(publishFormSchema),
+    defaultValues: { ...emptyPublishValues, type: defaultType },
+  });
   const [error, setError] = useState("");
   const [publishing, setPublishing] = useState(false);
-  const [imageUrl, setImageUrl] = useState("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [draftMessage, setDraftMessage] = useState("");
+  const [historyAvailability, setHistoryAvailability] = useState({ canUndo: false, canRedo: false });
   const [loadingEdit, setLoadingEdit] = useState(Boolean(editPostId));
   const fileRef = useRef<HTMLInputElement>(null);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
+  const historyRef = useRef<{ past: string[]; future: string[]; current: string }>({ past: [], future: [], current: "" });
+  const title = useWatch({ control, name: "title", defaultValue: "" });
+  const content = useWatch({ control, name: "content", defaultValue: "" });
+  const tags = useWatch({ control, name: "tags", defaultValue: "" });
 
   useEffect(() => {
-    if (!editPostId || !loggedIn) return;
+    if (!editPostId) {
+      const draft = readPublishDraft();
+      if (draft) {
+        reset(draft);
+        historyRef.current.current = draft.content;
+        window.setTimeout(() => setDraftMessage("已恢复本地草稿"), 0);
+      }
+      return;
+    }
+    if (!loggedIn) return;
     let active = true;
     void fetchPost(editPostId).then((post) => {
       if (!active) return;
-      setTitle(post.title);
-      setContent(post.content ?? "");
-      setType(post.type === "GUIDE" ? "攻略" : ["心得", "同人", "提问"].includes(post.category) ? post.category : "心得");
-      setTags(post.tags.join("、"));
+      const values = { title: post.title, content: post.content ?? "", type: post.type === "GUIDE" ? "攻略" : ["心得", "同人", "提问"].includes(post.category) ? post.category as PublishFormValues["type"] : "心得", tags: post.tags.join("、") };
+      reset(values);
+      historyRef.current.current = values.content;
     }).catch((requestError) => {
       if (active) setError(requestError instanceof Error ? requestError.message : "无法读取待编辑的帖子");
     }).finally(() => { if (active) setLoadingEdit(false); });
     return () => { active = false; };
-  }, [editPostId, loggedIn]);
+  }, [editPostId, loggedIn, reset]);
+
+  function recordContent(next: string) {
+    const history = historyRef.current;
+    if (next === history.current) return;
+    historyRef.current = { past: [...history.past, history.current], future: [], current: next };
+    setHistoryAvailability({ canUndo: true, canRedo: false });
+  }
+
+  function updateContent(next: string) {
+    recordContent(next);
+    setValue("content", next, { shouldDirty: true, shouldValidate: true });
+  }
+
+  function handleContentChange(event: ChangeEvent<HTMLTextAreaElement>) {
+    const next = event.target.value;
+    recordContent(next);
+    setValue("content", next, { shouldDirty: true, shouldValidate: false });
+  }
+
+  function selectionBounds() {
+    const element = contentRef.current;
+    const current = getValues("content");
+    const start = element?.selectionStart ?? current.length;
+    const end = element?.selectionEnd ?? start;
+    return { current, element, start, end };
+  }
+
+  function replaceSelection(before: string, after = "", placeholder = "文本") {
+    const { current, element, start, end } = selectionBounds();
+    const selected = current.slice(start, end) || placeholder;
+    const next = current.slice(0, start) + before + selected + after + current.slice(end);
+    updateContent(next);
+    window.requestAnimationFrame(() => {
+      element?.focus();
+      const selectionStart = start + before.length;
+      element?.setSelectionRange(selectionStart, selectionStart + selected.length);
+    });
+  }
+
+  function prefixSelectedLines(prefix: string) {
+    const { current, element, start, end } = selectionBounds();
+    const lineStart = current.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
+    const selectedEnd = end === start ? current.indexOf("\n", start) : end;
+    const lineEnd = selectedEnd < 0 ? current.length : selectedEnd;
+    const selected = current.slice(lineStart, lineEnd);
+    const nextLines = selected.split("\n").map((line) => line.startsWith(prefix) ? line : prefix + line).join("\n");
+    const next = current.slice(0, lineStart) + nextLines + current.slice(lineEnd);
+    updateContent(next);
+    window.requestAnimationFrame(() => {
+      element?.focus();
+      element?.setSelectionRange(lineStart, lineStart + nextLines.length);
+    });
+  }
+
+  function undo() {
+    const history = historyRef.current;
+    const previous = history.past.at(-1);
+    if (previous === undefined) return;
+    historyRef.current = { past: history.past.slice(0, -1), future: [history.current, ...history.future], current: previous };
+    setHistoryAvailability({ canUndo: history.past.length > 1, canRedo: true });
+    setValue("content", previous, { shouldDirty: true, shouldValidate: true });
+  }
+
+  function redo() {
+    const history = historyRef.current;
+    const next = history.future[0];
+    if (next === undefined) return;
+    historyRef.current = { past: [...history.past, history.current], future: history.future.slice(1), current: next };
+    setHistoryAvailability({ canUndo: true, canRedo: history.future.length > 1 });
+    setValue("content", next, { shouldDirty: true, shouldValidate: true });
+  }
+
+  function insertLink() {
+    const { current, element, start, end } = selectionBounds();
+    const selected = current.slice(start, end) || "链接文字";
+    const inserted = `[${selected}](https://)`;
+    updateContent(current.slice(0, start) + inserted + current.slice(end));
+    window.requestAnimationFrame(() => {
+      element?.focus();
+      const urlStart = start + selected.length + 3;
+      element?.setSelectionRange(urlStart, urlStart + 8);
+    });
+  }
+
+  async function uploadSelectedImage(file: File) {
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) { setError("仅支持 PNG、JPEG 或 WebP 图片"); return; }
+    if (file.size > 5 * 1024 * 1024) { setError("图片大小不能超过 5 MB"); return; }
+    setError("");
+    setImageUploading(true);
+    try {
+      const uploaded = await uploadImage(file);
+      const { current, element, start, end } = selectionBounds();
+      const inserted = `![${uploaded.originalName ?? file.name}](${uploaded.url})`;
+      updateContent(current.slice(0, start) + inserted + current.slice(end));
+      setDraftMessage("图片已插入正文");
+      window.requestAnimationFrame(() => {
+        element?.focus();
+        const cursor = start + inserted.length;
+        element?.setSelectionRange(cursor, cursor);
+      });
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "图片上传失败，请稍后重试");
+    } finally {
+      setImageUploading(false);
+    }
+  }
 
   function changeImage(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) { setError("仅支持 PNG、JPEG 或 WebP 图片"); return; }
-    if (file.size > 5 * 1024 * 1024) { setError("图片大小不能超过 5 MB"); return; }
-    if (imageUrl) URL.revokeObjectURL(imageUrl);
-    setError("");
-    setImageFile(file);
-    setImageUrl(URL.createObjectURL(file));
+    void uploadSelectedImage(file);
+    event.target.value = "";
   }
 
-  async function publish() {
+  function handleImageDrop(event: ReactDragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const file = event.dataTransfer.files[0];
+    if (file) void uploadSelectedImage(file);
+  }
+
+  function saveDraft() {
+    try {
+      const values = getValues();
+      const savedAt = new Date().toISOString();
+      const draft: PublishDraft = { version: 2, savedAt, values };
+      window.localStorage.setItem(publishDraftKey, JSON.stringify(draft));
+      setDraftMessage("草稿已保存");
+      notify("草稿已保存到本机");
+    } catch {
+      setError("本地草稿保存失败，请检查浏览器存储权限");
+      notify("草稿保存失败");
+    }
+  }
+
+  async function publish(values: PublishFormValues) {
     setPublishing(true);
     setError("");
     try {
-      const uploadedImage = imageFile ? await uploadImage(imageFile) : null;
-      const publishedContent = uploadedImage ? `${content.trim()}\n\n![${uploadedImage.originalName ?? "鸣潮社区配图"}](${uploadedImage.url})` : content;
-      const input = {
-        type: type === "攻略" ? "GUIDE" : "GENERAL",
-        category: type === "攻略" ? "配队攻略" : type,
-        title,
-        content: publishedContent,
-        tags: tags.split(/[，,\s]+/).map((tag) => tag.trim()).filter(Boolean),
-      } as const;
+      const input = { type: values.type === "攻略" ? "GUIDE" : "GENERAL", category: values.type === "攻略" ? "配队攻略" : values.type, title: values.title, content: values.content, tags: values.tags.split(/[，,\s]+/).map((tag) => tag.trim()).filter(Boolean) } as const;
       const post = editPostId ? await updatePost(editPostId, input) : await createPost(input);
+      try { window.localStorage.removeItem(publishDraftKey); } catch { /* 发布成功不应被本地存储异常阻断。 */ }
       notify(editPostId ? "帖子已更新" : "内容已发布");
       router.push("/guides/" + post.id);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "发布失败，请稍后重试");
-      notify("发布失败，请检查表单内容");
+      notify(editPostId ? "保存失败，请检查表单内容" : "发布失败，请检查表单内容");
     } finally {
       setPublishing(false);
     }
   }
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!loggedIn) { requestLogin(() => { void publish(); }); return; }
-    void publish();
+  function submit(values: PublishFormValues) {
+    if (!loggedIn) { requestLogin(() => { void publish(values); }); return; }
+    void publish(values);
   }
 
-  if (editPostId && !loggedIn) return <><PageHeader section="社区 / 编辑" title="编辑内容" description="登录后才能修改你发布的内容。" /><div className="empty-state"><p>请先登录，再打开编辑页面。</p><button className="primary-button" onClick={() => requestLogin()} type="button">立即登录</button></div></>;
-  if (loadingEdit) return <><PageHeader section="社区 / 编辑" title="编辑内容" description="正在读取这篇帖子…" /><div className="feed-status">正在载入帖子内容…</div></>;
-  return <><PageHeader section={editPostId ? "社区 / 编辑" : "社区 / 发布"} title={editPostId ? "编辑内容" : "发布内容"} description={editPostId ? "更新你的鸣潮攻略与实战心得。" : "分享攻略、心得和创作，让更多漂泊者看到你的答案。"} /><form className="publish-form" onSubmit={submit}><div className="publish-form-main"><label>标题<input required maxLength={200} onChange={(event) => setTitle(event.target.value)} placeholder="给这篇内容起一个清晰的标题" value={title} /></label><label>正文<textarea required onChange={(event) => setContent(event.target.value)} placeholder="写下你的攻略、发现或想和大家讨论的问题..." rows={11} value={content} /></label><input accept="image/png,image/jpeg,image/webp" className="file-input" onChange={changeImage} ref={fileRef} type="file" />{imageUrl ? <div className="upload-preview"><Image alt="待发布的图片预览" fill sizes="500px" src={imageUrl} unoptimized /><button onClick={() => { URL.revokeObjectURL(imageUrl); setImageUrl(""); setImageFile(null); if (fileRef.current) fileRef.current.value = ""; }} type="button" aria-label="移除图片"><X size={16} /></button></div> : <button className="upload-box" onClick={() => fileRef.current?.click()} type="button"><ImagePlus size={22} /><strong>{editPostId ? "追加图片" : "添加图片"}</strong><span>选择后{editPostId ? "保存时" : "发布时"}会上传到社区</span></button>}</div><aside className="publish-form-side"><label>内容类型<select onChange={(event) => setType(event.target.value)} value={type}><option>攻略</option><option>心得</option><option>同人</option><option>提问</option></select></label><label>添加标签<input onChange={(event) => setTags(event.target.value)} placeholder="例如：长离、声骸" value={tags} /></label><div className="publish-note"><Tag size={16} /><p>选择准确的标签，可以让内容更容易被需要的人找到。</p></div>{error && <p className="login-form-error" role="alert">{error}</p>}<button className="primary-button submit-button" disabled={publishing} type="submit"><Send size={16} />{publishing ? (editPostId ? "保存中…" : "发布中…") : (editPostId ? "保存修改" : "保存并发布")}</button></aside></form></>;
+  if (editPostId && !loggedIn) return <div className="publish-state"><strong>登录后才能编辑这篇帖子</strong><span>请先登录，再继续修改你的鸣潮内容。</span><button className="primary-button" onClick={() => requestLogin()} type="button">立即登录</button></div>;
+  if (loadingEdit) return <div className="publish-state"><span>正在载入帖子内容…</span></div>;
+  const registerTitle = register("title");
+  const registerType = register("type");
+  const registerTags = register("tags");
+  const registerContent = register("content");
+  return <form aria-label="发布编辑器" className="publish-editor" id="publish-editor" onSubmit={(event) => { void handleSubmit(submit)(event); }}>
+    <div className="publish-toolbar" role="toolbar" aria-label="Markdown 工具栏">
+      <PublishToolbarButton label="撤销" disabled={!historyAvailability.canUndo} icon={<Undo2 size={18} />} onClick={undo} />
+      <PublishToolbarButton label="重做" disabled={!historyAvailability.canRedo} icon={<Redo2 size={18} />} onClick={redo} />
+      <span className="publish-toolbar-separator" />
+      <span className="publish-toolbar-mode" aria-label="当前编辑模式：正文">正文</span>
+      <span className="publish-toolbar-separator" />
+      <PublishToolbarButton label="一级标题" icon={<Heading1 size={18} />} onClick={() => prefixSelectedLines("# ")} />
+      <PublishToolbarButton label="二级标题" icon={<Heading2 size={18} />} onClick={() => prefixSelectedLines("## ")} />
+      <PublishToolbarButton label="加粗" icon={<Bold size={18} />} onClick={() => replaceSelection("**", "**")} />
+      <PublishToolbarButton label="斜体" icon={<Italic size={18} />} onClick={() => replaceSelection("*", "*")} />
+      <PublishToolbarButton label="引用" icon={<Quote size={18} />} onClick={() => prefixSelectedLines("> ")} />
+      <PublishToolbarButton label="无序列表" icon={<List size={18} />} onClick={() => prefixSelectedLines("- ")} />
+      <PublishToolbarButton label="有序列表" icon={<ListOrdered size={18} />} onClick={() => prefixSelectedLines("1. ")} />
+      <span className="publish-toolbar-separator" />
+      <PublishToolbarButton label="插入链接" icon={<Link2 size={18} />} onClick={insertLink} />
+      <PublishToolbarButton label="插入图片" disabled={imageUploading} icon={<ImagePlus size={18} />} onClick={() => fileRef.current?.click()} />
+    </div>
+    <div className="publish-editor-body">
+      <div className="publish-title-field">
+        <input aria-label="帖子标题" maxLength={200} placeholder="输入标题（必填）" {...registerTitle} />
+        <span>{title.length} / 200</span>
+      </div>
+      {errors.title && <p className="publish-field-error" role="alert">{errors.title.message}</p>}
+      <div className="publish-content-field" onDragOver={(event) => event.preventDefault()} onDrop={handleImageDrop}>
+        <textarea aria-label="帖子正文" placeholder="在这里写下你的内容..." rows={18} {...registerContent} onChange={handleContentChange} ref={(element) => { registerContent.ref(element); contentRef.current = element; }} value={content} />
+        {!content && <button aria-label="上传正文图片" className="publish-upload-prompt" onClick={() => fileRef.current?.click()} type="button"><ImagePlus size={25} /><span>点击上传图片，或直接拖拽到此处</span><small>支持 PNG、JPG、WebP，单张不超过 5MB</small></button>}
+        {imageUploading && <span className="publish-uploading" role="status">图片上传中…</span>}
+        <span className="publish-content-count">{content.length} / 50000</span>
+      </div>
+      {errors.content && <p className="publish-field-error" role="alert">{errors.content.message}</p>}
+      <input accept="image/png,image/jpeg,image/webp" className="file-input" onChange={changeImage} ref={fileRef} type="file" />
+      <section aria-label="帖子设置" className="publish-meta" id="publish-meta">
+        <label><strong>内容类型</strong><select aria-label="内容类型" {...registerType}><option>攻略</option><option>心得</option><option>同人</option><option>提问</option></select></label>
+        <span className="publish-meta-divider" />
+        <label className="publish-tags-field"><strong>添加标签</strong><div><input aria-label="内容标签" placeholder="例如：长离、声骸" {...registerTags} /><span>{tags.split(/[，,\s]+/).filter(Boolean).length} / 10</span></div><small>按空格或逗号分隔标签，最多 10 个</small></label>
+      </section>
+      {errors.tags && <p className="publish-field-error" role="alert">{errors.tags.message}</p>}
+      {draftMessage && <p aria-live="polite" className="publish-draft-message">{draftMessage}</p>}
+      {error && <p className="publish-field-error" role="alert">{error}</p>}
+    </div>
+    <footer className="publish-action-bar">
+      <div className="publish-action-inner"><span className="publish-character-count">正文字符：<strong>{content.length}</strong></span><button className="publish-settings-button" onClick={() => document.getElementById("publish-meta")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" })} type="button">帖子设置<ChevronDown size={14} /></button><span className="publish-public-note">发布后公开展示</span><button className="publish-draft-button" onClick={saveDraft} type="button">保存草稿</button><button className="publish-submit-button" disabled={publishing || imageUploading} type="submit"><Send size={17} />{publishing ? (editPostId ? "保存中…" : "发布中…") : editPostId ? "保存修改" : "发布"}</button></div>
+    </footer>
+  </form>;
 }
 
 export function PublishPage() {
-  return <CommunityPageFrame activeNav="creations"><PublishPageContent /></CommunityPageFrame>;
+  return <CommunityPageFrame activeNav="community" hideRail hideSidebar><PublishPageContent /></CommunityPageFrame>;
 }
