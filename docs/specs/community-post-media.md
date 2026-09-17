@@ -1,6 +1,6 @@
 # 社区帖子多图媒体闭环规格
 
-关联任务：待进入 `to-tickets` 阶段后创建 GitHub Issue
+关联任务：GitHub Issue #51（后端 #52，前端 #53）
 
 ## 1. 目标
 
@@ -176,4 +176,3 @@ Content-Type: multipart/form-data
 6. 创建或更新失败时，原帖子内容和媒体关联保持不变。
 7. 旧帖子和旧 API 字段继续可读，前端不出现回归。
 8. 后端单元/集成测试、前端 lint/build、Playwright 回归全部通过。
-

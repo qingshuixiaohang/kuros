@@ -4,13 +4,19 @@ import com.kuros.kurosbackend.api.AuthorResponse;
 import com.kuros.kurosbackend.api.PageMeta;
 import com.kuros.kurosbackend.api.PageResult;
 import com.kuros.kurosbackend.api.PostDetailResponse;
+import com.kuros.kurosbackend.api.PostMediaResponse;
 import com.kuros.kurosbackend.api.PostSummaryResponse;
 import com.kuros.kurosbackend.domain.CommunityPost;
 import com.kuros.kurosbackend.domain.CommunityUser;
+import com.kuros.kurosbackend.domain.MediaAsset;
 import com.kuros.kurosbackend.domain.PostStatus;
+import com.kuros.kurosbackend.domain.PostMedia;
 import com.kuros.kurosbackend.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.repository.CommunityUserRepository;
+import com.kuros.kurosbackend.repository.MediaAssetRepository;
+import com.kuros.kurosbackend.repository.PostMediaRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -31,10 +37,22 @@ public class CommunityPostService {
 
     private final CommunityPostRepository postRepository;
     private final CommunityUserRepository userRepository;
+    private final PostMediaRepository postMediaRepository;
+    private final MediaAssetRepository mediaAssetRepository;
+    private final String publicBaseUrl;
 
-    public CommunityPostService(CommunityPostRepository postRepository, CommunityUserRepository userRepository) {
+    public CommunityPostService(
+            CommunityPostRepository postRepository,
+            CommunityUserRepository userRepository,
+            PostMediaRepository postMediaRepository,
+            MediaAssetRepository mediaAssetRepository,
+            @Value("${app.storage.public-base-url:http://localhost:8080}") String publicBaseUrl
+    ) {
         this.postRepository = postRepository;
         this.userRepository = userRepository;
+        this.postMediaRepository = postMediaRepository;
+        this.mediaAssetRepository = mediaAssetRepository;
+        this.publicBaseUrl = publicBaseUrl.replaceAll("/$", "");
     }
 
     public PageResult<PostSummaryResponse> findPublished(
@@ -116,18 +134,20 @@ public class CommunityPostService {
     }
 
     private PostSummaryResponse toSummary(CommunityPost post, CommunityUser author) {
+        List<PostMediaResponse> media = media(post.getId());
         return new PostSummaryResponse(
                 post.getId(), post.getType(), post.getCategory(), post.getTitle(), post.getExcerpt(),
                 toAuthor(author), post.getPublishedAt(), post.getViewCount(), post.getLikeCount(),
-                post.getFavoriteCount(), post.getCommentCount(), tagNames(post)
+                post.getFavoriteCount(), post.getCommentCount(), tagNames(post), coverUrl(media), media
         );
     }
 
     private PostDetailResponse toDetail(CommunityPost post, CommunityUser author) {
+        List<PostMediaResponse> media = media(post.getId());
         return new PostDetailResponse(
                 post.getId(), post.getType(), post.getCategory(), post.getTitle(), post.getExcerpt(), post.getContent(),
                 toAuthor(author), post.getPublishedAt(), post.getViewCount(), post.getLikeCount(),
-                post.getFavoriteCount(), post.getCommentCount(), tagNames(post)
+                post.getFavoriteCount(), post.getCommentCount(), tagNames(post), coverUrl(media), media
         );
     }
 
@@ -140,6 +160,27 @@ public class CommunityPostService {
 
     private List<String> tagNames(CommunityPost post) {
         return post.getTags().stream().map(tag -> tag.getName()).sorted().toList();
+    }
+
+    private String coverUrl(List<PostMediaResponse> media) {
+        return media.stream().findFirst().map(PostMediaResponse::url).orElse(null);
+    }
+
+    private List<PostMediaResponse> media(String postId) {
+        List<PostMedia> associations = postMediaRepository.findByPostIdOrderBySortOrderAsc(postId);
+        Map<String, MediaAsset> assets = mediaAssetRepository.findAllById(
+                        associations.stream().map(PostMedia::getAssetId).toList()
+                ).stream()
+                .collect(Collectors.toMap(MediaAsset::getId, Function.identity()));
+        return associations.stream()
+                .map(association -> assets.get(association.getAssetId()))
+                .filter(java.util.Objects::nonNull)
+                .map(asset -> new PostMediaResponse(
+                        asset.getId(), publicBaseUrl + "/media/" + asset.getStorageKey(),
+                        associations.stream().filter(item -> item.getAssetId().equals(asset.getId())).findFirst().orElseThrow().getSortOrder(),
+                        associations.stream().filter(item -> item.getAssetId().equals(asset.getId())).findFirst().orElseThrow().getSortOrder() == 0
+                ))
+                .toList();
     }
 
     private String blankToNull(String value) {

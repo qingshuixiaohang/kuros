@@ -1,6 +1,7 @@
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080").replace(/\/$/, "");
 
 export type ApiAuthor = { id: string; nickname: string; avatarUrl: string | null; bio: string | null };
+export type ApiPostMedia = { id: string; url: string; sortOrder: number; isCover: boolean };
 
 export type ApiPost = {
   id: string;
@@ -13,6 +14,7 @@ export type ApiPost = {
   coverImageUrl?: string | null;
   /** 新版接口可选返回的全部配图；未返回时回退到封面或正文图片。 */
   mediaUrls?: string[] | null;
+  media?: ApiPostMedia[] | null;
   author: ApiAuthor;
   publishedAt: string;
   viewCount: number;
@@ -118,7 +120,7 @@ export function fetchPost(id: string) {
   return request<ApiPost>("/api/v1/posts/" + encodeURIComponent(id));
 }
 
-export type CreatePostInput = { type: "GUIDE" | "GENERAL"; category: string; title: string; excerpt?: string; content: string; tags: string[] };
+export type CreatePostInput = { type: "GUIDE" | "GENERAL"; category: string; title: string; excerpt?: string; content: string; tags: string[]; mediaAssetIds?: string[] };
 
 export function createPost(input: CreatePostInput) {
   return ensureCsrfToken().then(() => request<ApiPost>("/api/v1/posts", { method: "POST", body: JSON.stringify(input) }));
@@ -155,12 +157,16 @@ export function handleReport(reportId: string, action: "CONFIRM" | "REJECT", not
   }));
 }
 
-export type UploadedImage = { url: string; originalName: string | null; contentType: string; size: number };
+export type UploadedImage = { assetId: string; url: string; originalName: string | null; contentType: string; size: number };
 
 export function uploadImage(file: File) {
   const formData = new FormData();
   formData.append("file", file);
   return ensureCsrfToken().then(() => request<UploadedImage>("/api/v1/files/images", { method: "POST", body: formData }));
+}
+
+export function deleteImage(assetId: string) {
+  return ensureCsrfToken().then(() => request<void>(`/api/v1/files/images/${encodeURIComponent(assetId)}`, { method: "DELETE" }));
 }
 
 export type PostInteraction = {

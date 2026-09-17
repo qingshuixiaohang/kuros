@@ -9,6 +9,9 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.mock.web.MockMultipartFile;
+import com.kuros.kurosbackend.storage.ImageStorageService;
+
+import java.time.LocalDateTime;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.hamcrest.Matchers.hasSize;
@@ -29,6 +32,9 @@ class KurosBackendApplicationTests {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private ImageStorageService imageStorageService;
 
     @Test
     void 健康检查只返回服务状态而不暴露敏感详情() throws Exception {
@@ -429,6 +435,72 @@ class KurosBackendApplicationTests {
     }
 
     @Test
+    @DirtiesContext
+    void 发布帖子可以绑定上传图片并按顺序返回媒体列表() throws Exception {
+        Cookie sessionCookie = login("13800000028");
+        String firstAssetId = uploadImageAndReadAssetId(sessionCookie, "first.png");
+        String secondAssetId = uploadImageAndReadAssetId(sessionCookie, "second.png");
+
+        var created = mockMvc.perform(post("/api/v1/posts")
+                        .cookie(sessionCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"多图实战记录\",\"content\":\"正文\",\"mediaAssetIds\":[\"" + firstAssetId + "\",\"" + secondAssetId + "\"]}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.media", hasSize(2)))
+                .andExpect(jsonPath("$.data.media[0].id").value(firstAssetId))
+                .andExpect(jsonPath("$.data.media[0].sortOrder").value(0))
+                .andExpect(jsonPath("$.data.media[0].isCover").value(true))
+                .andExpect(jsonPath("$.data.media[1].id").value(secondAssetId))
+                .andReturn();
+
+        String postId = readJsonString(created.getResponse().getContentAsString(), "id");
+        mockMvc.perform(get("/api/v1/posts/" + postId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.media", hasSize(2)))
+                .andExpect(jsonPath("$.data.coverImageUrl").value(org.hamcrest.Matchers.containsString("/media/")));
+        mockMvc.perform(get("/api/v1/posts").param("keyword", "多图实战记录"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].media[0].id").value(firstAssetId));
+    }
+
+    @Test
+    @DirtiesContext
+    void 帖子媒体只能由上传者绑定且更新时可以调整顺序() throws Exception {
+        Cookie ownerCookie = login("13800000029");
+        String firstAssetId = uploadImageAndReadAssetId(ownerCookie, "owned.png");
+        Cookie otherCookie = login("13800000030");
+
+        mockMvc.perform(post("/api/v1/posts")
+                        .cookie(otherCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"越权媒体\",\"content\":\"正文\",\"mediaAssetIds\":[\"" + firstAssetId + "\"]}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        var created = mockMvc.perform(post("/api/v1/posts")
+                        .cookie(ownerCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"可编辑多图\",\"content\":\"正文\",\"mediaAssetIds\":[\"" + firstAssetId + "\"]}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String postId = readJsonString(created.getResponse().getContentAsString(), "id");
+
+        String secondAssetId = uploadImageAndReadAssetId(ownerCookie, "new.png");
+        mockMvc.perform(put("/api/v1/posts/" + postId)
+                        .cookie(ownerCookie)
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"可编辑多图\",\"content\":\"正文\",\"mediaAssetIds\":[\"" + secondAssetId + "\",\"" + firstAssetId + "\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.media[0].id").value(secondAssetId))
+                .andExpect(jsonPath("$.data.media[0].isCover").value(true))
+                .andExpect(jsonPath("$.data.media[1].id").value(firstAssetId));
+    }
+
+    @Test
     void 发布帖子会校验必填字段和内容类型() throws Exception {
         Cookie sessionCookie = login("13800000008");
 
@@ -492,7 +564,7 @@ class KurosBackendApplicationTests {
 
     @Test
     void 游客不能上传图片且登录用户上传合法图片() throws Exception {
-        MockMultipartFile image = new MockMultipartFile("file", "tide.png", "image/png", new byte[]{1, 2, 3});
+        MockMultipartFile image = new MockMultipartFile("file", "tide.png", "image/png", minimalPng());
 
         mockMvc.perform(multipart("/api/v1/files/images").file(image))
                 .andExpect(status().isUnauthorized());
@@ -503,15 +575,26 @@ class KurosBackendApplicationTests {
                         .cookie(sessionCookie)
                         .with(csrf()))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.assetId").isNotEmpty())
                 .andExpect(jsonPath("$.data.url").value(org.hamcrest.Matchers.containsString("/media/")))
                 .andExpect(jsonPath("$.data.contentType").value("image/png"));
+    }
+
+    @Test
+    void 上传图片会拒绝仅伪造扩展名和请求类型的文件() throws Exception {
+        Cookie sessionCookie = login("13800000008");
+        MockMultipartFile fakeImage = new MockMultipartFile("file", "not-really.png", "image/png", new byte[]{1, 2, 3});
+
+        mockMvc.perform(multipart("/api/v1/files/images").file(fakeImage).cookie(sessionCookie).with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("IMAGE_CONTENT_INVALID"));
     }
 
     @Test
     void 上传图片会拒绝非图片类型和超大文件() throws Exception {
         Cookie sessionCookie = login("13800000008");
         MockMultipartFile text = new MockMultipartFile("file", "notes.txt", "text/plain", "not an image".getBytes());
-        MockMultipartFile oversized = new MockMultipartFile("file", "large.png", "image/png", new byte[5 * 1024 * 1024 + 1]);
+        MockMultipartFile oversized = new MockMultipartFile("file", "large.png", "image/png", new byte[10 * 1024 * 1024 + 1]);
 
         mockMvc.perform(multipart("/api/v1/files/images").file(text).cookie(sessionCookie).with(csrf()))
                 .andExpect(status().isBadRequest())
@@ -519,6 +602,58 @@ class KurosBackendApplicationTests {
         mockMvc.perform(multipart("/api/v1/files/images").file(oversized).cookie(sessionCookie).with(csrf()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("IMAGE_TOO_LARGE"));
+    }
+
+    @Test
+    @DirtiesContext
+    void 登录用户可以删除自己尚未绑定帖子的临时图片但不能删除他人的图片() throws Exception {
+        Cookie ownerCookie = login("13800000031");
+        String assetId = uploadImageAndReadAssetId(ownerCookie, "temporary.png");
+        Cookie otherCookie = login("13800000032");
+
+        mockMvc.perform(delete("/api/v1/files/images/" + assetId)
+                        .cookie(otherCookie)
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/v1/files/images/" + assetId)
+                        .cookie(ownerCookie)
+                        .with(csrf()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(delete("/api/v1/files/images/" + assetId)
+                        .cookie(ownerCookie)
+                        .with(csrf()))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DirtiesContext
+    void 临时图片清理服务会按截止时间清理未绑定资源() throws Exception {
+        Cookie ownerCookie = login("13800000033");
+        uploadImageAndReadAssetId(ownerCookie, "expired.png");
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, imageStorageService.cleanupTemporaryAssets(LocalDateTime.now().plusMinutes(1)));
+    }
+
+    private String uploadImageAndReadAssetId(Cookie sessionCookie, String fileName) throws Exception {
+        var result = mockMvc.perform(multipart("/api/v1/files/images")
+                        .file(new MockMultipartFile("file", fileName, "image/png", minimalPng()))
+                        .cookie(sessionCookie)
+                        .with(csrf()))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return readJsonString(result.getResponse().getContentAsString(), "assetId");
+    }
+
+    private byte[] minimalPng() {
+        return new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+    }
+
+    private String readJsonString(String body, String field) {
+        String marker = "\"" + field + "\":\"";
+        int start = body.indexOf(marker) + marker.length();
+        return body.substring(start, body.indexOf('"', start));
     }
 
     @Test

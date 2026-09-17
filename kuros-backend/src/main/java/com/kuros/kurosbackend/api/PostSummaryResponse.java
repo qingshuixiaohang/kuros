@@ -17,6 +17,8 @@ public record PostSummaryResponse(
         long likeCount,
         long favoriteCount,
         long commentCount,
-        List<String> tags
+        List<String> tags,
+        String coverImageUrl,
+        List<PostMediaResponse> media
 ) {
 }
