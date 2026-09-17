@@ -15,7 +15,7 @@ export const guides: Guide[] = [
     replies: 46,
     likes: "3.7k",
     tags: ["长离", "配队", "实战思路", "2.4"],
-    mediaUrls: ["/art/guide-sword.png", "/art/guide-flower.png", "/art/guide-tower.png"],
+    mediaUrls: ["/art/修-奥古斯都  唤取动画.png", "/art/修-守岸人 唤取动画.png", "/art/修-爱弥斯 唤取动画.png"],
   },
   {
     id: "tower-24",
@@ -31,7 +31,7 @@ export const guides: Guide[] = [
     replies: 89,
     likes: "5.1k",
     tags: ["深塔", "低配", "手法"],
-    mediaUrls: ["/art/guide-tower.png", "/art/guide-sword.png", "/art/guide-coast.png"],
+    mediaUrls: ["/art/修-仇远  唤取动画.png", "/art/修-弗洛洛 唤取动画.png", "/art/修-绯雪 唤取动画2.png"],
   },
   {
     id: "camellya-echo",
@@ -47,7 +47,7 @@ export const guides: Guide[] = [
     replies: 63,
     likes: "3.2k",
     tags: ["椿", "声骸", "培养建议"],
-    mediaUrls: ["/art/guide-flower.png", "/art/guide-coast.png", "/art/guide-sword.png"],
+    mediaUrls: ["/art/修-嘉贝莉娜  唤取动画.png", "/art/修-琳奈 唤取动画.png", "/art/修-露帕  唤取动画.png"],
   },
   {
     id: "new-player-route",
@@ -63,7 +63,7 @@ export const guides: Guide[] = [
     replies: 112,
     likes: "8.6k",
     tags: ["新手", "开荒", "资源规划"],
-    mediaUrls: ["/art/guide-coast.png", "/art/guide-flower.png", "/art/guide-tower.png"],
+    mediaUrls: ["/art/修-心灵海 男漂地图.png", "/art/修-优诺 唤取动画.png", "/art/修-千咲  唤取动画.png"],
   },
 ];
 
@@ -85,9 +85,9 @@ export const toolItems: ToolItem[] = [
 ];
 
 export const characters: Character[] = [
-  { id: "tide", name: "潮汐", role: "输出", title: "共鸣 · 湮灭", image: "/art/character-tide.png", description: "擅长控场与持续输出的远程共鸣者。", guideId: "changli-team" },
-  { id: "rover", name: "银羽", role: "输出", title: "气动 · 迅刀", image: "/art/character-rover.png", description: "灵活切入战场，适合快速轮切的角色。", guideId: "tower-24" },
-  { id: "lavender", name: "紫绫", role: "协同", title: "冷凝 · 协同", image: "/art/character-lavender.png", description: "以协同伤害和增益效果支援队伍。", guideId: "camellya-echo" },
+  { id: "shorekeeper", name: "守岸人", role: "辅助", title: "角色档案", image: "/art/修-守岸人 唤取动画.png", description: "记录角色定位、培养方向与队伍协同思路。", guideId: "changli-team" },
+  { id: "augustus", name: "奥古斯都", role: "输出", title: "角色档案", image: "/art/修-奥古斯都  唤取动画.png", description: "围绕技能循环、资源规划与实战手法整理资料。", guideId: "tower-24" },
+  { id: "aemeath", name: "爱弥斯", role: "协同", title: "角色档案", image: "/art/修-爱弥斯 唤取动画.png", description: "从队伍位置、轮切节奏和养成优先级快速了解角色。", guideId: "camellya-echo" },
 ];
 
 export const echoSets: EchoSet[] = [

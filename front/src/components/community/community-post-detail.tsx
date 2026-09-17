@@ -14,10 +14,10 @@ import { guides } from "@/lib/mock";
 import type { Guide } from "@/types/community";
 
 const coverByGuide: Record<string, string> = {
-  "changli-team": "/art/guide-sword.png",
-  "tower-24": "/art/guide-tower.png",
-  "camellya-echo": "/art/guide-flower.png",
-  "new-player-route": "/art/guide-coast.png",
+  "changli-team": "/art/修-奥古斯都  唤取动画.png",
+  "tower-24": "/art/修-仇远  唤取动画.png",
+  "camellya-echo": "/art/修-嘉贝莉娜  唤取动画.png",
+  "new-player-route": "/art/修-心灵海 男漂地图.png",
 };
 
 const apiPostIdBySlug: Record<string, string> = {
