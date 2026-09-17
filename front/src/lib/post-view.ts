@@ -36,6 +36,6 @@ export function toGuide(post: ApiPost): Guide {
     replies: post.commentCount,
     likes: formatPostCount(post.likeCount),
     tags: post.tags,
-    mediaUrls: post.coverImageUrl ? [post.coverImageUrl] : extractMarkdownImages(post.content),
+    mediaUrls: post.mediaUrls?.length ? post.mediaUrls : post.coverImageUrl ? [post.coverImageUrl] : extractMarkdownImages(post.content),
   };
 }

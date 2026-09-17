@@ -169,7 +169,7 @@ test("评论编辑器提供表情、图片和提及工具", async ({ page }) => 
   await composer.getByRole("button", { name: "添加图片" }).click();
   const chooser = await chooserPromise;
   await chooser.setFiles({ name: "echo.png", mimeType: "image/png", buffer: Buffer.from("demo") });
-  await expect(page.getByRole("status")).toContainText("评论暂不支持图片附件");
+  await expect(page.locator(".community-toast")).toContainText("评论暂不支持图片附件");
 });
 
 test("窄视口下表情浮层脱离帖子裁剪且可以插入", async ({ page }) => {

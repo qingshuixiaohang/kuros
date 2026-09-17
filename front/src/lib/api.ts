@@ -11,6 +11,8 @@ export type ApiPost = {
   content?: string;
   /** 列表接口可选返回的首图；旧后端未返回时保持无图卡片。 */
   coverImageUrl?: string | null;
+  /** 新版接口可选返回的全部配图；未返回时回退到封面或正文图片。 */
+  mediaUrls?: string[] | null;
   author: ApiAuthor;
   publishedAt: string;
   viewCount: number;
