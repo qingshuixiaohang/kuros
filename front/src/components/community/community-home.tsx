@@ -1,7 +1,8 @@
 "use client";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { BadgeCheck, Bell, BookOpen, Bookmark, Calculator, ChevronDown, ChevronRight, Compass, Eye, FileText, Heart, Home, LayoutGrid, LibraryBig, Menu, MessageSquare, MoreHorizontal, Newspaper, PenSquare, Search, Share2, Sparkles, Telescope, UsersRound, X } from "lucide-react";
+import { BadgeCheck, Bell, Bookmark, ChevronDown, ChevronRight, Eye, FileText, Heart, Home, LayoutGrid, LibraryBig, Menu, MessageSquare, MoreHorizontal, Newspaper, PenSquare, Search, Share2, Sparkles, Telescope, UsersRound, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
 import { CommunityHeroCarousel, CommunityImageCarousel } from "@/components/community/community-carousel";
@@ -14,12 +15,12 @@ import type { Guide } from "@/types/community";
 
 const channels = [{ label: "推荐", icon: Home, href: "/" }, { label: "关注", icon: Heart, href: "/?tab=following" }, { label: "攻略", icon: FileText, href: "/guides" }, { label: "新手", icon: Sparkles, href: "/guides?category=新手攻略" }, { label: "官方", icon: Bell, href: "/news?category=官方公告" }, { label: "同人", icon: UsersRound, href: "/creations" }, { label: "资讯", icon: Newspaper, href: "/news" }];
 const quickTools = [
-  { title: "养成计算器", href: "/tools/calculator", icon: Calculator },
-  { title: "声骸图鉴", href: "/echoes", icon: Compass },
-  { title: "配队模拟", href: "/tools/team-builder", icon: UsersRound },
-  { title: "角色图鉴", href: "/characters", icon: Telescope },
-  { title: "版本资讯", href: "/news", icon: Newspaper },
-  { title: "新手指南", href: "/guides?category=新手攻略", icon: BookOpen },
+  { title: "养成计算器", href: "/tools/calculator", iconSrc: "/icons/upgrade-calculator.png" },
+  { title: "声骸图鉴", href: "/echoes", iconSrc: "/icons/echo-archive.png" },
+  { title: "配队模拟", href: "/tools/team-builder", iconSrc: "/icons/team-builder.png" },
+  { title: "角色图鉴", href: "/characters", iconSrc: "/icons/character-archive.png" },
+  { title: "版本资讯", href: "/news", iconSrc: "/icons/version-news.png" },
+  { title: "新手指南", href: "/guides?category=新手攻略", iconSrc: "/icons/exploration-map.png" },
 ];
 function isActive(label: string, path: string, params: URLSearchParams) { if (label === "推荐") return path === "/" && params.get("tab") !== "following"; if (label === "关注") return path === "/" && params.get("tab") === "following"; if (label === "新手") return path === "/guides" && params.get("category") === "新手攻略"; if (label === "攻略") return path.startsWith("/guides") && params.get("category") !== "新手攻略"; if (label === "官方") return path === "/news" && params.get("category") === "官方公告"; if (label === "资讯") return path.startsWith("/news") && params.get("category") !== "官方公告"; return path.startsWith("/creations"); }
 function GameLogo() { return <div className="game-logo"><div className="game-logo-title">鸣潮</div><div className="game-logo-subtitle">WUTHERING WAVES</div><p>海潮回响 · 共鸣此间</p></div>; }
@@ -124,7 +125,7 @@ export function RightRail() {
     </section>
     <section aria-label="快捷工具" className="right-panel tools-panel" id="tools">
       <div className="panel-title"><h2>实用工具</h2><Link href="/tools">更多 <ChevronRight size={14} /></Link></div>
-      <ul aria-label="工具列表" className="tool-grid">{quickTools.map(({ title, href, icon: Icon }) => <li key={title}><Link className="tool-grid-item" href={href}><span className="tool-icon"><Icon size={22} strokeWidth={1.75} /></span><strong>{title}</strong></Link></li>)}</ul>
+      <ul aria-label="工具列表" className="tool-grid">{quickTools.map(({ title, href, iconSrc }) => <li key={title}><Link className="tool-grid-item" href={href}><span className="tool-icon"><Image alt="" fill sizes="36px" src={iconSrc} /></span><strong>{title}</strong></Link></li>)}</ul>
     </section>
     <div className="right-quote"><span>“</span><p>潮水会记得每一个漂泊者的足迹。</p><small>— 鸣潮</small></div>
   </aside>;

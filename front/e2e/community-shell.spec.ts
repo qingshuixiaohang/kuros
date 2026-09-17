@@ -43,6 +43,43 @@ test("首页快捷工具提供六个真实功能入口", async ({ page }) => {
   await expect(tools.getByRole("link", { name: /版本资讯/ })).toHaveAttribute("href", "/news");
 });
 
+test("首页快捷工具使用鸣潮主题图标素材", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/");
+
+  const tools = page.getByRole("region", { name: "快捷工具" });
+  const expectedIcons = [
+    ["养成计算器", "upgrade-calculator.png"],
+    ["声骸图鉴", "echo-archive.png"],
+    ["配队模拟", "team-builder.png"],
+    ["角色图鉴", "character-archive.png"],
+    ["版本资讯", "version-news.png"],
+    ["新手指南", "exploration-map.png"],
+  ] as const;
+
+  for (const [title, fileName] of expectedIcons) {
+    const image = tools.getByRole("link", { name: title }).locator("img");
+    await expect(image).toHaveAttribute("src", new RegExp(fileName));
+    await expect.poll(async () => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  }
+});
+
+test("工具箱页面使用对应的主题图标素材", async ({ page }) => {
+  await page.goto("/tools");
+
+  const expectedIcons = [
+    ["养成计算器", "upgrade-calculator.png"],
+    ["声骸图鉴", "echo-archive.png"],
+    ["配队模拟", "team-builder.png"],
+  ] as const;
+
+  for (const [title, fileName] of expectedIcons) {
+    const image = page.getByRole("link", { name: new RegExp(title) }).locator("img");
+    await expect(image).toHaveAttribute("src", new RegExp(fileName));
+    await expect.poll(async () => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  }
+});
+
 test("首页内容流在有配图时展示可访问的帖子媒体", async ({ page }) => {
   await page.route("http://localhost:8080/api/v1/posts?*", async (route) => {
     await route.fulfill({

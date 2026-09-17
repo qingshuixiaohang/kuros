@@ -79,9 +79,9 @@ export const newsItems: NewsItem[] = [
 ];
 
 export const toolItems: ToolItem[] = [
-  { slug: "calculator", title: "养成计算器", description: "角色 / 武器 / 声骸培养规划", icon: "calculator" },
-  { slug: "echo", title: "声骸图鉴", description: "声骸数据查询与搭配参考", icon: "echo" },
-  { slug: "team-builder", title: "配队模拟", description: "角色协同与队伍思路", icon: "team" },
+  { slug: "calculator", title: "养成计算器", description: "角色 / 武器 / 声骸培养规划", icon: "calculator", iconSrc: "/icons/upgrade-calculator.png" },
+  { slug: "echo", title: "声骸图鉴", description: "声骸数据查询与搭配参考", icon: "echo", iconSrc: "/icons/echo-archive.png" },
+  { slug: "team-builder", title: "配队模拟", description: "角色协同与队伍思路", icon: "team", iconSrc: "/icons/team-builder.png" },
 ];
 
 export const characters: Character[] = [

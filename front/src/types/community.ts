@@ -38,6 +38,7 @@ export interface ToolItem {
   title: string;
   description: string;
   icon: "calculator" | "echo" | "team";
+  iconSrc: string;
 }
 
 export interface Character {
