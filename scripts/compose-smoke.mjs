@@ -4,6 +4,10 @@ const apiBase = process.env.KUROS_API_BASE_URL ?? "http://localhost:8080";
 const frontendBase = process.env.KUROS_FRONTEND_BASE_URL ?? "http://localhost:3000";
 const statePath = process.env.KUROS_SMOKE_STATE ?? ".compose-smoke-state.json";
 const cookies = new Map();
+const smokePng = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+  "base64",
+);
 
 function rememberCookies(response) {
   const setCookies = response.headers.getSetCookie?.() ?? [];
@@ -100,7 +104,7 @@ async function main() {
     });
 
     const form = new FormData();
-    form.append("file", new Blob(["compose-smoke-image"], { type: "image/png" }), "smoke.png");
+    form.append("file", new Blob([smokePng], { type: "image/png" }), "smoke.png");
     const image = await request(apiBase, "/api/v1/files/images", {
       method: "POST",
       headers: csrfHeaders(),
