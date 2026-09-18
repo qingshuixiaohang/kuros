@@ -2,6 +2,18 @@ import { expect, test } from "@playwright/test";
 
 const postUrl = "/guides/10000000-0000-0000-0000-000000000001";
 
+test("帖子详情可以轮播查看本地演示中的全部配图", async ({ page }) => {
+  await page.route("http://localhost:8080/api/v1/posts/10000000-0000-0000-0000-000000000001", (route) => route.abort());
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(postUrl);
+
+  const carousel = page.getByRole("region", { name: /长离焚火队.*帖子配图轮播/ });
+  await expect(carousel).toBeVisible();
+  await expect(carousel.getByRole("img")).toHaveAttribute("alt", /第 1 张/);
+  await carousel.getByRole("button", { name: "下一张" }).click();
+  await expect(carousel.getByRole("img")).toHaveAttribute("alt", /第 2 张/);
+});
+
 test("帖子详情桌面端保留两侧 sticky 阅读辅助栏与帖子目录", async ({ page }) => {
   await page.route("http://localhost:8080/api/v1/posts/10000000-0000-0000-0000-000000000001", (route) => route.fulfill({
     json: {

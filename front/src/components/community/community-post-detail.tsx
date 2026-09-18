@@ -1,23 +1,24 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { autoUpdate, flip, FloatingFocusManager, FloatingPortal, offset, shift, useClick, useDismiss, useFloating, useInteractions, useRole } from "@floating-ui/react";
 import { AtSign, ArrowLeft, Bookmark, Clock3, Eye, Flag, Heart, ImagePlus, MessageCircle, Share2, Smile, ThumbsUp } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
+import { CommunityImageCarousel } from "@/components/community/community-carousel";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { createComment, deleteComment, favoritePost, fetchComments, fetchPost, fetchPostInteractions, likePost, unfavoritePost, unlikePost, type ApiComment, type PostInteraction, type ReportTargetType } from "@/lib/api";
 import { guides } from "@/lib/mock";
+import { extractMarkdownImages } from "@/lib/post-view";
 import type { Guide } from "@/types/community";
 
 const coverByGuide: Record<string, string> = {
-  "changli-team": "/art/guide-sword.png",
-  "tower-24": "/art/guide-tower.png",
-  "camellya-echo": "/art/guide-flower.png",
-  "new-player-route": "/art/guide-coast.png",
+  "changli-team": "/art/修-奥古斯都  唤取动画.png",
+  "tower-24": "/art/修-仇远  唤取动画.png",
+  "camellya-echo": "/art/修-嘉贝莉娜  唤取动画.png",
+  "new-player-route": "/art/修-心灵海 男漂地图.png",
 };
 
 const apiPostIdBySlug: Record<string, string> = {
@@ -363,7 +364,8 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
     let cancelled = false;
     fetchPost(apiPostId).then((post) => {
       if (!cancelled) {
-        setGuide({ ...fallbackGuide, id: post.id, category: post.category, title: post.title, excerpt: post.excerpt, content: post.content, coverImageUrl: post.coverImageUrl, author: post.author.nickname, authorMark: post.author.nickname.slice(0, 1), publishedAt: post.publishedAt, views: formatCount(post.viewCount), replies: post.commentCount, likes: formatCount(post.likeCount), tags: post.tags });
+        const apiMediaUrls = post.media?.length ? post.media.slice().sort((left, right) => left.sortOrder - right.sortOrder).map((item) => item.url) : undefined;
+        setGuide({ ...fallbackGuide, id: post.id, category: post.category, title: post.title, excerpt: post.excerpt, content: post.content, coverImageUrl: post.coverImageUrl, mediaUrls: apiMediaUrls ?? (post.mediaUrls?.length ? post.mediaUrls : post.coverImageUrl ? [post.coverImageUrl] : extractMarkdownImages(post.content)), author: post.author.nickname, authorMark: post.author.nickname.slice(0, 1), publishedAt: post.publishedAt, views: formatCount(post.viewCount), replies: post.commentCount, likes: formatCount(post.likeCount), tags: post.tags });
         setAuthorId(post.author.id);
         setApiUnavailable(false);
       }
@@ -375,7 +377,7 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
     <article className="post-detail-page">
       <Link className="back-link" href="/guides"><ArrowLeft size={15} />返回攻略列表</Link>
       <header className="post-detail-heading"><div className="post-detail-kicker"><span className="guide-type">{guide.category}</span><span>原创</span><time>{guide.publishedAt}</time></div><h1>{guide.title}</h1><p>{guide.excerpt}</p><div className="detail-author"><div className={"author-avatar author-avatar--" + guide.avatarTone}>{guide.authorMark}</div><div><strong>{guide.author}</strong><small>攻略作者 · {guide.views} 阅读</small></div><CommunityFollowButton className="follow-button" fallbackKey={guide.author} targetUserId={authorId} /></div></header>
-      <div className="post-cover"><Image alt={guide.title + "配图"} fill priority sizes="(max-width: 900px) 100vw, 820px" src={guide.coverImageUrl ?? coverByGuide[guide.id] ?? coverByGuide[slug] ?? guide.mediaUrls?.[0] ?? "/art/guide-sword.png"} /></div>
+      <CommunityImageCarousel className="post-cover" images={(guide.mediaUrls?.length ? guide.mediaUrls : [guide.coverImageUrl ?? coverByGuide[guide.id] ?? coverByGuide[slug] ?? "/art/guide-sword.png"]).map((src) => ({ alt: guide.title + "配图", src }))} label={`${guide.title}帖子配图轮播`} priority />
       <GuideArticle content={guide.content} />
       <div className="post-detail-footer"><span>阅读 {guide.views}</span><button type="button" onClick={() => requestLogin(() => setReportTarget({ type: "POST", id: apiPostId }))}><Flag size={14} />举报</button><button type="button" onClick={() => void sharePost()}><Share2 size={14} />分享</button></div>
       <PostComments authorName={guide.author} onReport={(commentId) => requestLogin(() => setReportTarget({ type: "COMMENT", id: commentId }))} postId={apiPostId} />

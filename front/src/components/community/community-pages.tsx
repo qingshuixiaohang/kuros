@@ -2,7 +2,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Bell, Bold, ChevronDown, ChevronRight, Eye, Heart, Heading1, Heading2, ImagePlus, Italic, Link2, List, ListOrdered, MessageSquare, MoveRight, PenLine, Quote, Redo2, Search, Send, Share2, Sparkles, Undo2, Wrench, X } from "lucide-react";
+import { ArrowLeft, Bell, Bold, ChevronDown, ChevronRight, ChevronUp, Eye, Heart, Heading1, Heading2, ImagePlus, Italic, Link2, List, ListOrdered, MessageSquare, MoveRight, PenLine, Quote, Redo2, Search, Send, Share2, Sparkles, Undo2, Wrench, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent as ReactDragEvent, type ReactNode } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
@@ -10,7 +10,7 @@ import { z } from "zod";
 import { CommunityDemoProvider, useCommunityDemo } from "@/components/community/community-interactions";
 import { RightRail, Sidebar, TopNavigation, useCommunityDrawer } from "@/components/community/community-home";
 import { characters, echoSets, guides, newsItems, toolItems } from "@/lib/mock";
-import { createPost, fetchPost, updatePost, uploadImage } from "@/lib/api";
+import { createPost, deleteImage, fetchPost, updatePost, uploadImage } from "@/lib/api";
 import { useCommunityPostQuery } from "@/lib/community-queries";
 import { toGuide } from "@/lib/post-view";
 
@@ -28,7 +28,7 @@ export function EchoDetailPage({ id }: { id: string }) { const echo = echoSets.f
 export function NewsPage() { const params = useSearchParams(); const [category, setCategory] = useState(params.get("category") ?? "全部"); const { requestLogin, notify } = useCommunityDemo(); const tabs = ["全部", "版本前瞻", "官方公告", "活动资讯"]; const visible = newsItems.filter((item) => category === "全部" || item.category === category); return <CommunityPageFrame activeNav="news"><PageHeader section="资讯" title="版本资讯" description="版本公告、活动前瞻和官方信息集中整理。" action={<button className="secondary-button" onClick={() => requestLogin(() => notify("已订阅资讯更新。"))} type="button"><Bell size={16} />订阅更新</button>} /><div className="news-page-tabs">{tabs.map((item) => <button className={category === item ? "is-active" : ""} key={item} onClick={() => setCategory(item)} type="button">{item}</button>)}</div><section className="news-page-list">{visible.map((item) => <Link href={"/news/" + item.id} key={item.id}><article><time>{item.date}</time><div><span>{item.category}</span><h2>{item.title}</h2><p>{item.summary}</p></div><ChevronRight size={18} /></article></Link>)}</section></CommunityPageFrame>; }
 export function NewsDetailPage({ id }: { id: string }) { const item = newsItems.find((entry) => entry.id === id) ?? newsItems[0]; const { notify } = useCommunityDemo(); return <CommunityPageFrame activeNav="news"><article className="detail-page"><Link className="back-link" href="/news"><ArrowLeft size={15} />返回资讯列表</Link><div className="detail-heading"><span className="guide-type">{item.category}</span><h1>{item.title}</h1><p>{item.date} · 社区资讯整理</p></div><main className="article-body news-detail-body">{item.content.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</main><button className="share-button detail-share" onClick={() => notify("资讯链接已复制。")} type="button"><Share2 size={16} />分享资讯</button></article></CommunityPageFrame>; }
 export function CreationsPage() { return <CommunityPageFrame activeNav="creations"><PageHeader section="同人创作" title="同人创作" description="收录绘画、摄影、剪辑和世界观相关的玩家创作。" action={<Link className="primary-button" href="/publish?type=creation"><PenLine size={16} />发布创作</Link>} /><section className="creation-list">{characters.map((item, index) => <Link className="creation-card" href={"/characters/" + item.id} key={item.id}><div className="creation-image"><Image alt={item.name + "创作预览"} fill sizes="(max-width: 620px) 50vw, 420px" src={item.image} /></div><div><span>玩家创作 · {index === 1 ? "摄影" : "绘画"}</span><h2>{item.name} · 潮声片段</h2><p>以原创角色意象为灵感的社区作品展示。</p><small>查看作品 <ChevronRight size={13} /></small></div></Link>)}</section></CommunityPageFrame>; }
-export function ToolsPage() { return <CommunityPageFrame activeNav="tools"><PageHeader section="实用工具" title="漂泊者工具箱" description="把常用的养成计算、声骸查询与配队思路收在同一处。" /><section className="tools-page-grid">{toolItems.map((tool) => { const href = tool.slug === "echo" ? "/echoes" : "/tools/" + tool.slug; return <Link href={href} key={tool.slug}><article className="tool-page-card"><span>{tool.icon === "calculator" ? "算" : tool.icon === "echo" ? "骸" : "队"}</span><h2>{tool.title}</h2><p>{tool.description}</p><small>打开工具 <ChevronRight size={13} /></small></article></Link>; })}</section></CommunityPageFrame>; }
+export function ToolsPage() { return <CommunityPageFrame activeNav="tools"><PageHeader section="实用工具" title="漂泊者工具箱" description="把常用的养成计算、声骸查询与配队思路收在同一处。" /><section className="tools-page-grid">{toolItems.map((tool) => { const href = tool.slug === "echo" ? "/echoes" : "/tools/" + tool.slug; return <Link href={href} key={tool.slug}><article className="tool-page-card"><span><Image alt="" fill sizes="64px" src={tool.iconSrc} /></span><h2>{tool.title}</h2><p>{tool.description}</p><small>打开工具 <ChevronRight size={13} /></small></article></Link>; })}</section></CommunityPageFrame>; }
 export function ToolDetailPage({ slug }: { slug: string }) { const tool = toolItems.find((item) => item.slug === slug) ?? toolItems[0]; const [level, setLevel] = useState(1); const [weapon, setWeapon] = useState(1); const [members, setMembers] = useState<string[]>([]); const isTeam = tool.slug === "team-builder"; const total = (level * 1200 + weapon * 780).toLocaleString(); function toggleMember(id: string) { setMembers((current) => current.includes(id) ? current.filter((entry) => entry !== id) : current.length === 3 ? [...current.slice(1), id] : [...current, id]); } return <CommunityPageFrame activeNav="tools"><PageHeader section={"实用工具 / " + tool.title} title={tool.title} description={tool.description} /><section className="tool-workspace">{isTeam ? <><div className="team-slots">{[0, 1, 2].map((index) => <div className="team-slot" key={index}>{members[index] ? characters.find((item) => item.id === members[index])?.name : "选择角色"}</div>)}</div><div className="tool-choice-list">{characters.map((item) => <button className={members.includes(item.id) ? "is-active" : ""} key={item.id} onClick={() => toggleMember(item.id)} type="button">{item.name}<small>{item.role}</small></button>)}</div><p className="tool-result">{members.length ? "当前队伍已记录 " + members.length + " 位角色。Demo 版用于梳理轮切思路。" : "从下方选择至多三位角色，开始构建队伍。"}</p></> : <><div className="calculator-fields"><label>角色等级<input max="90" min="1" onChange={(event) => setLevel(Number(event.target.value))} type="number" value={level} /></label><label>武器等级<input max="90" min="1" onChange={(event) => setWeapon(Number(event.target.value))} type="number" value={weapon} /></label></div><div className="tool-result"><span>预计养成素材</span><strong>{total}</strong><small>按当前等级差估算；接入数据服务后可展示真实材料明细。</small></div></>}</section></CommunityPageFrame>; }
 export function SearchResultsPage() { const params = useSearchParams(); const initialTerm = params.get("q")?.trim() ?? ""; const [term, setTerm] = useState(initialTerm); const [page, setPage] = useState(1); const result = useCommunityPostQuery({ keyword: term, page, pageSize: 10, sort: "latest" }); const fallback = guides.filter((guide) => (guide.title + guide.excerpt + guide.tags.join("")).toLowerCase().includes(term.toLowerCase())); const items = result.error ? fallback : result.data?.items.map(toGuide) ?? []; const totalPages = result.error ? 1 : result.data?.meta?.totalPages ?? 1; return <CommunityPageFrame query={term} onQueryChange={(value) => { setTerm(value); setPage(1); window.history.replaceState(null, "", value ? "/search?q=" + encodeURIComponent(value) : "/search"); }}><PageHeader section="搜索" title={term ? "“" + term + "” 的结果" : "搜索"} description={term ? "优先展示匹配的攻略与社区内容。" : "输入关键词寻找攻略、声骸和玩家讨论。"} /><section className="guide-list-page">{result.isLoading ? <div className="feed-status">正在搜索鸣潮社区…</div> : items.length ? items.map((guide) => <GuideListItem guide={guide} key={guide.id} />) : <div className="empty-state"><Search size={20} /><p>没有找到匹配内容，试试角色名、声骸或攻略标签。</p></div>}{result.error && <p className="api-fallback-note">后端暂不可用，当前显示本地 Demo 数据。</p>}{totalPages > 1 && <nav className="pagination" aria-label="搜索结果分页">{Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => <button className={page === pageNumber ? "is-active" : ""} key={pageNumber} onClick={() => setPage(pageNumber)} type="button">{pageNumber}</button>)}</nav>}</section></CommunityPageFrame>; }
 const publishFormSchema = z.object({
@@ -47,6 +47,7 @@ const emptyPublishValues: PublishFormValues = { title: "", content: "", type: "�
 const publishDraftValuesSchema = z.object({ title: z.string().max(200), content: z.string().max(50000), type: z.enum(["攻略", "心得", "同人", "提问"]), tags: z.string() });
 
 type PublishDraft = { version: 2; savedAt: string; values: PublishFormValues };
+type PostMediaDraft = { assetId: string; url: string; originalName: string; temporary: boolean };
 
 function readPublishDraft() {
   try {
@@ -87,7 +88,11 @@ function PublishPageContent() {
   const [draftMessage, setDraftMessage] = useState("");
   const [historyAvailability, setHistoryAvailability] = useState({ canUndo: false, canRedo: false });
   const [loadingEdit, setLoadingEdit] = useState(Boolean(editPostId));
+  const [postMedia, setPostMedia] = useState<PostMediaDraft[]>([]);
+  const [postMediaUploading, setPostMediaUploading] = useState(false);
+  const draggedMediaIndexRef = useRef<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const postMediaFileRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const historyRef = useRef<{ past: string[]; future: string[]; current: string }>({ past: [], future: [], current: "" });
   const title = useWatch({ control, name: "title", defaultValue: "" });
@@ -110,6 +115,7 @@ function PublishPageContent() {
       if (!active) return;
       const values = { title: post.title, content: post.content ?? "", type: post.type === "GUIDE" ? "攻略" : ["心得", "同人", "提问"].includes(post.category) ? post.category as PublishFormValues["type"] : "心得", tags: post.tags.join("、") };
       reset(values);
+      setPostMedia(post.media?.slice().sort((left, right) => left.sortOrder - right.sortOrder).map((media) => ({ assetId: media.id, url: media.url, originalName: `帖子配图 ${media.sortOrder + 1}`, temporary: false })) ?? []);
       historyRef.current.current = values.content;
     }).catch((requestError) => {
       if (active) setError(requestError instanceof Error ? requestError.message : "无法读取待编辑的帖子");
@@ -202,7 +208,7 @@ function PublishPageContent() {
 
   async function uploadSelectedImage(file: File) {
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) { setError("仅支持 PNG、JPEG 或 WebP 图片"); return; }
-    if (file.size > 5 * 1024 * 1024) { setError("图片大小不能超过 5 MB"); return; }
+    if (file.size > 10 * 1024 * 1024) { setError("图片大小不能超过 10 MB"); return; }
     setError("");
     setImageUploading(true);
     try {
@@ -220,6 +226,62 @@ function PublishPageContent() {
       setError(requestError instanceof Error ? requestError.message : "图片上传失败，请稍后重试");
     } finally {
       setImageUploading(false);
+    }
+  }
+
+  async function uploadPostImages(files: File[]) {
+    const remaining = 9 - postMedia.length;
+    if (files.length > remaining) { setError(`每个帖子最多上传 9 张图片，还可以添加 ${remaining} 张`); return; }
+    setError("");
+    setPostMediaUploading(true);
+    try {
+      for (const file of files) {
+        if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) throw new Error("仅支持 PNG、JPEG 或 WebP 图片");
+        if (file.size > 10 * 1024 * 1024) throw new Error("图片大小不能超过 10 MB");
+        const uploaded = await uploadImage(file);
+        setPostMedia((current) => [...current, { assetId: uploaded.assetId, url: uploaded.url, originalName: uploaded.originalName ?? file.name, temporary: true }]);
+      }
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "帖子配图上传失败，请稍后重试");
+    } finally {
+      setPostMediaUploading(false);
+    }
+  }
+
+  function changePostMedia(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (files.length) void uploadPostImages(files);
+  }
+
+  function movePostMedia(index: number, direction: -1 | 1) {
+    setPostMedia((current) => {
+      const nextIndex = index + direction;
+      if (nextIndex < 0 || nextIndex >= current.length) return current;
+      const next = [...current];
+      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+      return next;
+    });
+  }
+
+  function reorderPostMedia(fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex) return;
+    setPostMedia((current) => {
+      if (fromIndex < 0 || toIndex < 0 || fromIndex >= current.length || toIndex >= current.length) return current;
+      const next = [...current];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  }
+
+  async function removePostMedia(media: PostMediaDraft) {
+    setPostMedia((current) => current.filter((item) => item.assetId !== media.assetId));
+    if (!media.temporary) return;
+    try {
+      await deleteImage(media.assetId);
+    } catch {
+      setError("图片预览已移除，但服务器临时文件清理失败，请稍后重试");
     }
   }
 
@@ -254,7 +316,7 @@ function PublishPageContent() {
     setPublishing(true);
     setError("");
     try {
-      const input = { type: values.type === "攻略" ? "GUIDE" : "GENERAL", category: values.type === "攻略" ? "配队攻略" : values.type, title: values.title, content: values.content, tags: values.tags.split(/[，,\s]+/).map((tag) => tag.trim()).filter(Boolean) } as const;
+      const input = { type: values.type === "攻略" ? "GUIDE" : "GENERAL", category: values.type === "攻略" ? "配队攻略" : values.type, title: values.title, content: values.content, tags: values.tags.split(/[，,\s]+/).map((tag) => tag.trim()).filter(Boolean), mediaAssetIds: postMedia.map((media) => media.assetId) } as const;
       const post = editPostId ? await updatePost(editPostId, input) : await createPost(input);
       try { window.localStorage.removeItem(publishDraftKey); } catch { /* 发布成功不应被本地存储异常阻断。 */ }
       notify(editPostId ? "帖子已更新" : "内容已发布");
@@ -304,11 +366,31 @@ function PublishPageContent() {
       {errors.title && <p className="publish-field-error" role="alert">{errors.title.message}</p>}
       <div className="publish-content-field" onDragOver={(event) => event.preventDefault()} onDrop={handleImageDrop}>
         <textarea aria-label="帖子正文" placeholder="在这里写下你的内容..." rows={18} {...registerContent} onChange={handleContentChange} ref={(element) => { registerContent.ref(element); contentRef.current = element; }} value={content} />
-        {!content && <button aria-label="上传正文图片" className="publish-upload-prompt" onClick={() => fileRef.current?.click()} type="button"><ImagePlus size={25} /><span>点击上传图片，或直接拖拽到此处</span><small>支持 PNG、JPG、WebP，单张不超过 5MB</small></button>}
+        {!content && <button aria-label="上传正文图片" className="publish-upload-prompt" onClick={() => fileRef.current?.click()} type="button"><ImagePlus size={25} /><span>点击上传图片，或直接拖拽到此处</span><small>支持 PNG、JPG、WebP，单张不超过 10MB</small></button>}
         {imageUploading && <span className="publish-uploading" role="status">图片上传中…</span>}
         <span className="publish-content-count">{content.length} / 50000</span>
       </div>
       {errors.content && <p className="publish-field-error" role="alert">{errors.content.message}</p>}
+      <section aria-label="帖子配图" className="post-media-editor">
+        <div className="post-media-editor-heading"><div><strong>帖子配图</strong><span>首页展示第一张，详情页可浏览全部图片</span></div><em>{postMedia.length} / 9</em></div>
+        <div className="post-media-editor-grid">
+          {postMedia.map((media, index) => <article aria-label={`第 ${index + 1} 张帖子配图`} className="post-media-item" data-asset-id={media.assetId} draggable key={media.assetId}
+            onDragStart={() => { draggedMediaIndexRef.current = index; }}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => { event.preventDefault(); if (draggedMediaIndexRef.current !== null) reorderPostMedia(draggedMediaIndexRef.current, index); draggedMediaIndexRef.current = null; }}
+            onDragEnd={() => { draggedMediaIndexRef.current = null; }}>
+            <Image alt={media.originalName} fill sizes="(max-width: 620px) 50vw, 180px" src={media.url} unoptimized />
+            {index === 0 && <span className="post-media-cover">封面</span>}
+            <div className="post-media-item-actions">
+              <button aria-label={`图片 ${index + 1} 上移`} disabled={index === 0 || postMediaUploading} onClick={() => movePostMedia(index, -1)} type="button"><ChevronUp size={14} /></button>
+              <button aria-label={`图片 ${index + 1} 下移`} disabled={index === postMedia.length - 1 || postMediaUploading} onClick={() => movePostMedia(index, 1)} type="button"><ChevronDown size={14} /></button>
+              <button aria-label={`删除图片 ${index + 1}`} disabled={postMediaUploading} onClick={() => { void removePostMedia(media); }} type="button"><X size={14} /></button>
+            </div>
+          </article>)}
+          {postMedia.length < 9 && <button aria-label="添加帖子配图" className="post-media-add" disabled={postMediaUploading} onClick={() => postMediaFileRef.current?.click()} type="button"><ImagePlus size={22} /><span>{postMediaUploading ? "上传中…" : "添加配图"}</span><small>PNG / JPG / WebP · 10MB 内</small></button>}
+        </div>
+        <input accept="image/png,image/jpeg,image/webp" aria-label="帖子配图" className="file-input" multiple onChange={changePostMedia} ref={postMediaFileRef} type="file" />
+      </section>
       <input accept="image/png,image/jpeg,image/webp" className="file-input" onChange={changeImage} ref={fileRef} type="file" />
       <section aria-label="帖子设置" className="publish-meta" id="publish-meta">
         <label><strong>内容类型</strong><select aria-label="内容类型" {...registerType}><option>攻略</option><option>心得</option><option>同人</option><option>提问</option></select></label>
@@ -320,7 +402,7 @@ function PublishPageContent() {
       {error && <p className="publish-field-error" role="alert">{error}</p>}
     </div>
     <footer className="publish-action-bar">
-      <div className="publish-action-inner"><span className="publish-character-count">正文字符：<strong>{content.length}</strong></span><button className="publish-settings-button" onClick={() => document.getElementById("publish-meta")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" })} type="button">帖子设置<ChevronDown size={14} /></button><span className="publish-public-note">发布后公开展示</span><button className="publish-draft-button" onClick={saveDraft} type="button">保存草稿</button><button className="publish-submit-button" disabled={publishing || imageUploading} type="submit"><Send size={17} />{publishing ? (editPostId ? "保存中…" : "发布中…") : editPostId ? "保存修改" : "发布"}</button></div>
+      <div className="publish-action-inner"><span className="publish-character-count">正文字符：<strong>{content.length}</strong></span><button className="publish-settings-button" onClick={() => document.getElementById("publish-meta")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" })} type="button">帖子设置<ChevronDown size={14} /></button><span className="publish-public-note">发布后公开展示</span><button className="publish-draft-button" onClick={saveDraft} type="button">保存草稿</button><button className="publish-submit-button" disabled={publishing || imageUploading || postMediaUploading} type="submit"><Send size={17} />{publishing ? (editPostId ? "保存中…" : "发布中…") : editPostId ? "保存修改" : "发布"}</button></div>
     </footer>
   </form>;
 }

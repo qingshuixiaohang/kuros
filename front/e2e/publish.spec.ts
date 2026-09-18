@@ -134,13 +134,70 @@ test("图片工具按钮上传后将 Markdown 插入正文并完成发布", asyn
   await editor.getByRole("textbox", { name: "帖子标题" }).fill("鸣潮探索路线中的图片记录");
   await content.fill("这是正文。\n\n");
   await editor.getByRole("button", { name: "插入图片" }).click();
-  await editor.locator("input[type=file]").setInputFiles({ name: "wave-guide.png", mimeType: "image/png", buffer: Buffer.from("fake-image") });
+  await editor.locator("input[type=file]").last().setInputFiles({ name: "wave-guide.png", mimeType: "image/png", buffer: Buffer.from("fake-image") });
   await expect(content).toHaveValue(/!\[wave-guide\.png\]\(\/media\/wave-guide\.png\)/);
 
   await page.evaluate(() => window.localStorage.setItem("wuthering-community-publish-draft-v2", "test-draft"));
   await editor.getByRole("button", { name: "发布" }).click();
   await expect(page).toHaveURL(/\/guides\/created-post$/);
   await expect.poll(() => page.evaluate(() => window.localStorage.getItem("wuthering-community-publish-draft-v2"))).toBeNull();
+});
+
+test("发布页可以上传多张帖子配图、调整顺序并提交媒体 ID", async ({ page }) => {
+  await mockAuth(page);
+  await page.route("**/api/v1/auth/csrf", (route) => route.fulfill({ status: 204 }));
+  let uploadCount = 0;
+  let requestBody: { mediaAssetIds?: string[] } | undefined;
+  await page.route("**/api/v1/files/images", (route) => {
+    uploadCount += 1;
+    const assetId = `asset-${uploadCount}`;
+    return route.fulfill({ json: { data: { assetId, url: `/media/${assetId}.png`, originalName: `${assetId}.png`, contentType: "image/png", size: 3 } } });
+  });
+  await page.route("**/api/v1/posts", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    requestBody = JSON.parse(route.request().postData() ?? "{}") as { mediaAssetIds?: string[] };
+    await route.fulfill({ json: { data: { ...post, id: "multi-image-post" } } });
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/publish");
+
+  const editor = page.getByRole("form", { name: "发布编辑器" });
+  await editor.getByRole("textbox", { name: "帖子标题" }).fill("多图配队实战记录");
+  await editor.getByRole("textbox", { name: "帖子正文" }).fill("这是多图正文。");
+  await editor.getByRole("button", { name: "添加帖子配图" }).click();
+  await editor.locator("section[aria-label='帖子配图'] input[type=file]").setInputFiles([
+    { name: "first.png", mimeType: "image/png", buffer: Buffer.from("first") },
+    { name: "second.png", mimeType: "image/png", buffer: Buffer.from("second") },
+  ]);
+  await expect(editor.getByRole("article", { name: /第 \d+ 张帖子配图/ })).toHaveCount(2);
+  await editor.getByRole("button", { name: "图片 2 上移" }).click();
+  await editor.getByRole("button", { name: "发布" }).click();
+  await expect(page).toHaveURL(/\/guides\/multi-image-post$/);
+  expect(requestBody?.mediaAssetIds).toEqual(["asset-2", "asset-1"]);
+});
+
+test("发布页移除临时帖子配图时会清理上传资源", async ({ page }) => {
+  await mockAuth(page);
+  await page.route("**/api/v1/auth/csrf", (route) => route.fulfill({ status: 204 }));
+  let deleteRequested = false;
+  await page.route("**/api/v1/files/images", (route) => route.fulfill({ json: { data: { assetId: "asset-delete", url: "/media/asset-delete.png", originalName: "delete.png", contentType: "image/png", size: 3 } } }));
+  await page.route("**/api/v1/files/images/asset-delete", async (route) => {
+    if (route.request().method() === "DELETE") {
+      deleteRequested = true;
+      return route.fulfill({ status: 204 });
+    }
+    return route.continue();
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/publish");
+
+  const editor = page.getByRole("form", { name: "发布编辑器" });
+  await editor.getByRole("button", { name: "添加帖子配图" }).click();
+  await editor.locator("section[aria-label='帖子配图'] input[type=file]").setInputFiles({ name: "delete.png", mimeType: "image/png", buffer: Buffer.from("delete") });
+  await expect(editor.getByRole("article", { name: /第 \d+ 张帖子配图/ })).toHaveCount(1);
+  await editor.getByRole("button", { name: "删除图片 1" }).click();
+  await expect(editor.getByRole("article", { name: /第 \d+ 张帖子配图/ })).toHaveCount(0);
+  expect(deleteRequested).toBe(true);
 });
 
 test("编辑模式回填现有帖子并使用保存修改提交", async ({ page }) => {
@@ -160,6 +217,36 @@ test("编辑模式回填现有帖子并使用保存修改提交", async ({ page 
   await expect(editor.getByRole("button", { name: "保存修改" })).toBeVisible();
   await editor.getByRole("button", { name: "保存修改" }).click();
   await expect(page).toHaveURL(new RegExp(`/guides/${postId}$`));
+});
+
+test("编辑模式回填帖子配图并提交调整后的媒体顺序", async ({ page }) => {
+  await mockAuth(page);
+  const postWithMedia = {
+    ...post,
+    media: [
+      { id: "asset-1", url: "/media/asset-1.png", sortOrder: 0, isCover: true },
+      { id: "asset-2", url: "/media/asset-2.png", sortOrder: 1, isCover: false },
+    ],
+  };
+  let requestBody: { mediaAssetIds?: string[] } | undefined;
+  await page.route(`**/api/v1/posts/${postId}`, async (route) => {
+    if (route.request().method() === "GET") return route.fulfill({ json: { data: postWithMedia } });
+    if (route.request().method() === "PUT") {
+      requestBody = JSON.parse(route.request().postData() ?? "{}") as { mediaAssetIds?: string[] };
+      return route.fulfill({ json: { data: postWithMedia } });
+    }
+    return route.continue();
+  });
+  await page.route("**/api/v1/auth/csrf", (route) => route.fulfill({ status: 204 }));
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/publish?edit=${postId}`);
+
+  const editor = page.getByRole("form", { name: "发布编辑器" });
+  await expect(editor.getByRole("article", { name: /第 \d+ 张帖子配图/ })).toHaveCount(2);
+  await editor.getByRole("button", { name: "图片 2 上移" }).click();
+  await editor.getByRole("button", { name: "保存修改" }).click();
+  await expect(page).toHaveURL(new RegExp(`/guides/${postId}$`));
+  expect(requestBody?.mediaAssetIds).toEqual(["asset-2", "asset-1"]);
 });
 
 for (const viewport of [{ width: 1280, height: 900 }, { width: 1024, height: 900 }, { width: 768, height: 900 }, { width: 390, height: 844 }]) {

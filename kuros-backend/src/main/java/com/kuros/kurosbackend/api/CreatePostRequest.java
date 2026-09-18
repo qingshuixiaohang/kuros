@@ -8,6 +8,7 @@ public record CreatePostRequest(
         String title,
         String excerpt,
         String content,
-        List<String> tags
+        List<String> tags,
+        List<String> mediaAssetIds
 ) {
 }
