@@ -19,7 +19,7 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> resourceNotFound(ResourceNotFoundException exception) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ErrorResponse("POST_NOT_FOUND", exception.getMessage(), null));
+                .body(new ErrorResponse(exception.getCode(), exception.getMessage(), null));
     }
 
     @ExceptionHandler(AuthRequestException.class)

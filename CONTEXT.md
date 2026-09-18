@@ -122,3 +122,11 @@ _避免_：草稿帖子（当前后端不存在草稿状态）
 - MySQL 使用数据卷，后端上传目录使用持久化卷，Flyway 仍是唯一数据库迁移入口。
 - 本阶段保持 Cookie 会话和现有 REST API，不引入 Redis、MQ、MinIO、Elasticsearch、Nacos 或 Gateway。
 - 部署规格写入 `docs/specs/single-monolith-deployment-baseline.md`。
+
+## 2026-09-18 角色图鉴真实化决策
+
+- 下一项垂直功能切片是角色图鉴真实化：Flyway 表与种子数据、游客只读 API、前端列表和详情接入。
+- 第一版只保留基础资料字段，不实现管理后台、培养材料、技能树、推荐配队和声骸数据。
+- 角色页面不再静默回退到 Mock 数据；后端不可用时展示明确的加载失败状态。
+- 角色图片沿用现有项目资源 URL，不新增素材生成任务。
+- 详细规格见 `docs/specs/character-catalog.md`。

@@ -99,6 +99,15 @@
 | GET | `/users/{userId}/posts` | 公开帖子列表 |
 | GET | `/users/me/profile` | 当前用户的帖子、评论、收藏和关注概览 |
 
-## 8. 接口演进规则
+## 8. 角色图鉴
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | /characters | 游客分页查询已启用角色；支持 role、keyword、page、pageSize |
+| GET | /characters/{slug} | 游客查询单个已启用角色；不存在或下架返回 CHARACTER_NOT_FOUND |
+
+角色响应字段包括 id、slug、name、role、rarity、attribute、weaponType、version、imageUrl 和 description。当前不包含培养材料、技能树或推荐配队。
+
+## 9. 接口演进规则
 
 数据库字段通过 Flyway 迁移演进；不在已发布迁移上直接修改。新增字段优先保持向后兼容，破坏性变化使用新版本路径或明确迁移窗口。前端 API 封装集中放在 `front/src/lib/api.ts`，组件不得自行拼接认证、CSRF 和错误解析逻辑。

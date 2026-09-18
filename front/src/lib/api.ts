@@ -24,6 +24,19 @@ export type ApiPost = {
   tags: string[];
 };
 
+export type ApiCharacter = {
+  id: string;
+  slug: string;
+  name: string;
+  role: string;
+  rarity: number;
+  attribute: string;
+  weaponType: string;
+  version: string;
+  imageUrl: string;
+  description: string;
+};
+
 export type ApiPageMeta = { page: number; pageSize: number; totalItems: number; totalPages: number };
 type ApiEnvelope<T> = { data: T; meta?: ApiPageMeta };
 
@@ -114,6 +127,21 @@ export async function fetchPostPage(options: { category?: string; keyword?: stri
 
 export async function fetchPosts(options: { category?: string; keyword?: string; tag?: string; page?: number; pageSize?: number; sort?: "latest" | "hot" } = {}) {
   return (await fetchPostPage(options)).items;
+}
+
+export async function fetchCharacterPage(options: { role?: string; keyword?: string; page?: number; pageSize?: number } = {}) {
+  const params = new URLSearchParams({
+    page: String(options.page ?? 1),
+    pageSize: String(options.pageSize ?? 12),
+  });
+  if (options.role && options.role !== "全部角色") params.set("role", options.role);
+  if (options.keyword?.trim()) params.set("keyword", options.keyword.trim());
+  const envelope = await requestEnvelope<ApiCharacter[]>("/api/v1/characters?" + params.toString());
+  return { items: envelope?.data ?? [], meta: envelope?.meta };
+}
+
+export function fetchCharacter(slug: string) {
+  return request<ApiCharacter>("/api/v1/characters/" + encodeURIComponent(slug));
 }
 
 export function fetchPost(id: string) {

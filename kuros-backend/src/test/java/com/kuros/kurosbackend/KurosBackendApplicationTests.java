@@ -67,6 +67,49 @@ class KurosBackendApplicationTests {
     }
 
     @Test
+    void 游客可以按定位和关键词分页浏览已启用角色() throws Exception {
+        mockMvc.perform(get("/api/v1/characters")
+                        .param("role", "输出")
+                        .param("keyword", "奥古斯都")
+                        .param("page", "1")
+                        .param("pageSize", "12"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(1)))
+                .andExpect(jsonPath("$.data[0].slug").value("augustus"))
+                .andExpect(jsonPath("$.data[0].name").value("奥古斯都"))
+                .andExpect(jsonPath("$.data[0].weaponType").isNotEmpty())
+                .andExpect(jsonPath("$.meta.totalItems").value(1));
+    }
+
+    @Test
+    void 角色列表支持稳定排序分页并限制每页大小() throws Exception {
+        mockMvc.perform(get("/api/v1/characters")
+                        .param("page", "2")
+                        .param("pageSize", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(1)))
+                .andExpect(jsonPath("$.data[0].slug").value("augustus"))
+                .andExpect(jsonPath("$.meta.page").value(2))
+                .andExpect(jsonPath("$.meta.pageSize").value(1))
+                .andExpect(jsonPath("$.meta.totalPages").value(3));
+
+        mockMvc.perform(get("/api/v1/characters").param("pageSize", "200"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.meta.pageSize").value(50));
+    }
+
+    @Test
+    void 游客查看不存在或未启用角色返回角色未找到() throws Exception {
+        mockMvc.perform(get("/api/v1/characters/not-found"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("CHARACTER_NOT_FOUND"));
+
+        mockMvc.perform(get("/api/v1/characters/disabled-character"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("CHARACTER_NOT_FOUND"));
+    }
+
+    @Test
     void 公开查询不会暴露已删除帖子() throws Exception {
         mockMvc.perform(get("/api/v1/posts/10000000-0000-0000-0000-000000000099"))
                 .andExpect(status().isNotFound())
