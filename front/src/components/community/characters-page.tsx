@@ -1,141 +1,164 @@
 "use client";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, ChevronRight, Sparkles, Swords, Wrench } from "lucide-react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { ArrowLeft, ChevronRight, Sparkles, Wrench } from "lucide-react";
 import { useState } from "react";
 import { CommunityPageFrame, PageHeader } from "@/components/community/community-pages";
-import { characters } from "@/lib/mock";
-import type { CharacterElement, CharacterWeapon } from "@/types/community";
+import { fetchCharacter, fetchCharacterPage, type ApiCharacter } from "@/lib/api";
 
-const roles = ["全部角色", "输出", "协同", "辅助"] as const;
-const elements: readonly (CharacterElement | "全部属性")[] = ["全部属性", "湮灭", "导电", "热熔", "冷凝", "气动", "衍射"];
-const weapons: readonly (CharacterWeapon | "全部武器")[] = ["全部武器", "迅刀", "长刃", "佩枪", "臂铠", "音感仪"];
-const rarities = ["全部稀有度", "5★", "4★"] as const;
+const roles = ["全部角色", "输出", "协同", "辅助"];
+const elements = ["全部属性", "湮灭", "导电", "热熔", "冷凝", "气动", "衍射"];
+const weapons = ["全部武器", "迅刀", "长刃", "佩枪", "臂铠", "音感仪"];
+const rarities = ["全部稀有度", "5★", "4★"];
+const pageSize = 12;
 
 export function CharactersPage() {
   const [query, setQuery] = useState("");
-  const [role, setRole] = useState<string>("全部角色");
-  const [element, setElement] = useState<string>("全部属性");
-  const [weapon, setWeapon] = useState<string>("全部武器");
-  const [rarity, setRarity] = useState<string>("全部稀有度");
+  const [role, setRole] = useState("全部角色");
+  const [element, setElement] = useState("全部属性");
+  const [weapon, setWeapon] = useState("全部武器");
+  const [rarity, setRarity] = useState("全部稀有度");
+  const [page, setPage] = useState(1);
 
-  const visible = characters.filter((item) =>
-    (role === "全部角色" || item.role === role) &&
-    (element === "全部属性" || item.element === element) &&
-    (weapon === "全部武器" || item.weapon === weapon) &&
-    (rarity === "全部稀有度" || item.rarity + "★" === rarity) &&
-    (item.name + item.title + item.description).includes(query.trim())
-  );
+  const characters = useQuery({
+    queryKey: ["characters", role, element, weapon, rarity, query, page],
+    queryFn: () => fetchCharacterPage({
+      role: role === "全部角色" ? undefined : role,
+      attribute: element === "全部属性" ? undefined : element,
+      weapon: weapon === "全部武器" ? undefined : weapon,
+      rarity: rarity === "全部稀有度" ? undefined : Number(rarity.replace("★", "")),
+      keyword: query,
+      page,
+      pageSize,
+    }),
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+  const items = characters.data?.items ?? [];
+  const totalPages = characters.data?.meta?.totalPages ?? 1;
+  const resetPage = (setter: (value: string) => void) => (value: string) => {
+    setter(value);
+    setPage(1);
+  };
 
   return (
-    <CommunityPageFrame query={query} onQueryChange={setQuery}>
+    <CommunityPageFrame query={query} onQueryChange={resetPage(setQuery)}>
       <PageHeader section="图鉴 / 角色" title="角色图鉴" description="记录每位共鸣者的定位、属性与培养方向。" action={<Link className="secondary-button" href="/tools/team-builder"><Wrench size={16} />配队模拟</Link>} />
 
       {/* 角色定位 */}
-      <div className="catalog-tabs">{roles.map((item) => <button className={role === item ? "is-active" : ""} key={item} onClick={() => setRole(item)} type="button">{item}</button>)}</div>
+      <div className="catalog-tabs">{roles.map((item) => <button className={role === item ? "is-active" : ""} key={item} onClick={() => resetPage(setRole)(item)} type="button">{item}</button>)}</div>
 
       {/* 属性筛选 */}
       <div className="catalog-tabs catalog-tabs--sub">
         <span className="catalog-tabs-label">属性</span>
-        {elements.map((item) => <button className={element === item ? "is-active" : ""} key={item} onClick={() => setElement(item)} type="button">{item}</button>)}
+        {elements.map((item) => <button className={element === item ? "is-active" : ""} key={item} onClick={() => resetPage(setElement)(item)} type="button">{item}</button>)}
       </div>
 
       {/* 武器筛选 */}
       <div className="catalog-tabs catalog-tabs--sub">
         <span className="catalog-tabs-label">武器</span>
-        {weapons.map((item) => <button className={weapon === item ? "is-active" : ""} key={item} onClick={() => setWeapon(item)} type="button">{item}</button>)}
+        {weapons.map((item) => <button className={weapon === item ? "is-active" : ""} key={item} onClick={() => resetPage(setWeapon)(item)} type="button">{item}</button>)}
       </div>
 
       {/* 稀有度筛选 */}
       <div className="catalog-tabs catalog-tabs--sub">
         <span className="catalog-tabs-label">稀有度</span>
-        {rarities.map((item) => <button className={rarity === item ? "is-active" : ""} key={item} onClick={() => setRarity(item)} type="button">{item}</button>)}
+        {rarities.map((item) => <button className={rarity === item ? "is-active" : ""} key={item} onClick={() => resetPage(setRarity)(item)} type="button">{item}</button>)}
       </div>
 
-      <section className="character-grid">
-        {visible.map((item) => (
-          <article className="character-card" key={item.id}>
-            <Link className="character-image" href={"/characters/" + item.id}>
-              <Image alt={item.name + "角色立绘"} fill sizes="(max-width: 620px) 50vw, 260px" src={item.image} />
-            </Link>
-            <div className="character-copy">
-              <div>
-                <h2>{item.name}</h2>
-                <span>{item.title}</span>
-              </div>
-              <div className="character-tags">
-                <span className="character-tag character-tag--element">{item.element}</span>
-                <span className="character-tag character-tag--weapon">{item.weapon}</span>
-                <span className="character-tag character-tag--rarity">{item.rarity}★</span>
-              </div>
-              <p>{item.description}</p>
-              <Link href={"/characters/" + item.id}>查看培养攻略 <ChevronRight size={14} /></Link>
-            </div>
-          </article>
-        ))}
-        {visible.length === 0 && <p className="empty-state">没有找到匹配的角色。</p>}
-      </section>
+      {characters.isPending ? (
+        <div className="feed-status">正在加载角色资料…</div>
+      ) : characters.isError ? (
+        <div className="empty-state">
+          <p>角色资料暂时无法加载，请检查后端服务。</p>
+          <button className="secondary-button" onClick={() => characters.refetch()} type="button">重新加载</button>
+        </div>
+      ) : items.length === 0 ? (
+        <div className="empty-state"><p>没有找到符合条件的角色。</p></div>
+      ) : (
+        <>
+          <section className="character-grid">
+            {items.map((item) => (
+              <article className="character-card" key={item.id}>
+                <Link className="character-image" href={"/characters/" + item.slug}>
+                  <Image alt={item.name + "角色立绘"} fill sizes="(max-width: 620px) 50vw, 260px" src={item.imageUrl} />
+                </Link>
+                <div className="character-copy">
+                  <div>
+                    <h2>{item.name}</h2>
+                    <span>{item.role}</span>
+                  </div>
+                  <div className="character-tags">
+                    <span className="character-tag character-tag--element">{item.attribute}</span>
+                    <span className="character-tag character-tag--weapon">{item.weaponType}</span>
+                    <span className="character-tag character-tag--rarity">{item.rarity}★</span>
+                  </div>
+                  <p>{item.description}</p>
+                  <Link href={"/characters/" + item.slug}>查看角色资料 <ChevronRight size={14} /></Link>
+                </div>
+              </article>
+            ))}
+          </section>
+          {totalPages > 1 && (
+            <nav className="pagination" aria-label="角色图鉴分页">
+              {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+                <button className={page === pageNumber ? "is-active" : ""} key={pageNumber} onClick={() => setPage(pageNumber)} type="button">{pageNumber}</button>
+              ))}
+            </nav>
+          )}
+        </>
+      )}
     </CommunityPageFrame>
   );
 }
 
-export function CharacterDetailPage({ id }: { id: string }) {
-  const character = characters.find((item) => item.id === id) ?? characters[0];
+export function CharacterDetailPage({ slug }: { slug: string }) {
+  const character = useQuery<ApiCharacter>({
+    queryKey: ["character", slug],
+    queryFn: () => fetchCharacter(slug),
+    retry: false,
+  });
+
   return (
     <CommunityPageFrame>
       <article className="detail-page entity-detail">
         <Link className="back-link" href="/characters"><ArrowLeft size={15} />返回角色图鉴</Link>
 
-        <div className="entity-hero">
-          <div>
-            <span className="guide-type">{character.title}</span>
-            <h1>{character.name}</h1>
-            <p>{character.description}</p>
-            <div className="character-tags" style={{ marginTop: 12 }}>
-              <span className="character-tag character-tag--element">{character.element}</span>
-              <span className="character-tag character-tag--weapon">{character.weapon}</span>
-              <span className="character-tag character-tag--role">{character.role}</span>
-              <span className="character-tag character-tag--rarity">{character.rarity}★</span>
-            </div>
-            <Link className="primary-button" href={"/guides/" + character.guideId} style={{ marginTop: 16, display: "inline-flex" }}>查看培养攻略</Link>
+        {character.isPending ? (
+          <div className="feed-status">正在加载角色资料…</div>
+        ) : character.isError || !character.data ? (
+          <div className="empty-state">
+            <p>角色不存在、已下架或暂时无法加载。</p>
+            <Link className="secondary-button" href="/characters">返回角色图鉴</Link>
           </div>
-          <div className="entity-image">
-            <Image alt={character.name + "角色立绘"} fill sizes="300px" src={character.image} />
-          </div>
-        </div>
-
-        {/* 基础属性表 */}
-        <section className="entity-note">
-          <h2><Sparkles size={17} style={{ display: "inline", verticalAlign: "text-bottom", marginRight: 6 }} />基础属性（Lv.90）</h2>
-          <div className="attribute-table">
-            <div className="attribute-row"><span>生命值</span><strong>{character.attributes.hp.toLocaleString()}</strong></div>
-            <div className="attribute-row"><span>攻击力</span><strong>{character.attributes.atk}</strong></div>
-            <div className="attribute-row"><span>防御力</span><strong>{character.attributes.def}</strong></div>
-            <div className="attribute-row"><span>暴击率</span><strong>{character.attributes.critRate}</strong></div>
-            <div className="attribute-row"><span>暴击伤害</span><strong>{character.attributes.critDmg}</strong></div>
-          </div>
-        </section>
-
-        {/* 技能列表 */}
-        <section className="entity-note">
-          <h2><Swords size={17} style={{ display: "inline", verticalAlign: "text-bottom", marginRight: 6 }} />技能</h2>
-          <div className="skill-list">
-            {character.skills.map((skill) => (
-              <div className="skill-card" key={skill.type}>
-                <div className="skill-card-header">
-                  <strong>{skill.name}</strong>
-                  <span className="skill-type-badge">{skill.type}</span>
+        ) : (
+          <>
+            <div className="entity-hero">
+              <div>
+                <span className="guide-type">{character.data.role} · {character.data.rarity}星</span>
+                <h1>{character.data.name}</h1>
+                <p>{character.data.description}</p>
+                <div className="character-tags" style={{ marginTop: 12 }}>
+                  <span className="character-tag character-tag--element">{character.data.attribute}</span>
+                  <span className="character-tag character-tag--weapon">{character.data.weaponType}</span>
+                  <span className="character-tag character-tag--role">{character.data.role}</span>
+                  <span className="character-tag character-tag--rarity">{character.data.rarity}★</span>
                 </div>
-                <p>{skill.description}</p>
+                <Link className="primary-button" href={"/search?q=" + encodeURIComponent(character.data.name)} style={{ marginTop: 16, display: "inline-flex" }}>查看相关攻略</Link>
               </div>
-            ))}
-          </div>
-        </section>
+              <div className="entity-image">
+                <Image alt={character.data.name + "角色立绘"} fill sizes="300px" src={character.data.imageUrl} />
+              </div>
+            </div>
 
-        <section className="entity-note">
-          <h2>培养方向</h2>
-          <p>以稳定循环为优先，先补足角色核心技能等级，再根据队伍需求逐步完善声骸与武器。该页面为 Demo 图鉴内容，后端接入后可展示实时材料与面板数据。</p>
-        </section>
+            <section className="entity-note">
+              <h2><Sparkles size={17} style={{ display: "inline", verticalAlign: "text-bottom", marginRight: 6 }} />基础资料</h2>
+              <p>定位：{character.data.role}　属性：{character.data.attribute}　武器：{character.data.weaponType}　登场版本：{character.data.version}</p>
+              <p>当前页面展示已发布的基础角色资料，培养材料与推荐配队将在后续版本接入。</p>
+            </section>
+          </>
+        )}
       </article>
     </CommunityPageFrame>
   );

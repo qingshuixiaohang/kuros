@@ -60,8 +60,10 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> resourceNotFound(ResourceNotFoundException exception) {
+        // code 由异常自带：既有调用方默认 POST_NOT_FOUND，角色图鉴等新域传自己的 code
+        // （如 CHARACTER_NOT_FOUND），对外错误码随资源类型区分，前端据此渲染对应提示
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ErrorResponse("POST_NOT_FOUND", exception.getMessage(), null));
+                .body(new ErrorResponse(exception.getCode(), exception.getMessage(), null));
     }
 
     @ExceptionHandler(AuthRequestException.class)
