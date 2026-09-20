@@ -24,3 +24,4 @@
 | #4 | [04-sentinel-rate-limiting.md](./04-sentinel-rate-limiting.md) | Sentinel 基础限流保护 API |
 | #5 | [05-redis-distributed-lock.md](./05-redis-distributed-lock.md) | Redis 分布式锁防止并发重复操作 |
 | #6 | [06-springdoc-openapi.md](./06-springdoc-openapi.md) | SpringDoc OpenAPI 自动生成交互式 API 文档 |
+| #7 | [07-actuator-micrometer.md](./07-actuator-micrometer.md) | Actuator + Micrometer 应用监控 |
