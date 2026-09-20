@@ -6,11 +6,8 @@ import com.kuros.kurosbackend.api.PhoneCodeRequest;
 import com.kuros.kurosbackend.api.PhoneLoginRequest;
 import com.kuros.kurosbackend.api.VerificationCodeResponse;
 import com.kuros.kurosbackend.service.AuthService;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseCookie;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,25 +15,27 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.Duration;
 import java.util.UUID;
 
+/**
+ * 认证控制器（SaToken 版本）。
+ *
+ * 与之前版本的核心区别：
+ * - 登录不再手动构建 ResponseCookie，SaToken 的 StpUtil.login() 自动设置 Cookie
+ * - 登出不再手动清除 Cookie，SaToken 的 StpUtil.logout() 自动处理
+ * - /me 不再从 Cookie 手动读 token，SaToken 自动从请求中解析 Token
+ * - /csrf 端点保留（前端 refreshCsrfCookie() 仍然调用它）
+ *
+ * API 契约完全不变：路径、请求体、响应体格式与之前一致，前端零改动。
+ */
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
 
     private final AuthService authService;
-    private final String cookieName;
-    private final boolean cookieSecure;
 
-    public AuthController(
-            AuthService authService,
-            @Value("${app.auth.session-cookie-name:KUROS_SESSION}") String cookieName,
-            @Value("${app.auth.session-cookie-secure:false}") boolean cookieSecure
-    ) {
+    public AuthController(AuthService authService) {
         this.authService = authService;
-        this.cookieName = cookieName;
-        this.cookieSecure = cookieSecure;
     }
 
     @PostMapping("/code")
@@ -44,61 +43,49 @@ public class AuthController {
         return new ApiResponse<>(authService.issueCode(request), null);
     }
 
+    /**
+     * CSRF Token 端点（保留）。
+     * 前端 api.ts 的 refreshCsrfCookie() 会调用这个端点获取 XSRF-TOKEN Cookie。
+     * 虽然 CsrfInterceptor 在 GET 请求时也会自动设置，但保留这个端点保证前端逻辑不变。
+     */
     @GetMapping("/csrf")
-    public ResponseEntity<Void> csrf() {
+    public ResponseEntity<Void> csrf(HttpServletResponse response) {
         String token = UUID.randomUUID().toString();
-        return ResponseEntity.noContent()
-                .header(HttpHeaders.SET_COOKIE, ResponseCookie.from("XSRF-TOKEN", token)
-                        .httpOnly(false)
-                        .secure(false)
-                        .sameSite("Lax")
-                        .path("/")
-                        .build()
-                        .toString())
-                .build();
+        jakarta.servlet.http.Cookie cookie = new jakarta.servlet.http.Cookie("XSRF-TOKEN", token);
+        cookie.setPath("/");
+        cookie.setHttpOnly(false);
+        cookie.setMaxAge(-1);
+        response.addCookie(cookie);
+        return ResponseEntity.noContent().build();
     }
 
+    /**
+     * 登录。
+     * SaToken 的 StpUtil.login() 会自动在 response 中设置 KUROS_SESSION Cookie，
+     * 不需要手动构建 ResponseCookie。
+     */
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<AuthUserResponse>> login(@RequestBody PhoneLoginRequest request) {
+    public ApiResponse<AuthUserResponse> login(@RequestBody PhoneLoginRequest request) {
         AuthService.LoginResult result = authService.login(request);
-        return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, sessionCookie(result.token(), result.maxAgeSeconds()).toString())
-                .body(new ApiResponse<>(result.user(), null));
+        return new ApiResponse<>(result.user(), null);
     }
 
+    /**
+     * 获取当前登录用户。
+     * SaToken 自动从请求 Cookie 中解析 Token，不需要手动读取。
+     */
     @GetMapping("/me")
-    public ApiResponse<AuthUserResponse> me(HttpServletRequest request) {
-        return new ApiResponse<>(authService.currentUser(readToken(request)), null);
+    public ApiResponse<AuthUserResponse> me() {
+        return new ApiResponse<>(authService.currentUser(), null);
     }
 
+    /**
+     * 登出。
+     * SaToken 的 StpUtil.logout() 会自动删除 Redis 中的 Token 并清除 Cookie。
+     */
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(HttpServletRequest request) {
-        authService.logout(readToken(request));
-        return ResponseEntity.noContent()
-                .header(HttpHeaders.SET_COOKIE, sessionCookie("", 0).toString())
-                .build();
-    }
-
-    private ResponseCookie sessionCookie(String token, long maxAgeSeconds) {
-        return ResponseCookie.from(cookieName, token)
-                .httpOnly(true)
-                .secure(cookieSecure)
-                .sameSite("Lax")
-                .path("/")
-                .maxAge(Duration.ofSeconds(maxAgeSeconds))
-                .build();
-    }
-
-    private String readToken(HttpServletRequest request) {
-        Cookie[] cookies = request.getCookies();
-        if (cookies == null) {
-            return null;
-        }
-        for (Cookie cookie : cookies) {
-            if (cookieName.equals(cookie.getName())) {
-                return cookie.getValue();
-            }
-        }
-        return null;
+    public ResponseEntity<Void> logout() {
+        authService.logout();
+        return ResponseEntity.noContent().build();
     }
 }

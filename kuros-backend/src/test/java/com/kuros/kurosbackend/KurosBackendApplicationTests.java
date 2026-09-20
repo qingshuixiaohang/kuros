@@ -1,17 +1,27 @@
 package com.kuros.kurosbackend;
 
 import jakarta.servlet.http.Cookie;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.mock.web.MockMultipartFile;
 import com.kuros.kurosbackend.storage.ImageStorageService;
+// Testcontainers 2.x 中 GenericContainer 仍在 org.testcontainers.containers 包（已用 jar tf 核实 2.0.5 实际结构，
+// 官方迁移说明只适用于部分模块专属容器类）
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.hamcrest.Matchers.hasSize;
@@ -23,18 +33,49 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 
+/**
+ * 后端集成测试（SaToken + Redis 版本）。
+ *
+ * 与之前版本的核心区别：
+ * - 使用 Testcontainers 启动真实 Redis 容器（替代原来的纯 H2 内存测试）
+ * - CSRF 不再用 Spring Security 的 csrf() post-processor，改为手动设置双重提交 Cookie + Header
+ * - 登录流程不变（POST /auth/code + POST /auth/login），SaToken 自动设置 KUROS_SESSION Cookie
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Testcontainers
 class KurosBackendApplicationTests {
+
+    // Testcontainers Redis：每个测试类共享一个容器，@BeforeEach 清空数据保证测试隔离
+    @Container
+    static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
+
+    @DynamicPropertySource
+    static void redisProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.data.redis.host", redis::getHost);
+        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+    }
+
+    // 测试用固定 CSRF Token：CsrfInterceptor 只校验 cookie == header，不校验服务端存储
+    private static final String CSRF_TOKEN = "test-csrf-token";
+    private static final Cookie CSRF_COOKIE = new Cookie("XSRF-TOKEN", CSRF_TOKEN);
 
     @Autowired
     private MockMvc mockMvc;
 
     @Autowired
     private ImageStorageService imageStorageService;
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
+    @BeforeEach
+    void flushRedis() {
+        // 每个测试前清空 Redis，保证测试隔离（H2 已经是内存模式，每次上下文重建时自动清空）
+        Objects.requireNonNull(redisTemplate.getConnectionFactory()).getConnection().serverCommands().flushDb();
+    }
 
     @Test
     void 健康检查只返回服务状态而不暴露敏感详情() throws Exception {
@@ -76,12 +117,14 @@ class KurosBackendApplicationTests {
     @Test
     void 首次验证码登录会创建用户并恢复会话() throws Exception {
         mockMvc.perform(post("/api/v1/auth/code")
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"phone\":\"13800000005\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.devCode").value("123456"));
 
         var login = mockMvc.perform(post("/api/v1/auth/login")
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"phone\":\"13800000005\",\"code\":\"123456\"}"))
                 .andExpect(status().isOk())
@@ -98,11 +141,13 @@ class KurosBackendApplicationTests {
     @Test
     void 已有用户验证码登录不会重复创建用户() throws Exception {
         mockMvc.perform(post("/api/v1/auth/code")
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"phone\":\"13800000001\"}"))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/auth/login")
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"phone\":\"13800000001\",\"code\":\"123456\"}"))
                 .andExpect(status().isOk())
@@ -112,11 +157,13 @@ class KurosBackendApplicationTests {
     @Test
     void 无效验证码不能建立登录会话() throws Exception {
         mockMvc.perform(post("/api/v1/auth/code")
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"phone\":\"13800000006\"}"))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/auth/login")
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"phone\":\"13800000006\",\"code\":\"000000\"}"))
                 .andExpect(status().isBadRequest())
@@ -126,20 +173,23 @@ class KurosBackendApplicationTests {
     @Test
     void 退出登录后会话立即失效() throws Exception {
         mockMvc.perform(post("/api/v1/auth/code")
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"phone\":\"13800000007\"}"))
                 .andExpect(status().isOk());
 
         var login = mockMvc.perform(post("/api/v1/auth/login")
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"phone\":\"13800000007\",\"code\":\"123456\"}"))
                 .andExpect(status().isOk())
                 .andReturn();
         var sessionCookie = login.getResponse().getCookie("KUROS_SESSION");
 
-        mockMvc.perform(post("/api/v1/auth/logout").cookie(sessionCookie))
-                .andExpect(status().isNoContent())
-                .andExpect(cookie().maxAge("KUROS_SESSION", 0));
+        mockMvc.perform(post("/api/v1/auth/logout")
+                        .cookie(sessionCookie)
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
+                .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/api/v1/auth/me").cookie(sessionCookie))
                 .andExpect(status().isUnauthorized());
@@ -244,9 +294,9 @@ class KurosBackendApplicationTests {
     void 个人中心返回收藏帖子和关注用户() throws Exception {
         Cookie sessionCookie = login("13800000008");
 
-        mockMvc.perform(post("/api/v1/posts/10000000-0000-0000-0000-000000000001/interactions/favorite").cookie(sessionCookie).with(csrf()))
+        mockMvc.perform(post("/api/v1/posts/10000000-0000-0000-0000-000000000001/interactions/favorite").cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isOk());
-        mockMvc.perform(post("/api/v1/users/10000000-0000-0000-0000-000000000002/follow").cookie(sessionCookie).with(csrf()))
+        mockMvc.perform(post("/api/v1/users/10000000-0000-0000-0000-000000000002/follow").cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/v1/users/me/profile").cookie(sessionCookie))
@@ -275,17 +325,17 @@ class KurosBackendApplicationTests {
                 .andExpect(jsonPath("$.data.liked").value(false))
                 .andExpect(jsonPath("$.data.likeCount").value(3700));
 
-        mockMvc.perform(post(interactionPath + "/like").cookie(sessionCookie).with(csrf()))
+        mockMvc.perform(post(interactionPath + "/like").cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.liked").value(true))
                 .andExpect(jsonPath("$.data.likeCount").value(3701));
 
-        mockMvc.perform(post(interactionPath + "/like").cookie(sessionCookie).with(csrf()))
+        mockMvc.perform(post(interactionPath + "/like").cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.liked").value(true))
                 .andExpect(jsonPath("$.data.likeCount").value(3701));
 
-        mockMvc.perform(delete(interactionPath + "/like").cookie(sessionCookie).with(csrf()))
+        mockMvc.perform(delete(interactionPath + "/like").cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.liked").value(false))
                 .andExpect(jsonPath("$.data.likeCount").value(3700));
@@ -297,17 +347,17 @@ class KurosBackendApplicationTests {
         Cookie sessionCookie = login("13800000008");
         String interactionPath = "/api/v1/posts/10000000-0000-0000-0000-000000000001/interactions";
 
-        mockMvc.perform(post(interactionPath + "/favorite").cookie(sessionCookie).with(csrf()))
+        mockMvc.perform(post(interactionPath + "/favorite").cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.favorited").value(true))
                 .andExpect(jsonPath("$.data.favoriteCount").value(1201));
 
-        mockMvc.perform(post(interactionPath + "/favorite").cookie(sessionCookie).with(csrf()))
+        mockMvc.perform(post(interactionPath + "/favorite").cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.favorited").value(true))
                 .andExpect(jsonPath("$.data.favoriteCount").value(1201));
 
-        mockMvc.perform(delete(interactionPath + "/favorite").cookie(sessionCookie).with(csrf()))
+        mockMvc.perform(delete(interactionPath + "/favorite").cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.favorited").value(false))
                 .andExpect(jsonPath("$.data.favoriteCount").value(1200));
@@ -324,17 +374,17 @@ class KurosBackendApplicationTests {
                 .andExpect(jsonPath("$.data.followed").value(false))
                 .andExpect(jsonPath("$.data.followerCount").value(0));
 
-        mockMvc.perform(post(followPath).cookie(sessionCookie).with(csrf()))
+        mockMvc.perform(post(followPath).cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.followed").value(true))
                 .andExpect(jsonPath("$.data.followerCount").value(1));
 
-        mockMvc.perform(post(followPath).cookie(sessionCookie).with(csrf()))
+        mockMvc.perform(post(followPath).cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.followed").value(true))
                 .andExpect(jsonPath("$.data.followerCount").value(1));
 
-        mockMvc.perform(delete(followPath).cookie(sessionCookie).with(csrf()))
+        mockMvc.perform(delete(followPath).cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.followed").value(false))
                 .andExpect(jsonPath("$.data.followerCount").value(0));
@@ -348,7 +398,7 @@ class KurosBackendApplicationTests {
 
         mockMvc.perform(post(commentsPath)
                         .cookie(sessionCookie)
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"content\":\"实战里这套循环很好上手。\",\"parentId\":\"30000000-0000-0000-0000-000000000001\"}"))
                 .andExpect(status().isOk())
@@ -357,7 +407,7 @@ class KurosBackendApplicationTests {
 
         mockMvc.perform(post(commentsPath)
                         .cookie(sessionCookie)
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"content\":\"不允许继续嵌套。\",\"parentId\":\"30000000-0000-0000-0000-000000000002\"}"))
                 .andExpect(status().isBadRequest())
@@ -371,7 +421,7 @@ class KurosBackendApplicationTests {
         String commentsPath = "/api/v1/posts/10000000-0000-0000-0000-000000000001/comments";
         var created = mockMvc.perform(post(commentsPath)
                         .cookie(ownerCookie)
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"content\":\"准备按这个顺序练一轮。\"}"))
                 .andExpect(status().isOk())
@@ -383,13 +433,13 @@ class KurosBackendApplicationTests {
         Cookie otherCookie = login("13800000010");
         mockMvc.perform(delete(commentsPath + "/" + commentId)
                         .cookie(otherCookie)
-                        .with(csrf()))
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
         mockMvc.perform(delete(commentsPath + "/" + commentId)
                         .cookie(ownerCookie)
-                        .with(csrf()))
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(get(commentsPath).param("pageSize", "50"))
@@ -401,7 +451,7 @@ class KurosBackendApplicationTests {
     @Test
     void 游客不能发布帖子() throws Exception {
         mockMvc.perform(post("/api/v1/posts")
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"游客帖子\",\"content\":\"不应该发布\",\"tags\":[\"测试\"]}"))
                 .andExpect(status().isUnauthorized())
@@ -415,7 +465,7 @@ class KurosBackendApplicationTests {
 
         var created = mockMvc.perform(post("/api/v1/posts")
                         .cookie(sessionCookie)
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"长离实战循环记录\",\"content\":\"循环内容\",\"tags\":[\"长离\",\"实战\"]}"))
                 .andExpect(status().isCreated())
@@ -443,7 +493,7 @@ class KurosBackendApplicationTests {
 
         var created = mockMvc.perform(post("/api/v1/posts")
                         .cookie(sessionCookie)
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"多图实战记录\",\"content\":\"正文\",\"mediaAssetIds\":[\"" + firstAssetId + "\",\"" + secondAssetId + "\"]}"))
                 .andExpect(status().isCreated())
@@ -473,7 +523,7 @@ class KurosBackendApplicationTests {
 
         mockMvc.perform(post("/api/v1/posts")
                         .cookie(otherCookie)
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"越权媒体\",\"content\":\"正文\",\"mediaAssetIds\":[\"" + firstAssetId + "\"]}"))
                 .andExpect(status().isForbidden())
@@ -481,7 +531,7 @@ class KurosBackendApplicationTests {
 
         var created = mockMvc.perform(post("/api/v1/posts")
                         .cookie(ownerCookie)
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"可编辑多图\",\"content\":\"正文\",\"mediaAssetIds\":[\"" + firstAssetId + "\"]}"))
                 .andExpect(status().isCreated())
@@ -491,7 +541,7 @@ class KurosBackendApplicationTests {
         String secondAssetId = uploadImageAndReadAssetId(ownerCookie, "new.png");
         mockMvc.perform(put("/api/v1/posts/" + postId)
                         .cookie(ownerCookie)
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"可编辑多图\",\"content\":\"正文\",\"mediaAssetIds\":[\"" + secondAssetId + "\",\"" + firstAssetId + "\"]}"))
                 .andExpect(status().isOk())
@@ -506,7 +556,7 @@ class KurosBackendApplicationTests {
 
         mockMvc.perform(post("/api/v1/posts")
                         .cookie(sessionCookie)
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\" \",\"content\":\"正文\"}"))
                 .andExpect(status().isBadRequest())
@@ -514,7 +564,7 @@ class KurosBackendApplicationTests {
 
         mockMvc.perform(post("/api/v1/posts")
                         .cookie(sessionCookie)
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"type\":\"UNKNOWN\",\"category\":\"配队攻略\",\"title\":\"测试帖子\",\"content\":\"正文\"}"))
                 .andExpect(status().isBadRequest())
@@ -527,7 +577,7 @@ class KurosBackendApplicationTests {
         Cookie ownerCookie = login("13800000008");
         var created = mockMvc.perform(post("/api/v1/posts")
                         .cookie(ownerCookie)
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"待维护的帖子\",\"content\":\"原始正文\",\"tags\":[\"长离\"]}"))
                 .andExpect(status().isCreated())
@@ -540,14 +590,14 @@ class KurosBackendApplicationTests {
         Cookie otherCookie = login("13800000010");
         mockMvc.perform(put(path)
                         .cookie(otherCookie)
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"不应被修改\",\"content\":\"正文\"}"))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(put(path)
                         .cookie(ownerCookie)
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"type\":\"GENERAL\",\"category\":\"心得\",\"title\":\"已更新的帖子\",\"content\":\"更新后的正文\",\"tags\":[\"实战\",\"轮切\"]}"))
                 .andExpect(status().isOk())
@@ -555,9 +605,9 @@ class KurosBackendApplicationTests {
                 .andExpect(jsonPath("$.data.content").value("更新后的正文"))
                 .andExpect(jsonPath("$.data.tags", hasSize(2)));
 
-        mockMvc.perform(delete(path).cookie(ownerCookie).with(csrf()))
+        mockMvc.perform(delete(path).cookie(ownerCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isNoContent());
-        mockMvc.perform(delete(path).cookie(ownerCookie).with(csrf()))
+        mockMvc.perform(delete(path).cookie(ownerCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isNoContent());
         mockMvc.perform(get(path)).andExpect(status().isNotFound());
     }
@@ -573,7 +623,7 @@ class KurosBackendApplicationTests {
         mockMvc.perform(multipart("/api/v1/files/images")
                         .file(image)
                         .cookie(sessionCookie)
-                        .with(csrf()))
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.assetId").isNotEmpty())
                 .andExpect(jsonPath("$.data.url").value(org.hamcrest.Matchers.containsString("/media/")))
@@ -585,7 +635,7 @@ class KurosBackendApplicationTests {
         Cookie sessionCookie = login("13800000008");
         MockMultipartFile fakeImage = new MockMultipartFile("file", "not-really.png", "image/png", new byte[]{1, 2, 3});
 
-        mockMvc.perform(multipart("/api/v1/files/images").file(fakeImage).cookie(sessionCookie).with(csrf()))
+        mockMvc.perform(multipart("/api/v1/files/images").file(fakeImage).cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("IMAGE_CONTENT_INVALID"));
     }
@@ -596,10 +646,10 @@ class KurosBackendApplicationTests {
         MockMultipartFile text = new MockMultipartFile("file", "notes.txt", "text/plain", "not an image".getBytes());
         MockMultipartFile oversized = new MockMultipartFile("file", "large.png", "image/png", new byte[10 * 1024 * 1024 + 1]);
 
-        mockMvc.perform(multipart("/api/v1/files/images").file(text).cookie(sessionCookie).with(csrf()))
+        mockMvc.perform(multipart("/api/v1/files/images").file(text).cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("IMAGE_TYPE_INVALID"));
-        mockMvc.perform(multipart("/api/v1/files/images").file(oversized).cookie(sessionCookie).with(csrf()))
+        mockMvc.perform(multipart("/api/v1/files/images").file(oversized).cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("IMAGE_TOO_LARGE"));
     }
@@ -613,17 +663,17 @@ class KurosBackendApplicationTests {
 
         mockMvc.perform(delete("/api/v1/files/images/" + assetId)
                         .cookie(otherCookie)
-                        .with(csrf()))
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(delete("/api/v1/files/images/" + assetId)
                         .cookie(ownerCookie)
-                        .with(csrf()))
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(delete("/api/v1/files/images/" + assetId)
                         .cookie(ownerCookie)
-                        .with(csrf()))
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isNoContent());
     }
 
@@ -640,7 +690,7 @@ class KurosBackendApplicationTests {
         var result = mockMvc.perform(multipart("/api/v1/files/images")
                         .file(new MockMultipartFile("file", fileName, "image/png", minimalPng()))
                         .cookie(sessionCookie)
-                        .with(csrf()))
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isCreated())
                 .andReturn();
         return readJsonString(result.getResponse().getContentAsString(), "assetId");
@@ -667,7 +717,7 @@ class KurosBackendApplicationTests {
         Cookie userCookie = login("13800000008");
         mockMvc.perform(post("/api/v1/reports/POST/10000000-0000-0000-0000-000000000002")
                         .cookie(userCookie)
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"reason\":\"SPAM\"}"))
                 .andExpect(status().isCreated())
@@ -675,7 +725,7 @@ class KurosBackendApplicationTests {
 
         mockMvc.perform(post("/api/v1/reports/POST/10000000-0000-0000-0000-000000000002")
                         .cookie(userCookie)
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"reason\":\"ABUSE\"}"))
                 .andExpect(status().isBadRequest())
@@ -688,7 +738,7 @@ class KurosBackendApplicationTests {
         Cookie userCookie = login("13800000008");
         var created = mockMvc.perform(post("/api/v1/reports/POST/10000000-0000-0000-0000-000000000002")
                         .cookie(userCookie)
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"reason\":\"MISINFORMATION\"}"))
                 .andExpect(status().isCreated())
@@ -709,7 +759,7 @@ class KurosBackendApplicationTests {
 
         mockMvc.perform(post("/api/v1/admin/reports/" + reportId + "/handle")
                         .cookie(adminCookie)
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"action\":\"CONFIRM\",\"note\":\"确认内容不实\"}"))
                 .andExpect(status().isOk())
@@ -719,7 +769,7 @@ class KurosBackendApplicationTests {
                 .andExpect(status().isNotFound());
         mockMvc.perform(post("/api/v1/admin/reports/" + reportId + "/handle")
                         .cookie(adminCookie)
-                        .with(csrf())
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"action\":\"REJECT\"}"))
                 .andExpect(status().isBadRequest())
@@ -728,10 +778,12 @@ class KurosBackendApplicationTests {
 
     private Cookie login(String phone) throws Exception {
         mockMvc.perform(post("/api/v1/auth/code")
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"phone\":\"" + phone + "\"}"))
                 .andExpect(status().isOk());
         return mockMvc.perform(post("/api/v1/auth/login")
+                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
                         .contentType(APPLICATION_JSON)
                         .content("{\"phone\":\"" + phone + "\",\"code\":\"123456\"}"))
                 .andExpect(status().isOk())

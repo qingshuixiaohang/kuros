@@ -18,6 +18,19 @@ services:
       timeout: 5s
       retries: 20
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - kuros_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build:
       context: ./kuros-backend
@@ -26,8 +39,12 @@ services:
       DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-kuros}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8
       DB_USERNAME: ${MYSQL_USER:-kuros}
       DB_PASSWORD: ${MYSQL_PASSWORD:-kuros_dev_password}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       APP_CORS_ALLOWED_ORIGIN: ${APP_CORS_ALLOWED_ORIGIN:-http://localhost:3000}
-      APP_AUTH_DEV_CODE: ${APP_AUTH_DEV_CODE:-}
+      # dev 环境默认固定验证码 123456（与旧版 DevVerificationCodeService 的默认值一致）：
+      # compose-smoke.mjs 和前端演示登录都硬编码用它；生产环境走 .env.production.example，必须置空
+      APP_AUTH_DEV_CODE: ${APP_AUTH_DEV_CODE:-123456}
       APP_AUTH_DEV_CODE_EXPOSED: ${APP_AUTH_DEV_CODE_EXPOSED:-false}
       APP_AUTH_SESSION_COOKIE_SECURE: ${APP_AUTH_SESSION_COOKIE_SECURE:-false}
       APP_STORAGE_LOCAL_DIR: ${APP_STORAGE_LOCAL_DIR:-/app/storage}
@@ -38,6 +55,8 @@ services:
       - kuros_storage:${APP_STORAGE_LOCAL_DIR:-/app/storage}
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null || exit 1"]
@@ -68,3 +87,4 @@ services:
 volumes:
   kuros_mysql_data:
   kuros_storage:
+  kuros_redis_data:

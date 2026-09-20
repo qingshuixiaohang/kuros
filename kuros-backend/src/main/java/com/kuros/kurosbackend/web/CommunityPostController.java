@@ -1,5 +1,6 @@
 package com.kuros.kurosbackend.web;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.kuros.kurosbackend.api.ApiResponse;
 import com.kuros.kurosbackend.api.CreatePostRequest;
 import com.kuros.kurosbackend.api.PageResult;
@@ -19,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 
 import java.util.List;
 
@@ -49,19 +49,19 @@ public class CommunityPostController {
     }
 
     @PostMapping
-    public ResponseEntity<ApiResponse<PostDetailResponse>> publish(@RequestBody CreatePostRequest request, Authentication authentication) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse<>(publishingService.publish(request, authentication.getName()), null));
+    public ResponseEntity<ApiResponse<PostDetailResponse>> publish(@RequestBody CreatePostRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse<>(publishingService.publish(request, StpUtil.getLoginIdAsString()), null));
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<PostDetailResponse> update(@PathVariable String id, @RequestBody CreatePostRequest request, Authentication authentication) {
-        return new ApiResponse<>(publishingService.update(id, authentication.getName(), request), null);
+    public ApiResponse<PostDetailResponse> update(@PathVariable String id, @RequestBody CreatePostRequest request) {
+        return new ApiResponse<>(publishingService.update(id, StpUtil.getLoginIdAsString(), request), null);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable String id, Authentication authentication) {
-        publishingService.delete(id, authentication.getName());
+    public void delete(@PathVariable String id) {
+        publishingService.delete(id, StpUtil.getLoginIdAsString());
     }
 
     @GetMapping("/{id}")

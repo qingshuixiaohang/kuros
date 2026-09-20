@@ -1,9 +1,9 @@
 package com.kuros.kurosbackend.web;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.kuros.kurosbackend.api.ApiResponse;
 import com.kuros.kurosbackend.api.UserFollowResponse;
 import com.kuros.kurosbackend.service.UserFollowService;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,17 +22,18 @@ public class UserFollowController {
     }
 
     @GetMapping
-    public ApiResponse<UserFollowResponse> find(@PathVariable String targetUserId, Authentication authentication) {
-        return new ApiResponse<>(followService.find(targetUserId, authentication.getName()), null);
+    public ApiResponse<UserFollowResponse> find(@PathVariable String targetUserId) {
+        String userId = StpUtil.isLogin() ? StpUtil.getLoginIdAsString() : null;
+        return new ApiResponse<>(followService.find(targetUserId, userId), null);
     }
 
     @PostMapping
-    public ApiResponse<UserFollowResponse> follow(@PathVariable String targetUserId, Authentication authentication) {
-        return new ApiResponse<>(followService.follow(targetUserId, authentication.getName()), null);
+    public ApiResponse<UserFollowResponse> follow(@PathVariable String targetUserId) {
+        return new ApiResponse<>(followService.follow(targetUserId, StpUtil.getLoginIdAsString()), null);
     }
 
     @DeleteMapping
-    public ApiResponse<UserFollowResponse> unfollow(@PathVariable String targetUserId, Authentication authentication) {
-        return new ApiResponse<>(followService.unfollow(targetUserId, authentication.getName()), null);
+    public ApiResponse<UserFollowResponse> unfollow(@PathVariable String targetUserId) {
+        return new ApiResponse<>(followService.unfollow(targetUserId, StpUtil.getLoginIdAsString()), null);
     }
 }

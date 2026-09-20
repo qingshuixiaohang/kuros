@@ -1,12 +1,12 @@
 package com.kuros.kurosbackend.web;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.kuros.kurosbackend.api.ApiResponse;
 import com.kuros.kurosbackend.api.CommentResponse;
 import com.kuros.kurosbackend.api.CreateCommentRequest;
 import com.kuros.kurosbackend.api.PageResult;
 import com.kuros.kurosbackend.service.CommunityCommentService;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -43,19 +43,17 @@ public class CommunityCommentController {
     @PostMapping
     public ApiResponse<CommentResponse> create(
             @PathVariable String postId,
-            @RequestBody CreateCommentRequest request,
-            Authentication authentication
+            @RequestBody CreateCommentRequest request
     ) {
-        return new ApiResponse<>(commentService.create(postId, authentication.getName(), request), null);
+        return new ApiResponse<>(commentService.create(postId, StpUtil.getLoginIdAsString(), request), null);
     }
 
     @DeleteMapping("/{commentId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(
             @PathVariable String postId,
-            @PathVariable String commentId,
-            Authentication authentication
+            @PathVariable String commentId
     ) {
-        commentService.delete(postId, commentId, authentication.getName());
+        commentService.delete(postId, commentId, StpUtil.getLoginIdAsString());
     }
 }

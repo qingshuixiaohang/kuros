@@ -1,12 +1,12 @@
 package com.kuros.kurosbackend.web;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.kuros.kurosbackend.api.ApiResponse;
 import com.kuros.kurosbackend.api.ImageUploadResponse;
 import com.kuros.kurosbackend.storage.ImageStorageService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,17 +27,14 @@ public class ImageUploadController {
     }
 
     @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ApiResponse<ImageUploadResponse>> upload(
-            @RequestPart("file") MultipartFile file,
-            Authentication authentication
-    ) {
-        ImageUploadResponse result = imageStorageService.store(file, authentication.getName());
+    public ResponseEntity<ApiResponse<ImageUploadResponse>> upload(@RequestPart("file") MultipartFile file) {
+        ImageUploadResponse result = imageStorageService.store(file, StpUtil.getLoginIdAsString());
         return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse<>(result, null));
     }
 
     @DeleteMapping("/images/{assetId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable String assetId, Authentication authentication) {
-        imageStorageService.delete(assetId, authentication.getName());
+    public void delete(@PathVariable String assetId) {
+        imageStorageService.delete(assetId, StpUtil.getLoginIdAsString());
     }
 }

@@ -1,12 +1,12 @@
 package com.kuros.kurosbackend.web;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.kuros.kurosbackend.api.ApiResponse;
 import com.kuros.kurosbackend.api.PageResult;
 import com.kuros.kurosbackend.api.PostSummaryResponse;
 import com.kuros.kurosbackend.api.ProfileOverviewResponse;
 import com.kuros.kurosbackend.api.PublicProfileResponse;
 import com.kuros.kurosbackend.service.ProfileService;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -41,9 +41,8 @@ public class ProfileController {
     @GetMapping("/me/profile")
     public ApiResponse<ProfileOverviewResponse> ownProfile(
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int pageSize,
-            Authentication authentication
+            @RequestParam(defaultValue = "20") int pageSize
     ) {
-        return new ApiResponse<>(profileService.findOwn(authentication.getName(), page, pageSize), null);
+        return new ApiResponse<>(profileService.findOwn(StpUtil.getLoginIdAsString(), page, pageSize), null);
     }
 }

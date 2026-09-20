@@ -1,12 +1,12 @@
 package com.kuros.kurosbackend.web;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.kuros.kurosbackend.api.ApiResponse;
 import com.kuros.kurosbackend.api.HandleReportRequest;
 import com.kuros.kurosbackend.api.PageResult;
 import com.kuros.kurosbackend.api.ReportResponse;
 import com.kuros.kurosbackend.service.ContentReportService;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,10 +38,9 @@ public class AdminReportController {
     @PostMapping("/{reportId}/handle")
     public ResponseEntity<ApiResponse<ReportResponse>> handle(
             @PathVariable String reportId,
-            @RequestBody HandleReportRequest request,
-            Authentication authentication
+            @RequestBody HandleReportRequest request
     ) {
-        ReportResponse result = reportService.handle(reportId, authentication.getName(), request);
+        ReportResponse result = reportService.handle(reportId, StpUtil.getLoginIdAsString(), request);
         return ResponseEntity.ok(new ApiResponse<>(result, null));
     }
 }

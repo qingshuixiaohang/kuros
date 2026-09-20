@@ -28,12 +28,49 @@
     </scm>
     <properties>
         <java.version>21</java.version>
+        <sa-token.version>1.39.0</sa-token.version>
+        <!-- Testcontainers 2.x：1.x 全系与 Docker Engine 29（Docker Desktop 4.52+）不兼容（API 版本过旧被 400 拒绝），
+             2.0 起内置新版 docker-java 客户端；注意 2.0 的破坏性变更：模块坐标加 testcontainers- 前缀，核心类迁到 org.testcontainers.core 包 -->
+        <testcontainers.version>2.0.5</testcontainers.version>
     </properties>
     <dependencies>
+        <!-- SaToken 核心：替代 Spring Security，提供 Token 会话管理、路由拦截、注解鉴权 -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-spring-boot3-starter</artifactId>
+            <version>${sa-token.version}</version>
+        </dependency>
+        <!-- SaToken Redis 集成：Token 和权限数据持久化到 Redis，支持分布式会话 -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-redis-jackson</artifactId>
+            <version>${sa-token.version}</version>
+        </dependency>
+        <!-- Jackson 2：sa-token-redis-jackson 把这两个依赖声明为 optional（要求宿主应用提供）。
+             Spring Boot 4 默认已换成 Jackson 3（包名 tools.jackson.*），不再传递提供 com.fasterxml.jackson.*，
+             缺了它们 SaTokenDaoRedisJackson 初始化时直接 NoClassDefFoundError。
+             Jackson 2 与 Jackson 3 包名不同，可以共存，互不冲突 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.19.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <version>2.19.0</version>
+        </dependency>
+        <!-- Spring Data Redis + Lettuce：Redis 客户端，SaToken 和验证码服务的底层连接 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-security</artifactId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
+        <!-- Lettuce 连接池需要 commons-pool2 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-pool2</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
@@ -75,9 +112,18 @@
             <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Testcontainers：测试时启动真实 Redis 容器，验证 SaToken + Redis 集成行为 -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-security-test</artifactId>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- JUnit 5 集成：提供 @Testcontainers / @Container 注解，自动管理容器生命周期（2.x 坐标改名为 testcontainers-junit-jupiter） -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>

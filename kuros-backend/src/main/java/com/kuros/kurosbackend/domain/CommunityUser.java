@@ -83,4 +83,13 @@ public class CommunityUser {
     public UserRole getRole() {
         return role;
     }
+
+    /**
+     * 设置角色（冗余快捷字段）。
+     * RBAC 表（sys_user_role）是权威来源，这个字段只是保持现有 API 响应格式不变。
+     * 登录时由 AuthService.syncRoleField() 调用。
+     */
+    public void setRole(UserRole role) {
+        this.role = role;
+    }
 }
