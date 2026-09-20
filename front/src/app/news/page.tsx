@@ -1,4 +1,4 @@
-import { NewsPage } from "@/components/community/community-pages";
+import { NewsPage } from "@/components/community/news-page";
 
 export default function Page() {
   return <NewsPage />;

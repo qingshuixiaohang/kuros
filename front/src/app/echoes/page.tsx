@@ -1,4 +1,4 @@
-import { EchoesPage } from "@/components/community/community-pages";
+import { EchoesPage } from "@/components/community/echoes-page";
 
 export default function Page() {
   return <EchoesPage />;

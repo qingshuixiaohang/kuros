@@ -1,4 +1,4 @@
-import { CharactersPage } from "@/components/community/community-pages";
+import { CharactersPage } from "@/components/community/characters-page";
 
 export default function Page() {
   return <CharactersPage />;
