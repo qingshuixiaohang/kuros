@@ -22,3 +22,4 @@
 | #2 | [02-minio-storage-strategy.md](./02-minio-storage-strategy.md) | MinIO 对象存储 + 策略模式 |
 | #3 | [03-caffeine-cache.md](./03-caffeine-cache.md) | Caffeine 本地缓存加速热读路径 |
 | #4 | [04-sentinel-rate-limiting.md](./04-sentinel-rate-limiting.md) | Sentinel 基础限流保护 API |
+| #5 | [05-redis-distributed-lock.md](./05-redis-distributed-lock.md) | Redis 分布式锁防止并发重复操作 |
