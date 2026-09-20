@@ -74,6 +74,7 @@ function PostCard({ guide }: { guide: Guide }) {
   const isBookmarked = interaction?.favorited ?? bookmarked.includes(guide.id);
   const likeLabel = interaction ? feedCount(interaction.likeCount) : guide.likes;
   const detailHref = `/guides/${guide.id}`;
+  const authorRole = guide.category.includes("攻略") ? "攻略作者" : guide.category.includes("同人") ? "同人画师" : guide.category.includes("心得") ? "社区达人" : null;
   async function share() {
     try {
       await copyPostLink(guide.id);
@@ -85,7 +86,7 @@ function PostCard({ guide }: { guide: Guide }) {
   return <article className="post-card">
     <div className="post-header">
       <div className={`author-avatar author-avatar--${guide.avatarTone}`}>{guide.authorMark}</div>
-      <div className="author-info"><strong>{guide.author}<BadgeCheck size={13} /></strong><time>{guide.publishedAt}</time></div>
+      <div className="author-info"><strong>{guide.author}<BadgeCheck size={13} />{authorRole && <span className="author-role-badge">{authorRole}</span>}</strong><time>{guide.publishedAt}</time></div>
       <CommunityFollowButton className="follow-button" fallbackKey={guide.author} targetUserId={authorIdByName[guide.author]} />
       <div className="more-wrap">
         <button aria-expanded={menuOpen} aria-label="更多操作" className="more-button" onClick={() => setMenuOpen(!menuOpen)} type="button"><MoreHorizontal size={20} /></button>

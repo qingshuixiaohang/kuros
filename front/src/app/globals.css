@@ -846,3 +846,39 @@ select:focus-visible {
   .drawer-sidebar .game-logo { padding-top: 18px; }
   .drawer-sidebar .sidebar-footer { padding-top: 35px; }
 }
+
+/* ── Character Catalog Enhanced Filters ── */
+.catalog-tabs--sub { margin-top: -4px; padding: 4px 0; gap: 6px; }
+.catalog-tabs--sub button { font-size: 12px; padding: 5px 12px; border-radius: 4px; background: #f0f3f6; color: #6f7e90; }
+.catalog-tabs--sub button.is-active { background: var(--cyan-soft); color: #0dbbc5; }
+.catalog-tabs--sub button:hover { background: #e7f9fa; color: #0dbbc5; }
+.catalog-tabs-label { font-size: 11px; color: var(--muted); min-width: 48px; font-weight: 600; letter-spacing: .04em; }
+
+/* ── Character Tags ── */
+.character-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.character-tag { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+.character-tag--element { background: #e8f4fd; color: #2b7cb8; }
+.character-tag--weapon { background: #fef3e2; color: #b07a2e; }
+.character-tag--role { background: #e8fafb; color: #0dbbc5; }
+.character-tag--rarity { background: #fdf2e8; color: #c77b2e; }
+
+/* ── Attribute Table ── */
+.attribute-table { display: grid; gap: 1px; margin: 12px 0 20px; background: #e7ebf0; border-radius: 6px; overflow: hidden; }
+.attribute-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; background: #fff; }
+.attribute-row span { color: var(--muted); font-size: 13px; }
+.attribute-row strong { color: var(--ink); font-size: 15px; font-variant-numeric: tabular-nums; }
+
+/* ── Skill List ── */
+.skill-list { display: grid; gap: 12px; margin: 12px 0 20px; }
+.skill-card { padding: 16px 20px; border-radius: 6px; background: #fff; border: 1px solid var(--line); }
+.skill-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.skill-card-header strong { color: var(--ink); font-size: 15px; }
+.skill-type-badge { display: inline-flex; padding: 3px 10px; border-radius: 4px; background: var(--cyan-soft); color: #0dbbc5; font-size: 11px; font-weight: 500; }
+.skill-card p { color: var(--muted); font-size: 13px; line-height: 1.7; margin: 0; }
+
+/* ── Pinned Comment ── */
+.pinned-badge { display: inline-flex; align-items: center; margin-left: 6px; padding: 1px 8px; border-radius: 3px; background: #fff3e0; color: #e67e22; font-size: 10px; font-style: normal; font-weight: 600; letter-spacing: .03em; }
+.comment-item--pinned { border-left: 3px solid #e67e22; background: #fffaf5; }
+
+/* ── Author Role Badge ── */
+.author-role-badge { display: inline-flex; align-items: center; margin-left: 5px; padding: 1px 7px; border-radius: 3px; background: #e8f4fd; color: #2b7cb8; font-size: 10px; font-weight: 500; letter-spacing: .02em; vertical-align: middle; }

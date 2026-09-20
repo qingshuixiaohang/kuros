@@ -41,6 +41,7 @@ type CommentItem = {
   likes: number;
   deleted?: boolean;
   authorComment?: boolean;
+  pinned?: boolean;
 };
 
 type ArticleSection = {
@@ -51,12 +52,12 @@ type ArticleSection = {
 const commentEmojis = ["🙂", "👍", "✨", "😭", "🎉", "❤️"];
 
 const seedComments: CommentItem[] = [
-  { id: "30000000-0000-0000-0000-000000000001", parentId: null, author: "无音区夜行者", mark: "无", tone: "dark", date: "09-13 14:20", floor: "1楼", content: "轮切顺序写得很清楚，尤其是先把声骸触发安排进循环这一点，实战里确实舒服很多。", likes: 61 },
+  { id: "30000000-0000-0000-0000-000000000001", parentId: null, author: "无音区夜行者", mark: "无", tone: "dark", date: "09-13 14:20", floor: "1楼", content: "轮切顺序写得很清楚，尤其是先把声骸触发安排进循环这一点，实战里确实舒服很多。", likes: 61, pinned: true },
   { id: "30000000-0000-0000-0000-000000000002", parentId: "30000000-0000-0000-0000-000000000001", author: "潮声档案员", mark: "潮", tone: "blue", date: "09-13 15:06", floor: "楼主", content: "谢谢反馈！低配队伍可以先保证循环完整，再慢慢补面板，不用一开始就追求毕业词条。", likes: 55, authorComment: true },
   { id: "30000000-0000-0000-0000-000000000003", parentId: null, author: "今汐的留声机", mark: "今", tone: "lavender", date: "09-14 09:12", floor: "3楼", content: "已收藏，等下一次深塔刷新后按这个思路试一遍。", likes: 18 },
 ];
 
-function commentFromApi(comment: ApiComment, authorName: string): CommentItem {
+function commentFromApi(comment: ApiComment, authorName: string, index: number): CommentItem {
   return {
     id: comment.id,
     parentId: comment.parentId,
@@ -65,7 +66,7 @@ function commentFromApi(comment: ApiComment, authorName: string): CommentItem {
     mark: comment.author.nickname.slice(0, 1),
     tone: comment.author.id === "10000000-0000-0000-0000-000000000001" ? "blue" : "dark",
     date: comment.createdAt.slice(5, 16).replace("T", " "),
-    floor: comment.parentId ? "回复" : "评论",
+    floor: comment.parentId ? "回复" : (index + 1) + "楼",
     content: comment.content,
     likes: comment.likeCount,
     deleted: comment.deleted,
@@ -213,7 +214,7 @@ function PostComments({ postId, authorName, onReport }: { postId: string; author
     let active = true;
     fetchComments(postId, { page: 1, pageSize: 20, sort: sortNewest ? "latest" : "hot" }).then((result) => {
       if (!active) return;
-      setComments(result.items.map((comment) => commentFromApi(comment, authorName)));
+      setComments(result.items.map((comment, index) => commentFromApi(comment, authorName, index)));
       setTotalItems(result.meta?.totalItems ?? result.items.length);
       setApiError("");
     }).catch(() => {
@@ -227,7 +228,7 @@ function PostComments({ postId, authorName, onReport }: { postId: string; author
   async function submitComment(content: string, parentId: string | null) {
     try {
       const comment = await createComment(postId, content, parentId);
-      setComments((current) => [commentFromApi(comment, authorName), ...current]);
+      setComments((current) => [commentFromApi(comment, authorName, current.length), ...current]);
       setTotalItems((current) => current + 1);
       setReplyTo(null);
       setApiError("");
@@ -253,7 +254,7 @@ function PostComments({ postId, authorName, onReport }: { postId: string; author
     <CommentComposer onComment={submitComment} onCancel={() => setReplyTo(null)} replyLabel={comments.find((comment) => comment.id === replyTo)?.author} replyTo={replyTo} />
     {apiError && <p className="comment-inline-status" role="status">{apiError}</p>}
     {loading && <p className="comment-inline-status">正在整理漂泊者的留言…</p>}
-    <div className="comment-list">{visibleComments.map((comment) => <article className={"comment-item" + (comment.parentId ? " comment-item--reply" : "")} key={comment.id}><div className={"author-avatar author-avatar--" + comment.tone}>{comment.mark}</div><div className="comment-item-main"><div className="comment-item-meta"><strong>{comment.author}{comment.authorComment && <em>楼主</em>}</strong><span>{comment.floor} · {comment.date}</span></div><p className={comment.deleted ? "comment-deleted" : ""}>{comment.content}</p><div className="comment-item-actions"><span className="comment-like-count"><ThumbsUp size={14} />{comment.likes}</span>{!comment.deleted && !comment.parentId && <button type="button" onClick={() => { if (loggedIn) setReplyTo(comment.id); else requestLogin(() => setReplyTo(comment.id)); }}>回复</button>}<button type="button" onClick={() => onReport(comment.id)}>举报</button>{user?.id === comment.authorId && !comment.deleted && <button type="button" onClick={() => void removeComment(comment.id)}>删除</button>}</div></div></article>)}</div>
+    <div className="comment-list">{visibleComments.map((comment) => <article className={"comment-item" + (comment.parentId ? " comment-item--reply" : "") + (comment.pinned ? " comment-item--pinned" : "")} key={comment.id}><div className={"author-avatar author-avatar--" + comment.tone}>{comment.mark}</div><div className="comment-item-main"><div className="comment-item-meta"><strong>{comment.author}{comment.authorComment && <em>楼主</em>}{comment.pinned && <em className="pinned-badge">置顶</em>}</strong><span>{comment.floor} · {comment.date}</span></div><p className={comment.deleted ? "comment-deleted" : ""}>{comment.content}</p><div className="comment-item-actions"><span className="comment-like-count"><ThumbsUp size={14} />{comment.likes}</span>{!comment.deleted && !comment.parentId && <button type="button" onClick={() => { if (loggedIn) setReplyTo(comment.id); else requestLogin(() => setReplyTo(comment.id)); }}>回复</button>}<button type="button" onClick={() => onReport(comment.id)}>举报</button>{user?.id === comment.authorId && !comment.deleted && <button type="button" onClick={() => void removeComment(comment.id)}>删除</button>}</div></div></article>)}</div>
   </section>;
 }
 

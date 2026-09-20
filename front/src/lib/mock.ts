@@ -85,9 +85,42 @@ export const toolItems: ToolItem[] = [
 ];
 
 export const characters: Character[] = [
-  { id: "shorekeeper", name: "守岸人", role: "辅助", title: "角色档案", image: "/art/修-守岸人 唤取动画.png", description: "记录角色定位、培养方向与队伍协同思路。", guideId: "changli-team" },
-  { id: "augustus", name: "奥古斯都", role: "输出", title: "角色档案", image: "/art/修-奥古斯都  唤取动画.png", description: "围绕技能循环、资源规划与实战手法整理资料。", guideId: "tower-24" },
-  { id: "aemeath", name: "爱弥斯", role: "协同", title: "角色档案", image: "/art/修-爱弥斯 唤取动画.png", description: "从队伍位置、轮切节奏和养成优先级快速了解角色。", guideId: "camellya-echo" },
+  {
+    id: "shorekeeper", name: "守岸人", role: "辅助", title: "角色档案",
+    image: "/art/修-守岸人 唤取动画.png",
+    description: "记录角色定位、培养方向与队伍协同思路。", guideId: "changli-team",
+    element: "衍射", weapon: "音感仪", rarity: 5, version: "1.0",
+    attributes: { hp: 3648, atk: 303, def: 104, critRate: "5.0%", critDmg: "150.0%" },
+    skills: [
+      { name: "星流回响", type: "普通攻击", description: "以音感仪进行最多四段攻击，造成衍射伤害。" },
+      { name: "守护之声", type: "共鸣技能", description: "释放守护之音，为附近队伍中所有角色提供护盾。" },
+      { name: "潮声永驻", type: "共鸣解放", description: "展开潮声领域，持续回复范围内角色生命值。" },
+    ],
+  },
+  {
+    id: "augustus", name: "奥古斯都", role: "输出", title: "角色档案",
+    image: "/art/修-奥古斯都  唤取动画.png",
+    description: "围绕技能循环、资源规划与实战手法整理资料。", guideId: "tower-24",
+    element: "热熔", weapon: "长刃", rarity: 5, version: "2.4",
+    attributes: { hp: 2879, atk: 412, def: 89, critRate: "8.0%", critDmg: "160.0%" },
+    skills: [
+      { name: "帝焰斩", type: "普通攻击", description: "以长刃进行最多四段攻击，造成热熔伤害。" },
+      { name: "炎帝之威", type: "共鸣技能", description: "释放热熔之力，对前方敌人造成大范围热熔伤害。" },
+      { name: "万象焚灭", type: "共鸣解放", description: "召唤帝焰，对范围内敌人造成巨额热熔伤害。" },
+    ],
+  },
+  {
+    id: "aemeath", name: "爱弥斯", role: "协同", title: "角色档案",
+    image: "/art/修-爱弥斯 唤取动画.png",
+    description: "从队伍位置、轮切节奏和养成优先级快速了解角色。", guideId: "camellya-echo",
+    element: "导电", weapon: "臂铠", rarity: 4, version: "2.0",
+    attributes: { hp: 3102, atk: 345, def: 95, critRate: "5.0%", critDmg: "150.0%" },
+    skills: [
+      { name: "电光连击", type: "普通攻击", description: "以臂铠进行最多四段攻击，造成导电伤害。" },
+      { name: "共鸣协奏", type: "共鸣技能", description: "释放导电波，提升附近队友攻击力。" },
+      { name: "雷霆之绊", type: "共鸣解放", description: "召唤雷电连锁，对范围内敌人造成导电伤害并降低防御。" },
+    ],
+  },
 ];
 
 export const echoSets: EchoSet[] = [
