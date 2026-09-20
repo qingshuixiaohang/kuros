@@ -21,3 +21,4 @@
 | #1 | [01-satoken-redis-rbac.md](./01-satoken-redis-rbac.md) | SaToken + Redis + RBAC 分布式会话鉴权重构 |
 | #2 | [02-minio-storage-strategy.md](./02-minio-storage-strategy.md) | MinIO 对象存储 + 策略模式 |
 | #3 | [03-caffeine-cache.md](./03-caffeine-cache.md) | Caffeine 本地缓存加速热读路径 |
+| #4 | [04-sentinel-rate-limiting.md](./04-sentinel-rate-limiting.md) | Sentinel 基础限流保护 API |

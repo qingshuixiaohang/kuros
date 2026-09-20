@@ -95,6 +95,16 @@
             <artifactId>caffeine</artifactId>
         </dependency>
 
+        <!-- Sentinel 限流熔断：纯 Java SDK，不依赖 Dashboard。
+             为什么不用 sentinel-spring-webmvc-v6x-adapter？
+             因为 Spring Boot 4.x 基于 Jakarta EE，适配器版本兼容性不确定，
+             自定义 HandlerInterceptor + SphU.entry() 更可控 -->
+        <dependency>
+            <groupId>com.alibaba.csp</groupId>
+            <artifactId>sentinel-core</artifactId>
+            <version>1.8.10</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>

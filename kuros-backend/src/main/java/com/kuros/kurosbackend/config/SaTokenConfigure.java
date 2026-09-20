@@ -4,6 +4,7 @@ import cn.dev33.satoken.interceptor.SaInterceptor;
 import cn.dev33.satoken.router.SaHttpMethod;
 import cn.dev33.satoken.router.SaRouter;
 import cn.dev33.satoken.stp.StpUtil;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -20,13 +21,26 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class SaTokenConfigure implements WebMvcConfigurer {
 
     private final CsrfInterceptor csrfInterceptor;
+    private final SentinelRateLimitInterceptor rateLimitInterceptor;
 
-    public SaTokenConfigure(CsrfInterceptor csrfInterceptor) {
+    public SaTokenConfigure(CsrfInterceptor csrfInterceptor,
+                           ObjectProvider<SentinelRateLimitInterceptor> rateLimitInterceptor) {
         this.csrfInterceptor = csrfInterceptor;
+        this.rateLimitInterceptor = rateLimitInterceptor.getIfAvailable();
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // Sentinel 限流拦截器（order -1，最先执行）：
+        // 限流必须在鉴权之前——被限流的请求不应该浪费资源去做 Token 校验。
+        // 当 app.sentinel.enabled=false 时 SentinelConfig 不加载，
+        // ObjectProvider 返回 null，此处跳过注册
+        if (rateLimitInterceptor != null) {
+            registry.addInterceptor(rateLimitInterceptor)
+                    .addPathPatterns("/api/**")
+                    .order(-1);
+        }
+
         // SaToken 鉴权拦截器（order 0，先于 CSRF 执行）。
         // 为什么鉴权在前、CSRF 在后？旧版 Spring Security 的 CSRF 忽略条件就是“匿名请求”
         // （ignoringRequestMatchers(request -> authentication == null || anonymous)），即：
