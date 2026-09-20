@@ -3,7 +3,7 @@ package com.kuros.kurosbackend.web;
 import cn.dev33.satoken.stp.StpUtil;
 import com.kuros.kurosbackend.api.ApiResponse;
 import com.kuros.kurosbackend.api.ImageUploadResponse;
-import com.kuros.kurosbackend.storage.ImageStorageService;
+import com.kuros.kurosbackend.storage.MediaAssetService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -20,9 +20,9 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/v1/files")
 public class ImageUploadController {
 
-    private final ImageStorageService imageStorageService;
+    private final MediaAssetService imageStorageService;
 
-    public ImageUploadController(ImageStorageService imageStorageService) {
+    public ImageUploadController(MediaAssetService imageStorageService) {
         this.imageStorageService = imageStorageService;
     }
 

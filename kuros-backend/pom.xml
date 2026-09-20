@@ -71,6 +71,18 @@
             <artifactId>commons-pool2</artifactId>
         </dependency>
 
+        <!-- MinIO 官方 Java SDK：对象存储客户端。
+             为什么用官方 SDK 而不是 AWS S3 SDK？
+             1. API 更简洁，学习成本低
+             2. 对齐小哈书第七章的技术选型
+             3. 当前阶段目标是学会对象存储概念，不是适配多家云厂商
+             未来真要换 S3/OSS，Strategy 模式已隔离变更范围 -->
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+            <version>8.5.17</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>

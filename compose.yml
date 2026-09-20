@@ -31,6 +31,34 @@ services:
       timeout: 3s
       retries: 10
 
+  # MinIO 对象存储：S3 兼容的开源对象存储，替代本地磁盘存储。
+  # 为什么需要 MinIO？
+  # 1. 分布式：多台后端实例共享同一个 MinIO，文件不需要在实例间同步
+  # 2. 高可用：MinIO 支持纠删码，部分磁盘损坏也不丢数据
+  # 3. 无限容量：本地磁盘受限于单机，MinIO 可以扩展到 PB 级别
+  # 访问地址：
+  # - API: http://localhost:9000（后端 SDK 连接用）
+  # - Console: http://localhost:9001（浏览器管理界面，可登录查看所有文件）
+  minio:
+    image: quay.io/minio/minio:latest
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${APP_STORAGE_MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${APP_STORAGE_MINIO_SECRET_KEY:-minioadmin}
+    # command 中的 --console-address 指定管理界面端口
+    command: server /data --console-address ":9001"
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - kuros_minio_data:/data
+    healthcheck:
+      # mc 是 MinIO 自带的命令行工具，检查服务是否就绪
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   backend:
     build:
       context: ./kuros-backend
@@ -49,6 +77,14 @@ services:
       APP_AUTH_SESSION_COOKIE_SECURE: ${APP_AUTH_SESSION_COOKIE_SECURE:-false}
       APP_STORAGE_LOCAL_DIR: ${APP_STORAGE_LOCAL_DIR:-/app/storage}
       APP_STORAGE_PUBLIC_BASE_URL: ${APP_STORAGE_PUBLIC_BASE_URL:-http://localhost:8080}
+      # 存储策略：compose 环境默认 local（与开发环境一致）。切换 MinIO 只需改 .env 中 APP_STORAGE_TYPE=minio
+      APP_STORAGE_TYPE: ${APP_STORAGE_TYPE:-local}
+      # MinIO 配置（APP_STORAGE_TYPE=minio 时生效）：
+      # endpoint 用 minio（compose 服务名），不是 localhost（那是宿主机访问用）
+      APP_STORAGE_MINIO_ENDPOINT: ${APP_STORAGE_MINIO_ENDPOINT:-http://minio:9000}
+      APP_STORAGE_MINIO_ACCESS_KEY: ${APP_STORAGE_MINIO_ACCESS_KEY:-minioadmin}
+      APP_STORAGE_MINIO_SECRET_KEY: ${APP_STORAGE_MINIO_SECRET_KEY:-minioadmin}
+      APP_STORAGE_MINIO_BUCKET: ${APP_STORAGE_MINIO_BUCKET:-kuros-media}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     volumes:
@@ -58,6 +94,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      # MinIO 不是硬依赖：默认 local 模式不需要 MinIO。
+      # 只有 APP_STORAGE_TYPE=minio 时才需要等 MinIO 就绪。
+      minio:
+        condition: service_healthy
+        required: false
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null || exit 1"]
       interval: 5s
@@ -88,3 +129,4 @@ volumes:
   kuros_mysql_data:
   kuros_storage:
   kuros_redis_data:
+  kuros_minio_data:
