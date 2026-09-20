@@ -83,6 +83,18 @@
             <version>8.5.17</version>
         </dependency>
 
+        <!-- Caffeine 本地缓存：热读路径加速。
+             Spring Boot 自动配置会根据 spring.cache.type 选择缓存实现，
+             Caffeine 是 JVM 上性能最优的本地缓存库（基于 W-TinyLFU 淘汰算法） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>

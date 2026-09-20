@@ -17,6 +17,7 @@ import com.kuros.kurosbackend.repository.CommunityUserRepository;
 import com.kuros.kurosbackend.repository.ContentTagRepository;
 import com.kuros.kurosbackend.repository.MediaAssetRepository;
 import com.kuros.kurosbackend.repository.PostMediaRepository;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -65,6 +66,9 @@ public class PostPublishingService {
         return postService.findPublishedById(saved.getId());
     }
 
+    // @CacheEvict(beforeInvocation=true)：驱逐必须在方法体之前执行，
+    // 否则内部调用的 findPublishedById() 会命中旧缓存返回过期数据
+    @CacheEvict(cacheNames = "postDetail", key = "#postId", beforeInvocation = true)
     @Transactional
     public PostDetailResponse update(String postId, String authorId, CreatePostRequest request) {
         CommunityPost post = ownedPost(postId, authorId);
@@ -77,6 +81,7 @@ public class PostPublishingService {
         return postService.findPublishedById(post.getId());
     }
 
+    @CacheEvict(cacheNames = "postDetail", key = "#postId", beforeInvocation = true)
     @Transactional
     public void delete(String postId, String authorId) {
         CommunityPost post = postRepository.findById(postId)

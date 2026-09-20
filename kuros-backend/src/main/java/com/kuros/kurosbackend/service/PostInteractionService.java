@@ -10,6 +10,7 @@ import com.kuros.kurosbackend.domain.PostStatus;
 import com.kuros.kurosbackend.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.repository.PostLikeRepository;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +42,8 @@ public class PostInteractionService {
         return new PostInteractionResponse(postId, post.getLikeCount(), post.getFavoriteCount(), liked, favorited);
     }
 
+    // 点赞改变 likeCount，必须驱逐详情缓存
+    @CacheEvict(cacheNames = "postDetail", key = "#postId")
     public PostInteractionResponse like(String postId, String userId) {
         CommunityPost post = findPublishedPost(postId);
         PostLikeId id = new PostLikeId(userId, postId);
@@ -51,6 +54,7 @@ public class PostInteractionService {
         return findPost(postId, userId);
     }
 
+    @CacheEvict(cacheNames = "postDetail", key = "#postId")
     public PostInteractionResponse favorite(String postId, String userId) {
         findPublishedPost(postId);
         PostFavoriteId id = new PostFavoriteId(userId, postId);
@@ -61,6 +65,7 @@ public class PostInteractionService {
         return findPost(postId, userId);
     }
 
+    @CacheEvict(cacheNames = "postDetail", key = "#postId")
     public PostInteractionResponse unfavorite(String postId, String userId) {
         findPublishedPost(postId);
         PostFavoriteId id = new PostFavoriteId(userId, postId);
@@ -71,6 +76,7 @@ public class PostInteractionService {
         return findPost(postId, userId);
     }
 
+    @CacheEvict(cacheNames = "postDetail", key = "#postId")
     public PostInteractionResponse unlike(String postId, String userId) {
         findPublishedPost(postId);
         PostLikeId id = new PostLikeId(userId, postId);
