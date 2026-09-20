@@ -60,7 +60,9 @@ public class SaTokenConfigure implements WebMvcConfigurer {
                     "/api/v1/users/*/posts",   // 用户发布的帖子
                     "/api/v1/characters/**",   // 角色图鉴预留（PR #57 待合并，当前分支尚无此路由）
                     "/media/**",               // 上传图片的静态资源访问
-                    "/actuator/health"         // 容器健康检查
+                    "/actuator/health",        // 容器健康检查
+                    "/swagger-ui/**",           // Swagger UI 静态资源
+                    "/v3/api-docs/**"            // OpenAPI JSON 文档
             ).stop();
 
             // 其余所有路由要求登录（auth 端点除外）——对齐旧版 anyRequest().authenticated()
