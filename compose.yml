@@ -12,11 +12,103 @@ services:
       - "${MYSQL_PORT:-3307}:3306"
     volumes:
       - kuros_mysql_data:/var/lib/mysql
+      # 建库脚本仅对全新 volume 生效（MySQL entrypoint 只在首次初始化时执行）；
+      # 已有 volume 需手动执行：见 docs/learning 或 docker exec mysql < 脚本
+      - ./docker/mysql-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      # 必须用 TCP（127.0.0.1）而非 localhost/socket：MySQL 首次初始化时的临时服务器
+      # （跑 init SQL，含 nacos 建表）禁用了 TCP，socket ping 会提前报告 healthy，
+      # 导致 nacos 被过早拉起连不上库（CI 全新 volume 实测踩坑）
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
       interval: 5s
       timeout: 5s
       retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - kuros_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # MinIO 对象存储：S3 兼容的开源对象存储，替代本地磁盘存储。
+  # 为什么需要 MinIO？
+  # 1. 分布式：多台后端实例共享同一个 MinIO，文件不需要在实例间同步
+  # 2. 高可用：MinIO 支持纠删码，部分磁盘损坏也不丢数据
+  # 3. 无限容量：本地磁盘受限于单机，MinIO 可以扩展到 PB 级别
+  # 访问地址：
+  # - API: http://localhost:9000（后端 SDK 连接用）
+  # - Console: http://localhost:9001（浏览器管理界面，可登录查看所有文件）
+  minio:
+    image: quay.io/minio/minio:latest
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${APP_STORAGE_MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${APP_STORAGE_MINIO_SECRET_KEY:-minioadmin}
+    # command 中的 --console-address 指定管理界面端口
+    command: server /data --console-address ":9001"
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - kuros_minio_data:/data
+    healthcheck:
+      # mc 是 MinIO 自带的命令行工具，检查服务是否就绪
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Nacos 注册中心 + 配置中心（切片 #8）：standalone 单机（Q2 决策），
+  # 配置数据持久化到已有 MySQL（Q6 决策），复用 docker/mysql-init 下的建库脚本
+  # 端口：8848=OpenAPI，9848=gRPC（客户端通信），控制台宿主映射为 8081（避开 backend 的 8080）
+  nacos:
+    image: nacos/nacos-server:v3.1.1
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: mysql
+      MYSQL_SERVICE_PORT: "3306"
+      MYSQL_SERVICE_DB_NAME: nacos_config
+      MYSQL_SERVICE_USER: nacos
+      MYSQL_SERVICE_PASSWORD: nacos_dev_password
+      # 镜像默认 JDBC 参数缺 allowPublicKeyRetrieval：nacos 用户用 MySQL 8 默认的
+      # caching_sha2_password 认证，非 SSL 首连必须取服务器公钥，缺它则认证直接失败
+      MYSQL_SERVICE_DB_PARAM: "characterEncoding=utf8&connectTimeout=1000&socketTimeout=3000&autoReconnect=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai"
+      # v3 镜像强制要求鉴权三件套（不配拒绝启动），但鉴权开关默认关闭：
+      # dev 环境保持关闭（全新实例无 admin 用户，客户端无需账号）；生产硬化留给后续切片
+      NACOS_AUTH_ENABLE: "false"
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:-VGhpc0lzTXlDdXN0b21TZWNyZXRLZXkwMTIzNDU2Nzg=}
+      NACOS_AUTH_IDENTITY_KEY: serverIdentity
+      NACOS_AUTH_IDENTITY_VALUE: kuros
+      # 关闭命名空间兼容模式：它为 2.x→3.x 平滑升降级服务（空 namespace 与 public
+      # 双向同步），我们全新安装无历史数据，不需要。保留默认开启时，启动期的命名空间
+      # 迁移预检会在 DataSource 就绪前抢跑（No DataSource set，重试仅 3 秒），
+      # MySQL 冷启动（CI 全新 volume）时直接崩，见上游 issue #14613。
+      # 环境变量经 Spring 宽松绑定映射到 nacos.config.namespace.compatible.mode
+      NACOS_CONFIG_NAMESPACE_COMPATIBLE_MODE: "false"
+    ports:
+      - "${NACOS_API_PORT:-8848}:8848"
+      - "${NACOS_GRPC_PORT:-9848}:9848"
+      - "${NACOS_CONSOLE_PORT:-8081}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      # 实测：v3 主服务的 /nacos/actuator/health 404（未暴露），
+      # prometheus 端点无需鉴权且 200，直接探主服务（8848）而非控制台
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8848/nacos/actuator/prometheus -o /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
 
   backend:
     build:
@@ -26,18 +118,67 @@ services:
       DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-kuros}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8
       DB_USERNAME: ${MYSQL_USER:-kuros}
       DB_PASSWORD: ${MYSQL_PASSWORD:-kuros_dev_password}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       APP_CORS_ALLOWED_ORIGIN: ${APP_CORS_ALLOWED_ORIGIN:-http://localhost:3000}
-      APP_AUTH_DEV_CODE: ${APP_AUTH_DEV_CODE:-}
+      # dev 环境默认固定验证码 123456（与旧版 DevVerificationCodeService 的默认值一致）：
+      # compose-smoke.mjs 和前端演示登录都硬编码用它；生产环境走 .env.production.example，必须置空
+      APP_AUTH_DEV_CODE: ${APP_AUTH_DEV_CODE:-123456}
       APP_AUTH_DEV_CODE_EXPOSED: ${APP_AUTH_DEV_CODE_EXPOSED:-false}
       APP_AUTH_SESSION_COOKIE_SECURE: ${APP_AUTH_SESSION_COOKIE_SECURE:-false}
       APP_STORAGE_LOCAL_DIR: ${APP_STORAGE_LOCAL_DIR:-/app/storage}
       APP_STORAGE_PUBLIC_BASE_URL: ${APP_STORAGE_PUBLIC_BASE_URL:-http://localhost:8080}
+      # 存储策略：compose 环境默认 local（与开发环境一致）。切换 MinIO 只需改 .env 中 APP_STORAGE_TYPE=minio
+      APP_STORAGE_TYPE: ${APP_STORAGE_TYPE:-local}
+      # MinIO 配置（APP_STORAGE_TYPE=minio 时生效）：
+      # endpoint 用 minio（compose 服务名），不是 localhost（那是宿主机访问用）
+      APP_STORAGE_MINIO_ENDPOINT: ${APP_STORAGE_MINIO_ENDPOINT:-http://minio:9000}
+      APP_STORAGE_MINIO_ACCESS_KEY: ${APP_STORAGE_MINIO_ACCESS_KEY:-minioadmin}
+      APP_STORAGE_MINIO_SECRET_KEY: ${APP_STORAGE_MINIO_SECRET_KEY:-minioadmin}
+      APP_STORAGE_MINIO_BUCKET: ${APP_STORAGE_MINIO_BUCKET:-kuros-media}
+      # Nacos 连接（切片 #8）：backend 通过服务名 nacos 访问注册中心
+      NACOS_SERVER_ADDR: ${NACOS_SERVER_ADDR:-nacos:8848}
+    # 宿主映射挪至 8090（Q1/Q5 决策）：8080 正门让给 gateway，8090 保留调试直连通道；
+    # 容器内仍是 8080，compose 内部服务间通信不受影响
     ports:
-      - "${BACKEND_PORT:-8080}:8080"
+      - "${BACKEND_PORT:-8090}:8080"
     volumes:
       - kuros_storage:${APP_STORAGE_LOCAL_DIR:-/app/storage}
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      # MinIO 不是硬依赖：默认 local 模式不需要 MinIO。
+      # 只有 APP_STORAGE_TYPE=minio 时才需要等 MinIO 就绪。
+      minio:
+        condition: service_healthy
+        required: false
+      # Nacos 是硬依赖：注册失败等于服务不在微服务体系中（Q10 决策，fail-fast 由编排层承担）
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # Spring Cloud Gateway 统一入口（切片 #9）：占宿主 8080 正门，前端零改动（Q1 决策）。
+  # 纯换门（Q6 决策）：路由 lb://kuros-backend 原样透传，不加限流/鉴权/CORS。
+  # WebFlux 网关无法嵌入 Servlet 后端，必须独立容器，故为平级新工程 kuros-gateway/
+  gateway:
+    build:
+      context: ./kuros-gateway
+    restart: unless-stopped
+    environment:
+      NACOS_SERVER_ADDR: ${NACOS_SERVER_ADDR:-nacos:8848}
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    depends_on:
+      nacos:
+        condition: service_healthy
+      # backend 就绪后才对外放行：正门刚打开就该能出去
+      backend:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null || exit 1"]
@@ -57,7 +198,8 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
-      backend:
+      # 前端浏览器侧访问的是 8080 正门（gateway），等 gateway 即可（它已等过 backend）
+      gateway:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/ >/dev/null || exit 1"]
@@ -68,3 +210,5 @@ services:
 volumes:
   kuros_mysql_data:
   kuros_storage:
+  kuros_redis_data:
+  kuros_minio_data:

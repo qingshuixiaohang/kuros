@@ -28,12 +28,130 @@
     </scm>
     <properties>
         <java.version>21</java.version>
+        <sa-token.version>1.39.0</sa-token.version>
+        <!-- Testcontainers 2.x：1.x 全系与 Docker Engine 29（Docker Desktop 4.52+）不兼容（API 版本过旧被 400 拒绝），
+             2.0 起内置新版 docker-java 客户端；注意 2.0 的破坏性变更：模块坐标加 testcontainers- 前缀，核心类迁到 org.testcontainers.core 包 -->
+        <testcontainers.version>2.0.5</testcontainers.version>
     </properties>
+
+    <!-- BOM 依赖管理：统一 Spring Cloud / Spring Cloud Alibaba 全家桶版本。
+         版本兼容性赌注（切片 #8 Q1 决策）：SCA 2025.1.0.0 官方适配 Boot 4.0.2，
+         本项目 Boot 4.1.1 属于 minor 版本跨度，Spring Boot minor 版本通常向后兼容；
+         若启动失败（NoClassDefFoundError / 自动配置缺失）则降级 Boot 到 4.0.x -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>2025.1.1</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.alibaba.cloud</groupId>
+                <artifactId>spring-cloud-alibaba-dependencies</artifactId>
+                <version>2025.1.0.0</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
     <dependencies>
+        <!-- SaToken 核心：替代 Spring Security，提供 Token 会话管理、路由拦截、注解鉴权 -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-spring-boot3-starter</artifactId>
+            <version>${sa-token.version}</version>
+        </dependency>
+        <!-- SaToken Redis 集成：Token 和权限数据持久化到 Redis，支持分布式会话 -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-redis-jackson</artifactId>
+            <version>${sa-token.version}</version>
+        </dependency>
+        <!-- Jackson 2：sa-token-redis-jackson 把这两个依赖声明为 optional（要求宿主应用提供）。
+             Spring Boot 4 默认已换成 Jackson 3（包名 tools.jackson.*），不再传递提供 com.fasterxml.jackson.*，
+             缺了它们 SaTokenDaoRedisJackson 初始化时直接 NoClassDefFoundError。
+             Jackson 2 与 Jackson 3 包名不同，可以共存，互不冲突 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.19.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <version>2.19.0</version>
+        </dependency>
+        <!-- Spring Data Redis + Lettuce：Redis 客户端，SaToken 和验证码服务的底层连接 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-security</artifactId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
+        <!-- Lettuce 连接池需要 commons-pool2 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-pool2</artifactId>
+        </dependency>
+
+        <!-- MinIO 官方 Java SDK：对象存储客户端。
+             为什么用官方 SDK 而不是 AWS S3 SDK？
+             1. API 更简洁，学习成本低
+             2. 对齐小哈书第七章的技术选型
+             3. 当前阶段目标是学会对象存储概念，不是适配多家云厂商
+             未来真要换 S3/OSS，Strategy 模式已隔离变更范围 -->
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+            <version>8.5.17</version>
+        </dependency>
+
+        <!-- Caffeine 本地缓存：热读路径加速。
+             Spring Boot 自动配置会根据 spring.cache.type 选择缓存实现，
+             Caffeine 是 JVM 上性能最优的本地缓存库（基于 W-TinyLFU 淘汰算法） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
+        <!-- Sentinel 限流熔断：纯 Java SDK，不依赖 Dashboard。
+             为什么不用 sentinel-spring-webmvc-v6x-adapter？
+             因为 Spring Boot 4.x 基于 Jakarta EE，适配器版本兼容性不确定，
+             自定义 HandlerInterceptor + SphU.entry() 更可控 -->
+        <dependency>
+            <groupId>com.alibaba.csp</groupId>
+            <artifactId>sentinel-core</artifactId>
+            <version>1.8.10</version>
+        </dependency>
+
+        <!-- Nacos 服务注册发现：应用启动后作为临时实例注册到 Nacos，
+             供后续 Gateway / 服务拆分后通过服务名发现调用目标。
+             临时实例靠客户端心跳维持（默认 5s 一次），停止心跳 15s 后被摘除 -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+        <!-- Nacos 配置中心：通过 spring.config.import 拉取远端配置，
+         本地 application.properties 保留完整 fallback（分层迁移，Q3 决策），
+         Nacos 不可用时应用仍能以本地值启动 -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+        </dependency>
+
+        <!-- SpringDoc OpenAPI：自动生成 Swagger UI 交互式 API 文档。
+             springdoc 2.x 基于 Jakarta EE，兼容 Spring Boot 4.x。
+             为什么不用 springfox？springfox 已停止维护，不支持 Jakarta EE -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.8.6</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
@@ -75,9 +193,18 @@
             <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Testcontainers：测试时启动真实 Redis 容器，验证 SaToken + Redis 集成行为 -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-security-test</artifactId>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- JUnit 5 集成：提供 @Testcontainers / @Container 注解，自动管理容器生命周期（2.x 坐标改名为 testcontainers-junit-jupiter） -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>

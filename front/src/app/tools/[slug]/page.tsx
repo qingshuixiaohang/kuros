@@ -1,4 +1,4 @@
-import { ToolDetailPage } from "@/components/community/community-pages";
+import { ToolDetailPage } from "@/components/community/tools-page";
 
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;

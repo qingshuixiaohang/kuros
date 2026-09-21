@@ -1,4 +1,4 @@
-import { PublishPage } from "@/components/community/community-pages";
+import { PublishPage } from "@/components/community/publish-page";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {

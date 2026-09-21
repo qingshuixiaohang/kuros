@@ -1,12 +1,12 @@
 package com.kuros.kurosbackend.web;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.kuros.kurosbackend.api.ApiResponse;
 import com.kuros.kurosbackend.api.CreateReportRequest;
 import com.kuros.kurosbackend.api.ReportResponse;
 import com.kuros.kurosbackend.service.ContentReportService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -28,10 +28,9 @@ public class ContentReportController {
     public ResponseEntity<ApiResponse<ReportResponse>> create(
             @PathVariable String targetType,
             @PathVariable String targetId,
-            @RequestBody CreateReportRequest request,
-            Authentication authentication
+            @RequestBody CreateReportRequest request
     ) {
-        ReportResponse result = reportService.create(targetType, targetId, authentication.getName(), request);
+        ReportResponse result = reportService.create(targetType, targetId, StpUtil.getLoginIdAsString(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse<>(result, null));
     }
 }

@@ -17,6 +17,7 @@ import com.kuros.kurosbackend.repository.CommunityUserRepository;
 import com.kuros.kurosbackend.repository.PostFavoriteRepository;
 import com.kuros.kurosbackend.repository.UserFollowRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -54,6 +55,9 @@ public class ProfileService {
         this.followRepository = followRepository;
     }
 
+    // @Cacheable：用户公开资料查询缓存。
+    // 用户资料页是高频访问路径，包含帖子数和点赞数的聚合查询，缓存可显著减少 DB 压力。
+    @Cacheable(cacheNames = "publicProfile", key = "#userId")
     public PublicProfileResponse findPublic(String userId) {
         CommunityUser user = findUser(userId);
         return toPublic(user);

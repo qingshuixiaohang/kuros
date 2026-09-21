@@ -62,8 +62,17 @@ _避免_：评论时间（时间是另一种排序依据）
 **写操作**：会新增、修改或删除社区数据的行为，包括评论、点赞、收藏、关注和发布内容。
 _避免_：交互操作（范围过于宽泛，阅读也属于交互）
 
-**登录会话**：用户完成身份验证后，在一段连续访问期间被社区识别为同一用户的状态。
+**登录会话**：用户完成身份验证后，在一段连续访问期间被社区识别为同一用户的状态。会话由 SaToken 管理，Token 和权限数据存储在 Redis 中，支持多实例共享和服务重启不失效。
 _避免_：登录信息、令牌（它们是实现或凭据概念）
+
+**角色**：RBAC 模型中用户所具备的身份集合（如 USER、ADMIN），由 `sys_role` 表定义，通过 `sys_user_role` 关联到用户。角色决定用户可执行的权限集合。
+_避免_：用户类型、身份标签
+
+**权限**：RBAC 模型中可执行的最小操作单元（如 `report:handle`、`post:delete:any`），由 `sys_permission` 表定义，通过 `sys_role_permission` 关联到角色。
+_避免_：功能开关、菜单权限
+
+**验证码**：登录时发送到用户手机的 6 位数字凭证，存储在 Redis 中并带有 TTL，同一手机号 60 秒内不可重复发送。通过 `SmsSender` 接口抽象发送通道。
+_避免_：短信（短信是发送通道，不是凭证本身）、动态码
 
 **首次登录**：手机号第一次完成验证并建立社区身份的行为。
 _避免_：注册流程（当前首次登录同时完成身份创建）
@@ -120,5 +129,19 @@ _避免_：草稿帖子（当前后端不存在草稿状态）
 - 当前 MVP 先保持单个 Spring Boot 后端和独立 Next.js 前端，不提前拆分微服务。
 - 下一阶段目标是 Docker Compose 本地可重复启动，服务包含 MySQL、后端和前端。
 - MySQL 使用数据卷，后端上传目录使用持久化卷，Flyway 仍是唯一数据库迁移入口。
-- 本阶段保持 Cookie 会话和现有 REST API，不引入 Redis、MQ、MinIO、Elasticsearch、Nacos 或 Gateway。
+- ~~本阶段保持 Cookie 会话和现有 REST API，不引入 Redis、MQ、MinIO、Elasticsearch、Nacos 或 Gateway。~~（已被 2026-09-20 决策部分取代）
 - 部署规格写入 `docs/specs/single-monolith-deployment-baseline.md`。
+
+## 2026-09-20 微服务演进启动决策
+
+- 项目目标从"完成社区功能"转向"以项目为载体实践后端难点，用微服务组件解决，写进求职简历"。
+- 参照犬小哈《Spring Cloud Alibaba 小哈书（仿小红书）微服务项目实战》专栏。
+- **引入 Redis**：用于分布式会话（SaToken）、验证码存储、权限缓存、后续计数服务和搜索引擎。
+- **引入 SaToken**：完全替代 Spring Security，管理 Token、会话、路由拦截和注解鉴权。
+- **引入 RBAC 权限模型**：四张表（sys_role / sys_permission / sys_user_role / sys_role_permission），替代硬编码枚举。
+- **保持 Cookie 模式**：Token 通过 HttpOnly Cookie（`KUROS_SESSION`）传递，前端零改动。
+- **保持单体部署**：本步骤不拆微服务、不引入 Nacos/Gateway，只在单体内替换认证基础设施。
+- 架构决策记录：`docs/adr/0002-distributed-session-satoken-redis.md`。
+- 演进路线：Redis+SaToken → MinIO → Nacos/Gateway → 服务拆分 → RocketMQ → ES+Canal → Sentinel → XXL-JOB → Cassandra+Leaf → Jmeter+CI/CD。
+- 分工规则：中间件下载/安装/启动由用户执行，代码/配置/测试由 AI 编写，vibe learning 模式。
+- 本决策**不引入**：MQ、MinIO、Elasticsearch、Nacos、Gateway、Sentinel（留到后续切片）。

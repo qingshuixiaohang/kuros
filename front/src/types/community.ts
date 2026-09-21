@@ -41,6 +41,23 @@ export interface ToolItem {
   iconSrc: string;
 }
 
+export type CharacterElement = "湮灭" | "导电" | "热熔" | "冷凝" | "气动" | "衍射";
+export type CharacterWeapon = "迅刀" | "长刃" | "佩枪" | "臂铠" | "音感仪";
+
+export interface CharacterSkill {
+  name: string;
+  type: "普通攻击" | "共鸣技能" | "共鸣解放" | "变奏技能" | "延奏技能" | "共鸣回路";
+  description: string;
+}
+
+export interface CharacterAttributes {
+  hp: number;
+  atk: number;
+  def: number;
+  critRate: string;
+  critDmg: string;
+}
+
 export interface Character {
   id: string;
   name: string;
@@ -49,6 +66,12 @@ export interface Character {
   image: string;
   description: string;
   guideId: string;
+  element: CharacterElement;
+  weapon: CharacterWeapon;
+  rarity: 4 | 5;
+  version: string;
+  attributes: CharacterAttributes;
+  skills: CharacterSkill[];
 }
 
 export interface EchoSet {

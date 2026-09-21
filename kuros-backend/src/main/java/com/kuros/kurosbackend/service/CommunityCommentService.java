@@ -16,6 +16,7 @@ import com.kuros.kurosbackend.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.repository.CommunityCommentRepository;
 import com.kuros.kurosbackend.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.repository.CommunityUserRepository;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -63,6 +64,8 @@ public class CommunityCommentService {
         return new PageResult<>(items, new PageMeta(normalizedPage, normalizedPageSize, comments.getTotalElements(), comments.getTotalPages()));
     }
 
+    // 评论创建后驱逐帖子详情缓存，确保下次查询获取最新评论数
+    @CacheEvict(cacheNames = "postDetail", key = "#postId")
     @Transactional
     public CommentResponse create(String postId, String authorId, CreateCommentRequest request) {
         ensurePublishedPost(postId);
@@ -87,6 +90,8 @@ public class CommunityCommentService {
         return toResponse(comment, author);
     }
 
+    // 评论删除后驱逐帖子详情缓存
+    @CacheEvict(cacheNames = "postDetail", key = "#postId")
     @Transactional
     public void delete(String postId, String commentId, String authorId) {
         CommunityComment comment = commentRepository.findById(commentId)

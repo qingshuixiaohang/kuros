@@ -1,4 +1,4 @@
-import { CharacterDetailPage } from "@/components/community/community-pages";
+import { CharacterDetailPage } from "@/components/community/characters-page";
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

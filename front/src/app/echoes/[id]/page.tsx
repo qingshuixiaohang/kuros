@@ -1,4 +1,4 @@
-import { EchoDetailPage } from "@/components/community/community-pages";
+import { EchoDetailPage } from "@/components/community/echoes-page";
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

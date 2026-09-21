@@ -17,6 +17,9 @@ import com.kuros.kurosbackend.repository.CommunityUserRepository;
 import com.kuros.kurosbackend.repository.ContentTagRepository;
 import com.kuros.kurosbackend.repository.MediaAssetRepository;
 import com.kuros.kurosbackend.repository.PostMediaRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Timer;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +39,8 @@ public class PostPublishingService {
     private final CommunityPostService postService;
     private final MediaAssetRepository mediaAssetRepository;
     private final PostMediaRepository postMediaRepository;
+    private final Counter postsPublishedCounter;
+    private final Timer postsPublishTimer;
 
     public PostPublishingService(
             CommunityPostRepository postRepository,
@@ -43,7 +48,9 @@ public class PostPublishingService {
             ContentTagRepository tagRepository,
             CommunityPostService postService,
             MediaAssetRepository mediaAssetRepository,
-            PostMediaRepository postMediaRepository
+            PostMediaRepository postMediaRepository,
+            Counter postsPublishedCounter,
+            Timer postsPublishTimer
     ) {
         this.postRepository = postRepository;
         this.userRepository = userRepository;
@@ -51,20 +58,29 @@ public class PostPublishingService {
         this.postService = postService;
         this.mediaAssetRepository = mediaAssetRepository;
         this.postMediaRepository = postMediaRepository;
+        this.postsPublishedCounter = postsPublishedCounter;
+        this.postsPublishTimer = postsPublishTimer;
     }
 
     @Transactional
     public PostDetailResponse publish(CreatePostRequest request, String authorId) {
-        userRepository.findById(authorId).orElseThrow(() -> new ResourceNotFoundException("用户不存在"));
-        ValidatedPost input = validate(request);
-        List<String> tagNames = normalizeTags(request.tags());
-        CommunityPost post = CommunityPost.publish(authorId, input.type(), input.category(), input.title(), input.excerpt(), input.content(), LocalDateTime.now());
-        post.addTags(tagNames.stream().map(name -> tagRepository.findByName(name).orElseGet(() -> tagRepository.save(new ContentTag(name)))).toList());
-        CommunityPost saved = postRepository.save(post);
-        replaceMedia(saved.getId(), List.of(), mediaAssets(request.mediaAssetIds(), authorId, null));
-        return postService.findPublishedById(saved.getId());
+        return postsPublishTimer.record(() -> {
+            userRepository.findById(authorId).orElseThrow(() -> new ResourceNotFoundException("用户不存在"));
+            ValidatedPost input = validate(request);
+            List<String> tagNames = normalizeTags(request.tags());
+            CommunityPost post = CommunityPost.publish(authorId, input.type(), input.category(), input.title(), input.excerpt(), input.content(), LocalDateTime.now());
+            post.addTags(tagNames.stream().map(name -> tagRepository.findByName(name).orElseGet(() -> tagRepository.save(new ContentTag(name)))).toList());
+            CommunityPost saved = postRepository.save(post);
+            replaceMedia(saved.getId(), List.of(), mediaAssets(request.mediaAssetIds(), authorId, null));
+            // 业务指标埋点：每发布一个帖子计数器 +1
+            postsPublishedCounter.increment();
+            return postService.findPublishedById(saved.getId());
+        });
     }
 
+    // @CacheEvict(beforeInvocation=true)：驱逐必须在方法体之前执行，
+    // 否则内部调用的 findPublishedById() 会命中旧缓存返回过期数据
+    @CacheEvict(cacheNames = "postDetail", key = "#postId", beforeInvocation = true)
     @Transactional
     public PostDetailResponse update(String postId, String authorId, CreatePostRequest request) {
         CommunityPost post = ownedPost(postId, authorId);
@@ -77,6 +93,7 @@ public class PostPublishingService {
         return postService.findPublishedById(post.getId());
     }
 
+    @CacheEvict(cacheNames = "postDetail", key = "#postId", beforeInvocation = true)
     @Transactional
     public void delete(String postId, String authorId) {
         CommunityPost post = postRepository.findById(postId)

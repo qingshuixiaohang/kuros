@@ -1,4 +1,4 @@
-import { NewsDetailPage } from "@/components/community/community-pages";
+import { NewsDetailPage } from "@/components/community/news-page";
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

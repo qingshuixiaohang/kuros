@@ -17,6 +17,7 @@ import com.kuros.kurosbackend.repository.CommunityUserRepository;
 import com.kuros.kurosbackend.repository.MediaAssetRepository;
 import com.kuros.kurosbackend.repository.PostMediaRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -81,6 +82,10 @@ public class CommunityPostService {
         return new PageResult<>(items, meta);
     }
 
+    // @Cacheable：首次查询穿透 DB 后写入缓存，后续相同 postId 直接返回缓存值。
+    // 为什么只缓存这一个方法而不是列表查询？
+    // 因为帖子详情是“读多写少”的典型场景，而分页列表参数组合多、命中率低，缓存收益小。
+    @Cacheable(cacheNames = "postDetail", key = "#id")
     public PostDetailResponse findPublishedById(String id) {
         CommunityPost post = postRepository.findByIdAndStatus(id, PostStatus.PUBLISHED)
                 .orElseThrow(() -> new ResourceNotFoundException("帖子不存在或已删除"));
