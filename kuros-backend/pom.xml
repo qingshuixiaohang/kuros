@@ -33,6 +33,29 @@
              2.0 起内置新版 docker-java 客户端；注意 2.0 的破坏性变更：模块坐标加 testcontainers- 前缀，核心类迁到 org.testcontainers.core 包 -->
         <testcontainers.version>2.0.5</testcontainers.version>
     </properties>
+
+    <!-- BOM 依赖管理：统一 Spring Cloud / Spring Cloud Alibaba 全家桶版本。
+         版本兼容性赌注（切片 #8 Q1 决策）：SCA 2025.1.0.0 官方适配 Boot 4.0.2，
+         本项目 Boot 4.1.1 属于 minor 版本跨度，Spring Boot minor 版本通常向后兼容；
+         若启动失败（NoClassDefFoundError / 自动配置缺失）则降级 Boot 到 4.0.x -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>2025.1.1</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.alibaba.cloud</groupId>
+                <artifactId>spring-cloud-alibaba-dependencies</artifactId>
+                <version>2025.1.0.0</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
     <dependencies>
         <!-- SaToken 核心：替代 Spring Security，提供 Token 会话管理、路由拦截、注解鉴权 -->
         <dependency>
@@ -103,6 +126,21 @@
             <groupId>com.alibaba.csp</groupId>
             <artifactId>sentinel-core</artifactId>
             <version>1.8.10</version>
+        </dependency>
+
+        <!-- Nacos 服务注册发现：应用启动后作为临时实例注册到 Nacos，
+             供后续 Gateway / 服务拆分后通过服务名发现调用目标。
+             临时实例靠客户端心跳维持（默认 5s 一次），停止心跳 15s 后被摘除 -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+        <!-- Nacos 配置中心：通过 spring.config.import 拉取远端配置，
+         本地 application.properties 保留完整 fallback（分层迁移，Q3 决策），
+         Nacos 不可用时应用仍能以本地值启动 -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
         </dependency>
 
         <!-- SpringDoc OpenAPI：自动生成 Swagger UI 交互式 API 文档。

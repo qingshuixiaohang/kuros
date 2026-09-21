@@ -12,6 +12,9 @@ services:
       - "${MYSQL_PORT:-3307}:3306"
     volumes:
       - kuros_mysql_data:/var/lib/mysql
+      # 建库脚本仅对全新 volume 生效（MySQL entrypoint 只在首次初始化时执行）；
+      # 已有 volume 需手动执行：见 docs/learning 或 docker exec mysql < 脚本
+      - ./docker/mysql-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
       interval: 5s
@@ -59,6 +62,45 @@ services:
       timeout: 5s
       retries: 10
 
+  # Nacos 注册中心 + 配置中心（切片 #8）：standalone 单机（Q2 决策），
+  # 配置数据持久化到已有 MySQL（Q6 决策），复用 docker/mysql-init 下的建库脚本
+  # 端口：8848=OpenAPI，9848=gRPC（客户端通信），控制台宿主映射为 8081（避开 backend 的 8080）
+  nacos:
+    image: nacos/nacos-server:v3.1.1
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: mysql
+      MYSQL_SERVICE_PORT: "3306"
+      MYSQL_SERVICE_DB_NAME: nacos_config
+      MYSQL_SERVICE_USER: nacos
+      MYSQL_SERVICE_PASSWORD: nacos_dev_password
+      # 镜像默认 JDBC 参数缺 allowPublicKeyRetrieval：nacos 用户用 MySQL 8 默认的
+      # caching_sha2_password 认证，非 SSL 首连必须取服务器公钥，缺它则认证直接失败
+      MYSQL_SERVICE_DB_PARAM: "characterEncoding=utf8&connectTimeout=1000&socketTimeout=3000&autoReconnect=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai"
+      # v3 镜像强制要求鉴权三件套（不配拒绝启动），但鉴权开关默认关闭：
+      # dev 环境保持关闭（全新实例无 admin 用户，客户端无需账号）；生产硬化留给后续切片
+      NACOS_AUTH_ENABLE: "false"
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:-VGhpc0lzTXlDdXN0b21TZWNyZXRLZXkwMTIzNDU2Nzg=}
+      NACOS_AUTH_IDENTITY_KEY: serverIdentity
+      NACOS_AUTH_IDENTITY_VALUE: kuros
+    ports:
+      - "${NACOS_API_PORT:-8848}:8848"
+      - "${NACOS_GRPC_PORT:-9848}:9848"
+      - "${NACOS_CONSOLE_PORT:-8081}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      # 实测：v3 主服务的 /nacos/actuator/health 404（未暴露），
+      # prometheus 端点无需鉴权且 200，直接探主服务（8848）而非控制台
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8848/nacos/actuator/prometheus -o /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
   backend:
     build:
       context: ./kuros-backend
@@ -85,6 +127,8 @@ services:
       APP_STORAGE_MINIO_ACCESS_KEY: ${APP_STORAGE_MINIO_ACCESS_KEY:-minioadmin}
       APP_STORAGE_MINIO_SECRET_KEY: ${APP_STORAGE_MINIO_SECRET_KEY:-minioadmin}
       APP_STORAGE_MINIO_BUCKET: ${APP_STORAGE_MINIO_BUCKET:-kuros-media}
+      # Nacos 连接（切片 #8）：backend 通过服务名 nacos 访问注册中心
+      NACOS_SERVER_ADDR: ${NACOS_SERVER_ADDR:-nacos:8848}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     volumes:
@@ -99,6 +143,9 @@ services:
       minio:
         condition: service_healthy
         required: false
+      # Nacos 是硬依赖：注册失败等于服务不在微服务体系中（Q10 决策，fail-fast 由编排层承担）
+      nacos:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null || exit 1"]
       interval: 5s

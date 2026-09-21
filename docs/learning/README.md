@@ -25,3 +25,4 @@
 | #5 | [05-redis-distributed-lock.md](./05-redis-distributed-lock.md) | Redis 分布式锁防止并发重复操作 |
 | #6 | [06-springdoc-openapi.md](./06-springdoc-openapi.md) | SpringDoc OpenAPI 自动生成交互式 API 文档 |
 | #7 | [07-actuator-micrometer.md](./07-actuator-micrometer.md) | Actuator + Micrometer 应用监控 |
+| #8 | [08-nacos-discovery-config.md](./08-nacos-discovery-config.md) | Nacos 注册发现 + 配置中心分层迁移与动态刷新 |
