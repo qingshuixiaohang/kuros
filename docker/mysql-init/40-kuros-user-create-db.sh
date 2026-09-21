@@ -10,9 +10,8 @@
 # CLI + 已导出的环境变量在两种模式下都成立（与官方文档的 .sh 示例同款写法）。
 #
 # 注意：init 脚本仅对全新 volume 生效（entrypoint 只在首次初始化时执行）。
-# 已有 volume 需手动执行本文件：
-#   docker compose exec -T mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD"' \
-#     < docker/mysql-init/40-kuros-user-create-db.sh
+# 已有 volume 需手动执行（脚本就在容器内挂载目录里，凭据取容器环境变量）：
+#   docker compose exec mysql bash /docker-entrypoint-initdb.d/40-kuros-user-create-db.sh
 set -e
 
 mysql --protocol=socket -uroot -hlocalhost -p"$MYSQL_ROOT_PASSWORD" <<EOF
