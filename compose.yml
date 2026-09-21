@@ -138,8 +138,10 @@ services:
       APP_STORAGE_MINIO_BUCKET: ${APP_STORAGE_MINIO_BUCKET:-kuros-media}
       # Nacos 连接（切片 #8）：backend 通过服务名 nacos 访问注册中心
       NACOS_SERVER_ADDR: ${NACOS_SERVER_ADDR:-nacos:8848}
+    # 宿主映射挪至 8090（Q1/Q5 决策）：8080 正门让给 gateway，8090 保留调试直连通道；
+    # 容器内仍是 8080，compose 内部服务间通信不受影响
     ports:
-      - "${BACKEND_PORT:-8080}:8080"
+      - "${BACKEND_PORT:-8090}:8080"
     volumes:
       - kuros_storage:${APP_STORAGE_LOCAL_DIR:-/app/storage}
     depends_on:
@@ -161,6 +163,29 @@ services:
       timeout: 5s
       retries: 30
 
+  # Spring Cloud Gateway 统一入口（切片 #9）：占宿主 8080 正门，前端零改动（Q1 决策）。
+  # 纯换门（Q6 决策）：路由 lb://kuros-backend 原样透传，不加限流/鉴权/CORS。
+  # WebFlux 网关无法嵌入 Servlet 后端，必须独立容器，故为平级新工程 kuros-gateway/
+  gateway:
+    build:
+      context: ./kuros-gateway
+    restart: unless-stopped
+    environment:
+      NACOS_SERVER_ADDR: ${NACOS_SERVER_ADDR:-nacos:8848}
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    depends_on:
+      nacos:
+        condition: service_healthy
+      # backend 就绪后才对外放行：正门刚打开就该能出去
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
   frontend:
     build:
       context: ./front
@@ -173,7 +198,8 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
-      backend:
+      # 前端浏览器侧访问的是 8080 正门（gateway），等 gateway 即可（它已等过 backend）
+      gateway:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/ >/dev/null || exit 1"]

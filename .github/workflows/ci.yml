@@ -61,6 +61,9 @@ jobs:
         run: APP_AUTH_DEV_CODE=123456 APP_AUTH_DEV_CODE_EXPOSED=true docker compose up -d --build
       - name: Verify service health
         run: |
+          # 切片 #9 起 8080 正门归 gateway，8090 是 backend 调试直连口：
+          # 8080 探的是网关自身 health，backend 就绪门控改用 8090
+          curl --fail --retry 60 --retry-all-errors --retry-delay 2 http://localhost:8090/actuator/health
           curl --fail --retry 30 --retry-all-errors --retry-delay 2 http://localhost:8080/actuator/health
           curl --fail --retry 30 --retry-all-errors --retry-delay 2 http://localhost:3000/
           curl --fail --retry 30 --retry-all-errors --retry-delay 2 http://localhost:3000/guides
@@ -79,6 +82,10 @@ jobs:
           sleep 10
           docker compose restart backend frontend
           sleep 5
+          # 8080 已是 gateway 正门（探到的是网关自身 health，恒绿），
+          # 不能再作为 backend 就绪门控；先用 8090 直连门控 backend，
+          # 再探网关与前端，最后 smoke（业务请求经网关转发）
+          curl --fail --retry 60 --retry-all-errors --retry-delay 2 http://localhost:8090/actuator/health
           curl --fail --retry 30 --retry-all-errors --retry-delay 2 http://localhost:8080/actuator/health
           curl --fail --retry 30 --retry-all-errors --retry-delay 2 http://localhost:3000/
           node scripts/compose-smoke.mjs

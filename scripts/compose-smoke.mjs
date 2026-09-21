@@ -137,27 +137,31 @@ async function main() {
 }
 
 /**
- * 切片 #8：Nacos 注册发现端到端验证。
+ * 切片 #8：Nacos 注册发现端到端验证；切片 #9 扩展为同时校验网关注册。
  *
  * v3 client OpenAPI 查实例无需鉴权（实测行为）；console 独立监听 8080，
  * compose 映射到宿主机 8081。backend healthy 后注册应已存在（注册发生在
- * WebServerInitializedEvent，早于 compose 的 healthcheck 放行）。
+ * WebServerInitializedEvent，早于 compose 的 healthcheck 放行）；gateway
+ * 同理（Q2 决策：仅多查一个服务名，业务断言不经网关重复跑——但下方既有
+ * 请求的 apiBase 已指向 8080 正门，事实上已天然经过网关）。
  */
 async function verifyNacosRegistration() {
   const consoleResponse = await fetch(nacosConsoleBase + "/v3/console/health/readiness");
   if (!consoleResponse.ok) throw new Error(`Nacos console readiness returned ${consoleResponse.status}`);
 
-  const url = `${nacosBase}/nacos/v3/client/ns/instance/list?serviceName=kuros-backend&groupName=DEFAULT_GROUP&namespaceId=public`;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Nacos instance list returned ${response.status}`);
-  const body = await response.json();
-  const registered = body.data?.some(
-    (instance) => instance.healthy && instance.serviceName === "DEFAULT_GROUP@@kuros-backend",
-  );
-  if (!registered) {
-    throw new Error(`kuros-backend is not registered as a healthy instance in Nacos: ${JSON.stringify(body)}`);
+  for (const serviceName of ["kuros-backend", "kuros-gateway"]) {
+    const url = `${nacosBase}/nacos/v3/client/ns/instance/list?serviceName=${serviceName}&groupName=DEFAULT_GROUP&namespaceId=public`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Nacos instance list returned ${response.status}`);
+    const body = await response.json();
+    const registered = body.data?.some(
+      (instance) => instance.healthy && instance.serviceName === `DEFAULT_GROUP@@${serviceName}`,
+    );
+    if (!registered) {
+      throw new Error(`${serviceName} is not registered as a healthy instance in Nacos: ${JSON.stringify(body)}`);
+    }
   }
-  console.log("Nacos smoke passed: kuros-backend registered as healthy ephemeral instance");
+  console.log("Nacos smoke passed: kuros-backend & kuros-gateway registered as healthy ephemeral instances");
 }
 
 main().catch((error) => {
