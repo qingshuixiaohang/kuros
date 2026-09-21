@@ -1,4 +1,4 @@
-package com.kuros.kurosbackend.config;
+package com.kuros.kurosbackend.shared.config;
 
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;

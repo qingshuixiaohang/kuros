@@ -118,7 +118,7 @@ class MinIOStorageStrategyTest {
 
         // Then: 再次读取应抛异常（文件不存在）
         assertThatThrownBy(() -> storageStrategy.get(key))
-                .isInstanceOf(com.kuros.kurosbackend.exception.FileStorageException.class);
+                .isInstanceOf(com.kuros.kurosbackend.shared.exception.FileStorageException.class);
     }
 
     @Test

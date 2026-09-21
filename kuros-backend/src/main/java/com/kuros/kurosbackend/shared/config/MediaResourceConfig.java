@@ -1,4 +1,4 @@
-package com.kuros.kurosbackend.config;
+package com.kuros.kurosbackend.shared.config;
 
 import com.kuros.kurosbackend.storage.LocalStorageStrategy;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

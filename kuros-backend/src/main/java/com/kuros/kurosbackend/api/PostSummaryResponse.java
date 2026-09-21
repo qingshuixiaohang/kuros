@@ -1,5 +1,7 @@
 package com.kuros.kurosbackend.api;
 
+import com.kuros.kurosbackend.shared.api.AuthorResponse;
+
 import com.kuros.kurosbackend.domain.PostType;
 
 import java.time.LocalDateTime;

@@ -1,4 +1,4 @@
-package com.kuros.kurosbackend.config;
+package com.kuros.kurosbackend.shared.config;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;

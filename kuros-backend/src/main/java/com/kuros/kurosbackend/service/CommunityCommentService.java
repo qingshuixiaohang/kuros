@@ -1,18 +1,18 @@
 package com.kuros.kurosbackend.service;
 
-import com.kuros.kurosbackend.api.AuthorResponse;
+import com.kuros.kurosbackend.shared.api.AuthorResponse;
 import com.kuros.kurosbackend.api.CommentResponse;
 import com.kuros.kurosbackend.api.CreateCommentRequest;
-import com.kuros.kurosbackend.api.PageMeta;
-import com.kuros.kurosbackend.api.PageResult;
+import com.kuros.kurosbackend.shared.api.PageMeta;
+import com.kuros.kurosbackend.shared.api.PageResult;
 import com.kuros.kurosbackend.domain.CommentStatus;
 import com.kuros.kurosbackend.domain.CommunityComment;
 import com.kuros.kurosbackend.domain.CommunityPost;
 import com.kuros.kurosbackend.domain.CommunityUser;
 import com.kuros.kurosbackend.domain.PostStatus;
-import com.kuros.kurosbackend.exception.AuthRequestException;
-import com.kuros.kurosbackend.exception.ForbiddenException;
-import com.kuros.kurosbackend.exception.ResourceNotFoundException;
+import com.kuros.kurosbackend.shared.exception.AuthRequestException;
+import com.kuros.kurosbackend.shared.exception.ForbiddenException;
+import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.repository.CommunityCommentRepository;
 import com.kuros.kurosbackend.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.repository.CommunityUserRepository;

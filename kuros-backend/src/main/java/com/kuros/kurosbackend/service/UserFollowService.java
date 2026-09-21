@@ -1,11 +1,13 @@
 package com.kuros.kurosbackend.service;
 
+import com.kuros.kurosbackend.shared.lock.DistributedLock;
+
 import com.kuros.kurosbackend.api.UserFollowResponse;
 import com.kuros.kurosbackend.domain.CommunityUser;
 import com.kuros.kurosbackend.domain.UserFollow;
 import com.kuros.kurosbackend.domain.UserFollowId;
-import com.kuros.kurosbackend.exception.AuthRequestException;
-import com.kuros.kurosbackend.exception.ResourceNotFoundException;
+import com.kuros.kurosbackend.shared.exception.AuthRequestException;
+import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.repository.CommunityUserRepository;
 import com.kuros.kurosbackend.repository.UserFollowRepository;
 import org.springframework.stereotype.Service;

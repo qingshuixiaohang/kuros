@@ -1,4 +1,4 @@
-package com.kuros.kurosbackend.config;
+package com.kuros.kurosbackend.shared.config;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;

@@ -1,4 +1,4 @@
-package com.kuros.kurosbackend.config;
+package com.kuros.kurosbackend.shared.config;
 
 import com.alibaba.csp.sentinel.slots.block.RuleConstant;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRule;

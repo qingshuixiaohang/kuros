@@ -1,5 +1,7 @@
 package com.kuros.kurosbackend.service;
 
+import com.kuros.kurosbackend.shared.lock.DistributedLock;
+
 import com.kuros.kurosbackend.api.PostInteractionResponse;
 import com.kuros.kurosbackend.domain.CommunityPost;
 import com.kuros.kurosbackend.domain.PostLike;
@@ -7,7 +9,7 @@ import com.kuros.kurosbackend.domain.PostLikeId;
 import com.kuros.kurosbackend.domain.PostFavorite;
 import com.kuros.kurosbackend.domain.PostFavoriteId;
 import com.kuros.kurosbackend.domain.PostStatus;
-import com.kuros.kurosbackend.exception.ResourceNotFoundException;
+import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.repository.PostLikeRepository;
 import org.springframework.cache.annotation.CacheEvict;

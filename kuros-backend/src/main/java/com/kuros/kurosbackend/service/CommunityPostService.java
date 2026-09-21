@@ -1,8 +1,8 @@
 package com.kuros.kurosbackend.service;
 
-import com.kuros.kurosbackend.api.AuthorResponse;
-import com.kuros.kurosbackend.api.PageMeta;
-import com.kuros.kurosbackend.api.PageResult;
+import com.kuros.kurosbackend.shared.api.AuthorResponse;
+import com.kuros.kurosbackend.shared.api.PageMeta;
+import com.kuros.kurosbackend.shared.api.PageResult;
 import com.kuros.kurosbackend.api.PostDetailResponse;
 import com.kuros.kurosbackend.api.PostMediaResponse;
 import com.kuros.kurosbackend.api.PostSummaryResponse;
@@ -11,7 +11,7 @@ import com.kuros.kurosbackend.domain.CommunityUser;
 import com.kuros.kurosbackend.domain.MediaAsset;
 import com.kuros.kurosbackend.domain.PostStatus;
 import com.kuros.kurosbackend.domain.PostMedia;
-import com.kuros.kurosbackend.exception.ResourceNotFoundException;
+import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.repository.CommunityUserRepository;
 import com.kuros.kurosbackend.repository.MediaAssetRepository;

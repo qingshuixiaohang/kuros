@@ -1,10 +1,10 @@
 package com.kuros.kurosbackend.web;
 
 import cn.dev33.satoken.stp.StpUtil;
-import com.kuros.kurosbackend.api.ApiResponse;
+import com.kuros.kurosbackend.shared.api.ApiResponse;
 import com.kuros.kurosbackend.api.CommentResponse;
 import com.kuros.kurosbackend.api.CreateCommentRequest;
-import com.kuros.kurosbackend.api.PageResult;
+import com.kuros.kurosbackend.shared.api.PageResult;
 import com.kuros.kurosbackend.service.CommunityCommentService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;

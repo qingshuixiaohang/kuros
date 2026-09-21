@@ -1,4 +1,5 @@
-package com.kuros.kurosbackend.api;
+package com.kuros.kurosbackend.shared.api;
+
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 

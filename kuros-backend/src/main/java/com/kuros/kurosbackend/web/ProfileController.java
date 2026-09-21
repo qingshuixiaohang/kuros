@@ -1,8 +1,8 @@
 package com.kuros.kurosbackend.web;
 
 import cn.dev33.satoken.stp.StpUtil;
-import com.kuros.kurosbackend.api.ApiResponse;
-import com.kuros.kurosbackend.api.PageResult;
+import com.kuros.kurosbackend.shared.api.ApiResponse;
+import com.kuros.kurosbackend.shared.api.PageResult;
 import com.kuros.kurosbackend.api.PostSummaryResponse;
 import com.kuros.kurosbackend.api.ProfileOverviewResponse;
 import com.kuros.kurosbackend.api.PublicProfileResponse;

@@ -1,6 +1,6 @@
 package com.kuros.kurosbackend.storage;
 
-import com.kuros.kurosbackend.exception.FileStorageException;
+import com.kuros.kurosbackend.shared.exception.FileStorageException;
 import io.minio.BucketExistsArgs;
 import io.minio.GetObjectArgs;
 import io.minio.MakeBucketArgs;

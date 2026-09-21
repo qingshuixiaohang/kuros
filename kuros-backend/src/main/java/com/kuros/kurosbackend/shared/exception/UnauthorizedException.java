@@ -1,4 +1,4 @@
-package com.kuros.kurosbackend.exception;
+package com.kuros.kurosbackend.shared.exception;
 
 public class UnauthorizedException extends RuntimeException {
 

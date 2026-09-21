@@ -1,4 +1,5 @@
-package com.kuros.kurosbackend.service;
+package com.kuros.kurosbackend.shared.lock;
+
 
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;

@@ -1,4 +1,6 @@
-package com.kuros.kurosbackend.api;
+package com.kuros.kurosbackend.shared.api;
+
+import com.kuros.kurosbackend.shared.api.PageMeta;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 

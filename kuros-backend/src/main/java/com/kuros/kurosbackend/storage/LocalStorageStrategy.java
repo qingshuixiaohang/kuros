@@ -1,6 +1,6 @@
 package com.kuros.kurosbackend.storage;
 
-import com.kuros.kurosbackend.exception.FileStorageException;
+import com.kuros.kurosbackend.shared.exception.FileStorageException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;

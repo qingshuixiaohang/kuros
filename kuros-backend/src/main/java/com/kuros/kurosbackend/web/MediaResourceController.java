@@ -1,7 +1,7 @@
 package com.kuros.kurosbackend.web;
 
 import com.kuros.kurosbackend.domain.MediaAsset;
-import com.kuros.kurosbackend.exception.ResourceNotFoundException;
+import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.repository.MediaAssetRepository;
 import com.kuros.kurosbackend.storage.StorageStrategy;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

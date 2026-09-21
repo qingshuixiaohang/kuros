@@ -1,5 +1,7 @@
 package com.kuros.kurosbackend.api;
 
+import com.kuros.kurosbackend.shared.api.AuthorResponse;
+
 import java.time.LocalDateTime;
 
 public record CommentResponse(

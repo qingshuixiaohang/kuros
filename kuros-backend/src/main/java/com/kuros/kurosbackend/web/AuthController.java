@@ -1,6 +1,6 @@
 package com.kuros.kurosbackend.web;
 
-import com.kuros.kurosbackend.api.ApiResponse;
+import com.kuros.kurosbackend.shared.api.ApiResponse;
 import com.kuros.kurosbackend.api.AuthUserResponse;
 import com.kuros.kurosbackend.api.PhoneCodeRequest;
 import com.kuros.kurosbackend.api.PhoneLoginRequest;

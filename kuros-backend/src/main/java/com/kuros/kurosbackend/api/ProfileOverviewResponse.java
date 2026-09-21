@@ -1,5 +1,7 @@
 package com.kuros.kurosbackend.api;
 
+import com.kuros.kurosbackend.shared.api.PageResult;
+
 public record ProfileOverviewResponse(
         PublicProfileResponse profile,
         ProfileStats stats,

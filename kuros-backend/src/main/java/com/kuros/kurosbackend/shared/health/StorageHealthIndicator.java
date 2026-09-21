@@ -1,4 +1,4 @@
-package com.kuros.kurosbackend.health;
+package com.kuros.kurosbackend.shared.health;
 
 import com.kuros.kurosbackend.storage.StorageStrategy;
 import org.springframework.boot.health.contributor.Health;

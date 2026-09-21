@@ -1,6 +1,6 @@
 package com.kuros.kurosbackend.auth;
 
-import com.kuros.kurosbackend.exception.AuthRequestException;
+import com.kuros.kurosbackend.shared.exception.AuthRequestException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;

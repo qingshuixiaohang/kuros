@@ -1,7 +1,7 @@
 package com.kuros.kurosbackend.web;
 
 import cn.dev33.satoken.stp.StpUtil;
-import com.kuros.kurosbackend.api.ApiResponse;
+import com.kuros.kurosbackend.shared.api.ApiResponse;
 import com.kuros.kurosbackend.api.ImageUploadResponse;
 import com.kuros.kurosbackend.storage.MediaAssetService;
 import org.springframework.http.HttpStatus;
