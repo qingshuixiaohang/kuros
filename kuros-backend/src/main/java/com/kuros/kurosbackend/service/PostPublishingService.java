@@ -13,7 +13,7 @@ import com.kuros.kurosbackend.shared.exception.AuthRequestException;
 import com.kuros.kurosbackend.shared.exception.ForbiddenException;
 import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.repository.CommunityPostRepository;
-import com.kuros.kurosbackend.repository.CommunityUserRepository;
+import com.kuros.kurosbackend.user.repository.CommunityUserRepository;
 import com.kuros.kurosbackend.repository.ContentTagRepository;
 import com.kuros.kurosbackend.repository.MediaAssetRepository;
 import com.kuros.kurosbackend.repository.PostMediaRepository;

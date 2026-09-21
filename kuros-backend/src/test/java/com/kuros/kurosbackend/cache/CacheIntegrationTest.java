@@ -2,9 +2,9 @@ package com.kuros.kurosbackend.cache;
 
 import com.kuros.kurosbackend.api.CreatePostRequest;
 import com.kuros.kurosbackend.api.PostDetailResponse;
-import com.kuros.kurosbackend.domain.CommunityUser;
-import com.kuros.kurosbackend.domain.UserStatus;
-import com.kuros.kurosbackend.repository.CommunityUserRepository;
+import com.kuros.kurosbackend.user.domain.CommunityUser;
+import com.kuros.kurosbackend.user.domain.UserStatus;
+import com.kuros.kurosbackend.user.repository.CommunityUserRepository;
 import com.kuros.kurosbackend.service.CommunityPostService;
 import com.kuros.kurosbackend.service.PostPublishingService;
 import org.junit.jupiter.api.BeforeEach;
