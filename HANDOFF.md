@@ -148,6 +148,7 @@ SaRouter.match(SaHttpMethod.GET).match("/api/v1/posts/**").stop();
 11. **全量测试跨类污染双根因**：① H2 库名固定 + Spring context 缓存 → @DirtiesContext 失效、数据串类（单类绿全量红）；② Sca Nacos 地址解析 JVM 级静态缓存 → 首解析地址粘住 JVM、静默回退默认值（阈值 100 vs 555）。修复：唯一 H2 库名工厂（TestDatabases）+ surefire `reuseForks=false` 每类独立 JVM（cbae01c，详见 pom 与测试类注释）
 12. **mysql-init 授权脚本两坑（split-05）**：① GRANT 写死账号名——MySQL 8 起 GRANT 不再隐式建号，换 `MYSQL_USER` 后报 1410，entrypoint 带 `set -e` 使初始化整体失败（改用 `.sh` 展开环境变量；`mysql` CLI 在 source/子进程两种执行模式下都成立）；② Windows（`core.autocrlf=true`）检出 `.sh` 变 CRLF 会破坏 shebang/heredoc（目录级 `.gitattributes` 锁 `eol=lf`）
 13. **跨库用户身份窗口期（split-06~08）**：认证迁入 kuros-user 后，非种子手机号首次登录只在 `kuros_user` 建号。split-06 期为"内容域按登录 ID 查 backend 本库 `users` → 404/403"；split-07 起 backend 已删用户域（V10），资料/个人中心整端 503 `SERVICE_UNAVAILABLE`（不用 404——误导"用户不存在"；不用 500——计划内可恢复），帖子列表仍可用且作者占位"未知漂泊者"（保留 `authorId`，关注按钮窗口期可用）；关注链路已 100% 在 kuros-user。冒烟/会话脚本用种子号（13800000002/03）；split-08 Feign 从用户库回填后收口
+14. **三 Java 服务并行构建的 BuildKit 共享 cache mount 竞态（split-07 CI 第二轮）**：compose 并行构建 backend/user/gateway 共享 `/root/.m2` cache mount（默认 `sharing=shared`），冷缓存下三方同时下载解包 maven-wrapper；而 mvnw 3.3.4（only-script）以"目录存在"判断已安装（不校验 `bin/mvn` 完整性）——并发中一方看到另一方刚建的目录即跳过下载，直接 exec 未解包出的 `bin/mvn` → `exit 127`。修复：三个 Dockerfile 的挂载加 `sharing=locked`（并发构建互斥，同时消除 `~/.m2/repository` 并发写入的同类竞态）；此前轮次全绿属时序侥幸（flaky），根因是共享写入无互斥——本地热缓存永远复现不了
 
 ---
 
