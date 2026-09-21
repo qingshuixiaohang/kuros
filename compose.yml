@@ -186,6 +186,38 @@ services:
       timeout: 5s
       retries: 30
 
+  # 用户服务（切片 #10 / split-05）：第一个从 backend 拆出的业务微服务，
+  # 独立库 kuros_user（建库脚本见 docker/mysql-init/40-kuros-user-create-db.sql）。
+  # 骨架阶段只交付"能启动、能注册、能迁移"三项能力，业务端点自 split-06 起迁移过来；
+  # 宿主映射 8091 与 backend 的 8090 并列，是调试直连通道（容器内仍是 8080）
+  user:
+    build:
+      context: ./kuros-user
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/kuros_user?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8
+      DB_USERNAME: ${MYSQL_USER:-kuros}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-kuros_dev_password}
+      # 共享同一 Redis 实例：拆服务不拆会话（SaToken 会话跨服务可见的地基）
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      NACOS_SERVER_ADDR: ${NACOS_SERVER_ADDR:-nacos:8848}
+    ports:
+      - "${USER_PORT:-8091}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      # 与 backend 同款：注册失败等于服务不在微服务体系中（fail-fast 由编排层承担）
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
   frontend:
     build:
       context: ./front

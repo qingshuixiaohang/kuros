@@ -15,10 +15,10 @@
 
 ## 验收
 
-- [ ] kuros-user 注册 Nacos healthy 实例
-- [ ] health/prometheus 端点可用
-- [ ] Flyway 在全新库执行成功，seed 与应用字段对齐
-- [ ] compose 配置校验通过；CI 第 5 job 绿
+- [x] kuros-user 注册 Nacos healthy 实例（集成测试实机跑，4/4 绿）
+- [x] health/prometheus 端点可用（同上，health=UP、prometheus 200 且含指标正文）
+- [x] Flyway 在全新库执行成功，seed 与应用字段对齐（H2 迁移四断言 + MySQL 8 临时容器实测 V1/V2 exit 0，种子与 backend 逐字一致）
+- [ ] compose 配置校验通过；CI 第 5 job 绿（compose config 已过；CI 待 PR 触发）
 
 ## 备注
 
