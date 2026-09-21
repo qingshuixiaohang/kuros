@@ -2,6 +2,7 @@ package com.kuros.kurosgateway.discovery;
 
 import com.alibaba.nacos.api.NacosFactory;
 import com.alibaba.nacos.api.naming.NamingService;
+import com.kuros.kurosgateway.testsupport.StubBackend;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
