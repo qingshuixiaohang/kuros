@@ -71,15 +71,18 @@ async function main() {
 
   const state = await readState();
 
+  // 登录用两侧共有种子号（backend V2 与 kuros_user V2 的 UUID 逐字一致）：
+  // split-06 起新手机号首次登录只在 kuros_user 建号，而 backend 内容域（发帖/评论）
+  // 按登录 ID 查本库 users 会 404——只有种子号才有跨库同 ID 的用户行（split-08 收口前）
   await request(apiBase, "/api/v1/auth/code", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone: "13800000008" }),
+    body: JSON.stringify({ phone: "13800000002" }),
   });
   await request(apiBase, "/api/v1/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone: "13800000008", code: "123456" }),
+    body: JSON.stringify({ phone: "13800000002", code: "123456" }),
   });
   await request(apiBase, "/api/v1/auth/csrf");
 

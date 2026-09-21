@@ -51,17 +51,14 @@ public class SentinelRuleRefresher {
                 rule("api-posts-list", qps("app.sentinel.posts-list-qps", 100)),
                 // 帖子详情：聚合查询较重，QPS 上限较低
                 rule("api-post-detail", qps("app.sentinel.post-detail-qps", 50)),
-                // 验证码发送：防刷，QPS 极低
-                rule("api-auth-code", qps("app.sentinel.auth-code-qps", 10)),
-                // 兜底规则：覆盖其余 API
+                // 兜底规则：覆盖其余 API（原 api-auth-code 随认证链路迁出，split-06）
                 rule("api-default", qps("app.sentinel.default-qps", 200))
         );
         FlowRuleManager.loadRules(rules);
-        log.info("Sentinel 限流规则已加载（触发：{}）：posts-list={} post-detail={} auth-code={} default={}",
+        log.info("Sentinel 限流规则已加载（触发：{}）：posts-list={} post-detail={} default={}",
                 trigger,
                 qps("app.sentinel.posts-list-qps", 100),
                 qps("app.sentinel.post-detail-qps", 50),
-                qps("app.sentinel.auth-code-qps", 10),
                 qps("app.sentinel.default-qps", 200));
     }
 

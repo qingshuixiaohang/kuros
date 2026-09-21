@@ -27,16 +27,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Sentinel 限流行为集成测试。
  *
  * 测试策略：
- * 1. 通过 @TestPropertySource 将 auth-code-qps 设为极低值（2），方便触发限流
- * 2. 验证正常请求返回 200
- * 3. 验证超过 QPS 后返回 429 + RATE_LIMITED
+ * 1. 验证正常请求返回 200（限流基础设施不误伤正常流量）
+ * 2. 验证限流链路可运转、429 响应格式正确（阈值较高时通常不触发，见方法内注释）
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @TestPropertySource(properties = {
         "app.sentinel.enabled=true",
-        "app.sentinel.auth-code-qps=2",
         "app.sentinel.posts-list-qps=100",
         "app.sentinel.post-detail-qps=100",
         "app.sentinel.default-qps=100"
@@ -78,7 +76,8 @@ class RateLimitIntegrationTest {
 
     @Test
     void 超过QPS阈值后返回429() throws Exception {
-        // auth-code-qps 设为 2，快速发 5 个请求应该触发限流
+        // posts-list 阈值（100）下 20 个请求通常不触发限流；
+        // 一旦触发则校验 429 响应体格式（RATE_LIMITED）
         boolean rateLimited = false;
         for (int i = 0; i < 20; i++) {
             var result = mockMvc.perform(get("/api/v1/posts")
@@ -97,7 +96,8 @@ class RateLimitIntegrationTest {
         }
 
         // 注意：由于 posts-list-qps=100，20 个请求不太可能触发限流
-        // 这个测试主要验证限流基础设施正常工作（不报错）
-        // 真正的限流行为在 auth-code 端点测试（但 auth 端点需要登录，测试复杂）
+        // 这个测试主要验证限流基础设施正常工作（不报错）；
+        // auth-code 端点的限流随认证链路迁至 kuros-user（split-06），
+        // 该服务暂未引入 Sentinel（Q15-A 决策），本服务不再有对应端点可测
     }
 }

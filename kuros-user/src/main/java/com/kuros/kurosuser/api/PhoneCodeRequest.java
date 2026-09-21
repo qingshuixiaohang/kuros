@@ -1,4 +1,4 @@
-package com.kuros.kurosbackend.user.api;
+package com.kuros.kurosuser.api;
 
 public record PhoneCodeRequest(String phone) {
 }

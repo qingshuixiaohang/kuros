@@ -1,19 +1,19 @@
-package com.kuros.kurosbackend.user.service;
+package com.kuros.kurosuser.service;
 
 import cn.dev33.satoken.stp.StpUtil;
-import com.kuros.kurosbackend.user.api.AuthUserResponse;
-import com.kuros.kurosbackend.user.api.PhoneCodeRequest;
-import com.kuros.kurosbackend.user.api.PhoneLoginRequest;
-import com.kuros.kurosbackend.user.api.VerificationCodeResponse;
-import com.kuros.kurosbackend.user.auth.VerificationCodeService;
-import com.kuros.kurosbackend.user.domain.CommunityUser;
-import com.kuros.kurosbackend.user.domain.UserRole;
-import com.kuros.kurosbackend.user.domain.UserStatus;
-import com.kuros.kurosbackend.shared.exception.AuthRequestException;
-import com.kuros.kurosbackend.shared.exception.UnauthorizedException;
-import com.kuros.kurosbackend.user.repository.CommunityUserRepository;
-import com.kuros.kurosbackend.user.repository.SysPermissionRepository;
-import com.kuros.kurosbackend.user.repository.SysRoleRepository;
+import com.kuros.kurosuser.api.AuthUserResponse;
+import com.kuros.kurosuser.api.PhoneCodeRequest;
+import com.kuros.kurosuser.api.PhoneLoginRequest;
+import com.kuros.kurosuser.api.VerificationCodeResponse;
+import com.kuros.kurosuser.auth.VerificationCodeService;
+import com.kuros.kurosuser.domain.CommunityUser;
+import com.kuros.kurosuser.domain.UserRole;
+import com.kuros.kurosuser.domain.UserStatus;
+import com.kuros.kurosuser.repository.CommunityUserRepository;
+import com.kuros.kurosuser.repository.SysPermissionRepository;
+import com.kuros.kurosuser.repository.SysRoleRepository;
+import com.kuros.kurosuser.shared.exception.AuthRequestException;
+import com.kuros.kurosuser.shared.exception.UnauthorizedException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -25,14 +25,23 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 认证服务（SaToken + Redis 版本）。
+ * 认证服务（split-06 自 kuros-backend 迁入）。
  *
- * 与之前版本的核心区别：
+ * 认证的权威归属已迁移到 kuros-user：登录建号、会话创建、角色/权限同步
+ * 全部发生在本服务；backend 不再持有认证代码（/api/v1/auth/** 直连返回 404，
+ * 经网关则路由到本服务）。
+ *
+ * 与迁移前的核心设计（SaToken + Redis 版本）：
  * - 登录不再手动生成 random token + 写 MySQL user_sessions 表
  * - 改为调用 StpUtil.login(userId)，SaToken 自动管理 Token 生成、Redis 存储、Cookie 设置
  * - 登出不再手动删 MySQL 记录，改为 StpUtil.logout()
  * - 获取当前用户不再从 Cookie 读 token + 查 DB，改为 StpUtil.getLoginIdAsString()
  * - 登录后同步角色/权限到 Redis，后续鉴权请求不再查 DB
+ *
+ * "拆服务不拆会话"的两个落点：
+ * 1. SaToken 配置（token-name/timeout/is-read-cookie/cookie-same-site）与 backend 逐字相同，
+ *    两侧共享同一 Redis + 同名 Cookie —— 经网关在本服务登录后的会话，backend 直接可见
+ * 2. auth:roles:/auth:permissions: 缓存写共享 Redis，backend 的管理员鉴权不受拆分影响
  *
  * 对应小哈书第五章：SaToken 登录/登出/会话管理。
  */
@@ -93,7 +102,7 @@ public class AuthService {
 
         // SaToken 登录：自动生成 Token、存入 Redis、通过 Cookie 返回给前端
         // 为什么不用手动 set-cookie？因为 SaToken 配置了 is-read-cookie=true + token-name=KUROS_SESSION，
-        // 它会自动在响应中设置 HttpOnly Cookie，前端零改动。
+        // 它会自动在响应中设置 HttpOnly Cookie，前端零改动（配置随迁移逐字复制，Cookie 名不变）。
         StpUtil.login(user.getId());
 
         // 同步 users.role 冗余字段：保持 AuthUserResponse 格式不变，前端不用改

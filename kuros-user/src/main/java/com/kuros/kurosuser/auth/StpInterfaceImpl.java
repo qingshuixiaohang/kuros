@@ -1,8 +1,8 @@
-package com.kuros.kurosbackend.user.auth;
+package com.kuros.kurosuser.auth;
 
 import cn.dev33.satoken.stp.StpInterface;
-import com.kuros.kurosbackend.user.repository.SysPermissionRepository;
-import com.kuros.kurosbackend.user.repository.SysRoleRepository;
+import com.kuros.kurosuser.repository.SysPermissionRepository;
+import com.kuros.kurosuser.repository.SysRoleRepository;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -10,16 +10,19 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * SaToken 权限数据源实现。
+ * SaToken 权限数据源实现（split-06 自 kuros-backend 迁入，逐字一致）。
  *
  * SaToken 在调用 StpUtil.checkRole() / StpUtil.checkPermission() 时，
  * 会通过这个接口查询当前用户拥有的角色和权限列表。
  *
  * 为什么先查 Redis 再查 DB？
- * 登录时 kuros-user 的 AuthService.login 已把角色和权限同步到共享 Redis（split-06 后
- * 登录发生在 kuros-user，两个服务共用同一 Redis 与同一套缓存 key 契约），
+ * 登录时我们已经把角色和权限同步到了 Redis（AuthService.login），
  * 这里优先从 Redis 读取（O(1)），只有 Redis 缺失时才回源 DB。
  * 这样每次鉴权请求不需要查数据库，认证性能从 2 次 DB 查询降为 1 次 Redis 查询。
+ *
+ * 拆服务后的一致性说明：backend 侧若还有 checkRole/checkPermission 调用（管理员接口），
+ * 其 StpInterfaceImpl 仍会命中本服务登录时写入的 auth:roles:/auth:permissions: 缓存；
+ * 缓存缺失时 backend 才回源自己的库（两侧 RBAC 种子逐字一致，split-07/08 再收口）。
  *
  * 对应小哈书第五章：SaToken 权限认证 → StpInterface 实现。
  */

@@ -65,7 +65,10 @@ public class SaTokenConfigure implements WebMvcConfigurer {
                     "/v3/api-docs/**"            // OpenAPI JSON 文档
             ).stop();
 
-            // 其余所有路由要求登录（auth 端点除外）——对齐旧版 anyRequest().authenticated()
+            // 其余所有路由要求登录（auth 端点除外）——对齐旧版 anyRequest().authenticated()；
+            // split-06 起 /api/v1/auth/** 已迁至 kuros-user，此条目刻意保留为“透传容错”：
+            // 直连本服务（8090）的 auth 请求因此能穿过鉴权链、落到“无 handler”的 404，
+            // 而非先被 checkLogin 拦成 401——404（端点不存在）才是迁移后正确的对外语义
             SaRouter.match("/**")
                     .notMatch("/api/v1/auth/**")
                     .check(r -> StpUtil.checkLogin());
@@ -80,7 +83,8 @@ public class SaTokenConfigure implements WebMvcConfigurer {
         // CSRF 双重提交 Cookie 拦截器（order 1，鉴权之后执行）：
         // 能走到这里 = 请求已登录（游客在上面已被 SaInterceptor 拦下 401），
         // 语义等价于旧版“仅对已认证用户做 CSRF 校验”；
-        // 排除 /api/v1/auth/**：前端 api.ts 对 auth 路径不发 X-XSRF-TOKEN Header，与旧版一致
+        // 排除 /api/v1/auth/**：前端 api.ts 对 auth 路径不发 X-XSRF-TOKEN Header，与旧版一致；
+        // split-06 后同样刻意保留（与 SaToken notMatch 同因）：认证 POST 落到 404 而非 403
         registry.addInterceptor(csrfInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns("/api/v1/auth/**")

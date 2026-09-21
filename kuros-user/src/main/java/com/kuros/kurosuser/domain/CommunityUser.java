@@ -1,4 +1,4 @@
-package com.kuros.kurosbackend.user.domain;
+package com.kuros.kurosuser.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -9,6 +9,13 @@ import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
 
+/**
+ * 用户实体（split-06 自 kuros-backend 迁入，表名/列名逐字一致）。
+ *
+ * 为什么保留包内副本而不是抽公共模块：Q5-A 决策——不建 common 模块，有纪律的复制；
+ * backend 侧在 split-08（Feign 组合视图）前仍保留一份副本供内容域作者组装读取，
+ * 双写共存期是迁移过程态，两侧以本库为权威（登录建号只发生在 kuros-user）。
+ */
 @Entity
 @Table(name = "users")
 public class CommunityUser {
@@ -87,7 +94,7 @@ public class CommunityUser {
     /**
      * 设置角色（冗余快捷字段）。
      * RBAC 表（sys_user_role）是权威来源，这个字段只是保持现有 API 响应格式不变。
-     * 登录时由 kuros-user 的 AuthService.syncRoleField() 调用（split-06 起认证链路已迁出本服务）。
+     * 登录时由 AuthService.syncRoleField() 调用。
      */
     public void setRole(UserRole role) {
         this.role = role;

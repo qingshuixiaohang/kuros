@@ -1,4 +1,4 @@
-package com.kuros.kurosbackend.user.auth;
+package com.kuros.kurosuser.auth;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,12 +7,15 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 /**
- * 开发环境短信发送实现：只打印日志，不真正发短信。
+ * 开发环境短信发送实现：只打印日志，不真正发短信（split-06 自 kuros-backend 迁入）。
  *
  * 为什么用 @Profile("!production") 而不是 @ConditionalOnProperty？
  * 因为小哈书的做法是按环境切换：dev/test 走日志，production 走阿里云 SDK。
- * 后面你接真实短信时，只需新建一个 AliyunSmsSender 标注 @Profile("production")，
+ * 后面接真实短信时，只需新建一个 AliyunSmsSender 标注 @Profile("production")，
  * Spring 会自动按 Profile 选择实现，业务代码零改动。
+ *
+ * 注：@Async("smsExecutor") 依赖的线程池随本类一同迁到 kuros-user（AsyncConfig），
+ * 两半不拆散——backend 侧的消费者只剩本类，迁移后已删除 backend 的 AsyncConfig。
  */
 @Component
 @Profile("!production")

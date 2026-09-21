@@ -17,8 +17,11 @@ import { readFile, writeFile } from "node:fs/promises";
 
 const apiBase = process.env.KUROS_API_BASE_URL ?? "http://localhost:8080";
 const statePath = process.env.KUROS_SESSION_STATE ?? ".session-persistence-state.json";
-// 用独立手机号，避免和 smoke 脚本的 13800000008 测试数据互相干扰
-const PHONE = "13800000009";
+// 用两侧共有种子号（backend V2 与 kuros_user V2 的 UUID 逐字一致）：
+// split-06 起登录只在 kuros_user 建号，而 me/profile 属 backend 内容域、按登录 ID
+// 查本库 users——只有种子号才有跨库同 ID 的用户行（split-08 Feign 回填用户域前）；
+// 与 smoke 脚本的 13800000002 取不同种子号，避免测试数据互相干扰
+const PHONE = "13800000003";
 const DEV_CODE = "123456"; // compose dev 环境的固定验证码（APP_AUTH_DEV_CODE）
 
 async function postJson(path, payload, cookie) {

@@ -1,12 +1,11 @@
-package com.kuros.kurosbackend.user.web;
+package com.kuros.kurosuser.web;
 
-import com.kuros.kurosbackend.shared.api.ApiResponse;
-import com.kuros.kurosbackend.user.api.AuthUserResponse;
-import com.kuros.kurosbackend.user.api.PhoneCodeRequest;
-import com.kuros.kurosbackend.user.api.PhoneLoginRequest;
-import com.kuros.kurosbackend.user.api.VerificationCodeResponse;
-import com.kuros.kurosbackend.user.service.AuthService;
-import jakarta.servlet.http.HttpServletRequest;
+import com.kuros.kurosuser.api.AuthUserResponse;
+import com.kuros.kurosuser.api.PhoneCodeRequest;
+import com.kuros.kurosuser.api.PhoneLoginRequest;
+import com.kuros.kurosuser.api.VerificationCodeResponse;
+import com.kuros.kurosuser.service.AuthService;
+import com.kuros.kurosuser.shared.api.ApiResponse;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,15 +17,18 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.UUID;
 
 /**
- * 认证控制器（SaToken 版本）。
+ * 认证控制器（split-06 自 kuros-backend 迁入，API 契约逐字不变）。
  *
- * 与之前版本的核心区别：
+ * 迁移动机：认证链路的权威归属整体搬到用户服务——前端经网关的
+ * /api/v1/auth/** 全部路由到本服务；backend 侧同路径已无 handler（直连 404）。
+ *
+ * 与迁移前的核心区别（保留原设计注释）：
  * - 登录不再手动构建 ResponseCookie，SaToken 的 StpUtil.login() 自动设置 Cookie
  * - 登出不再手动清除 Cookie，SaToken 的 StpUtil.logout() 自动处理
  * - /me 不再从 Cookie 手动读 token，SaToken 自动从请求中解析 Token
  * - /csrf 端点保留（前端 refreshCsrfCookie() 仍然调用它）
  *
- * API 契约完全不变：路径、请求体、响应体格式与之前一致，前端零改动。
+ * API 契约完全不变：路径、请求体、响应体格式与迁移前一致，前端零改动。
  */
 @RestController
 @RequestMapping("/api/v1/auth")

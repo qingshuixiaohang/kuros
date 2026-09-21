@@ -1,4 +1,4 @@
-package com.kuros.kurosbackend.shared.config;
+package com.kuros.kurosuser.shared.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -9,7 +9,11 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
 
 /**
- * 自定义线程池配置，用于验证码异步发送。
+ * 自定义线程池配置（split-06 自 kuros-backend 迁入），用于验证码异步发送。
+ *
+ * 为什么线程池随认证代码一起迁移：backend 版唯一的消费者是 DevSmsSender
+ * （@Async("smsExecutor")），它已随认证链路迁到本服务；半保线程池会让
+ * backend 留下无人使用的 executor bean，两边都别扭。
  *
  * 为什么不用 Spring 默认的 @Async 线程池？
  * 默认线程池（SimpleAsyncTaskExecutor）每次创建新线程，不复用，高并发下会 OOM。

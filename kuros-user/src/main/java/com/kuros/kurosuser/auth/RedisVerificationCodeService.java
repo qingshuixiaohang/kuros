@@ -1,6 +1,6 @@
-package com.kuros.kurosbackend.user.auth;
+package com.kuros.kurosuser.auth;
 
-import com.kuros.kurosbackend.shared.exception.AuthRequestException;
+import com.kuros.kurosuser.shared.exception.AuthRequestException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -10,8 +10,10 @@ import java.time.Duration;
 
 /**
  * 基于 Redis 的验证码服务，替代原来的 DevVerificationCodeService（ConcurrentHashMap）。
+ * split-06 自 kuros-backend 迁入，逐字一致——验证码本就存于共享 Redis，迁移后
+ * 原有 key 前缀不变，双写共存期两侧读到的验证码数据天然一致。
  *
- * 为什么要换成 Redis？
+ * 为什么要用 Redis（而不是内存 Map）？
  * 1. ConcurrentHashMap 是 JVM 内存，服务重启后所有未使用的验证码丢失
  * 2. 多实例部署时，实例 A 发的验证码在实例 B 上无法验证
  * 3. 无法实现精确的 TTL 过期（原来靠手动比对 expiresAt）

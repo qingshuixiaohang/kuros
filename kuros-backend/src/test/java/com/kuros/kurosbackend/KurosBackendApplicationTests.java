@@ -1,5 +1,6 @@
 package com.kuros.kurosbackend;
 
+import cn.dev33.satoken.stp.StpUtil;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,9 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.mock.web.MockMultipartFile;
 import com.kuros.kurosbackend.media.storage.MediaAssetService;
+import com.kuros.kurosbackend.user.domain.CommunityUser;
+import com.kuros.kurosbackend.user.domain.UserStatus;
+import com.kuros.kurosbackend.user.repository.CommunityUserRepository;
 // Testcontainers 2.x 中 GenericContainer 仍在 org.testcontainers.containers 包（已用 jar tf 核实 2.0.5 实际结构，
 // 官方迁移说明只适用于部分模块专属容器类）
 import org.testcontainers.containers.GenericContainer;
@@ -22,6 +26,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
+import java.util.UUID;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.hamcrest.Matchers.hasSize;
@@ -37,10 +42,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * 后端集成测试（SaToken + Redis 版本）。
  *
+ * split-06 起认证端点（/api/v1/auth/**）已迁至 kuros-user：
+ * - 本测试不再走 HTTP 登录，改用"直建会话"helper（repository 建号 + StpUtil.createLoginSession）
+ * - 登录链路的完整验收（验证码→登录→会话写共享 Redis→/me）在 kuros-user 的
+ *   AuthLoginIntegrationTest 里用 Testcontainers MySQL + Redis 覆盖
+ * - CSRF 令牌 fixture 从 GET /api/v1/auth/csrf 改为公开帖子列表 GET（backend 侧该端点已 404）
+ *
  * 与之前版本的核心区别：
  * - 使用 Testcontainers 启动真实 Redis 容器（替代原来的纯 H2 内存测试）
  * - CSRF 不再用 Spring Security 的 csrf() post-processor，改为手动设置双重提交 Cookie + Header
- * - 登录流程不变（POST /auth/code + POST /auth/login），SaToken 自动设置 KUROS_SESSION Cookie
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -72,6 +82,10 @@ class KurosBackendApplicationTests {
 
     @Autowired
     private StringRedisTemplate redisTemplate;
+
+    // split-06：登录 helper 直接在本库补建/复用用户行（内容域作者组装仍读本库 users）
+    @Autowired
+    private CommunityUserRepository userRepository;
 
     @BeforeEach
     void flushRedis() {
@@ -117,94 +131,6 @@ class KurosBackendApplicationTests {
     }
 
     @Test
-    void 首次验证码登录会创建用户并恢复会话() throws Exception {
-        mockMvc.perform(post("/api/v1/auth/code")
-                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
-                        .contentType(APPLICATION_JSON)
-                        .content("{\"phone\":\"13800000005\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.devCode").value("123456"));
-
-        var login = mockMvc.perform(post("/api/v1/auth/login")
-                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
-                        .contentType(APPLICATION_JSON)
-                        .content("{\"phone\":\"13800000005\",\"code\":\"123456\"}"))
-                .andExpect(status().isOk())
-                .andExpect(cookie().exists("KUROS_SESSION"))
-                .andExpect(jsonPath("$.data.nickname").value("漂泊者0005"))
-                .andReturn();
-
-        var sessionCookie = login.getResponse().getCookie("KUROS_SESSION");
-        mockMvc.perform(get("/api/v1/auth/me").cookie(sessionCookie))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.nickname").value("漂泊者0005"));
-    }
-
-    @Test
-    void 已有用户验证码登录不会重复创建用户() throws Exception {
-        mockMvc.perform(post("/api/v1/auth/code")
-                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
-                        .contentType(APPLICATION_JSON)
-                        .content("{\"phone\":\"13800000001\"}"))
-                .andExpect(status().isOk());
-
-        mockMvc.perform(post("/api/v1/auth/login")
-                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
-                        .contentType(APPLICATION_JSON)
-                        .content("{\"phone\":\"13800000001\",\"code\":\"123456\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.nickname").value("潮声档案员"));
-    }
-
-    @Test
-    void 无效验证码不能建立登录会话() throws Exception {
-        mockMvc.perform(post("/api/v1/auth/code")
-                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
-                        .contentType(APPLICATION_JSON)
-                        .content("{\"phone\":\"13800000006\"}"))
-                .andExpect(status().isOk());
-
-        mockMvc.perform(post("/api/v1/auth/login")
-                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
-                        .contentType(APPLICATION_JSON)
-                        .content("{\"phone\":\"13800000006\",\"code\":\"000000\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_VERIFICATION_CODE"));
-    }
-
-    @Test
-    void 退出登录后会话立即失效() throws Exception {
-        mockMvc.perform(post("/api/v1/auth/code")
-                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
-                        .contentType(APPLICATION_JSON)
-                        .content("{\"phone\":\"13800000007\"}"))
-                .andExpect(status().isOk());
-
-        var login = mockMvc.perform(post("/api/v1/auth/login")
-                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
-                        .contentType(APPLICATION_JSON)
-                        .content("{\"phone\":\"13800000007\",\"code\":\"123456\"}"))
-                .andExpect(status().isOk())
-                .andReturn();
-        var sessionCookie = login.getResponse().getCookie("KUROS_SESSION");
-
-        mockMvc.perform(post("/api/v1/auth/logout")
-                        .cookie(sessionCookie)
-                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
-                .andExpect(status().isNoContent());
-
-        mockMvc.perform(get("/api/v1/auth/me").cookie(sessionCookie))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void 没有会话访问当前用户返回未授权() throws Exception {
-        mockMvc.perform(get("/api/v1/auth/me"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
-    }
-
-    @Test
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.BEFORE_METHOD)
     void 评论列表支持最新排序分页并保留删除占位() throws Exception {
         mockMvc.perform(get("/api/v1/posts/10000000-0000-0000-0000-000000000001/comments")
@@ -244,8 +170,11 @@ class KurosBackendApplicationTests {
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.BEFORE_METHOD)
     void 浏览器先获取Csrf令牌后可以发表评论() throws Exception {
         Cookie sessionCookie = login("13800000018");
-        var csrfResponse = mockMvc.perform(get("/api/v1/auth/csrf").cookie(sessionCookie))
-                .andExpect(status().isNoContent())
+        // 令牌来源从 GET /api/v1/auth/csrf 改为公开帖子列表 GET：
+        // split-06 起认证端点已迁至 kuros-user，backend 侧该路径无 handler（404）；
+        // 浏览器真实链路里任意 GET 都会被 CsrfInterceptor 种下 XSRF-TOKEN Cookie，行为等价
+        var csrfResponse = mockMvc.perform(get("/api/v1/posts").cookie(sessionCookie))
+                .andExpect(status().isOk())
                 .andExpect(cookie().exists("XSRF-TOKEN"))
                 .andReturn();
         Cookie csrfCookie = csrfResponse.getResponse().getCookie("XSRF-TOKEN");
@@ -257,6 +186,19 @@ class KurosBackendApplicationTests {
                         .content("{\"content\":\"浏览器令牌链路正常。\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content").value("浏览器令牌链路正常。"));
+    }
+
+    @Test
+    void 认证端点已迁出本服务直连返回404() throws Exception {
+        // split-06 验收编码化：/api/v1/auth/** 迁至 kuros-user 后，backend 直连必须 404。
+        // 拦截器链刻意放行该前缀（SaToken notMatch + CSRF exclude），请求落到"无 handler"
+        // 才得到 404；若放行条目被当作死配置删除，这里会先吃到 401/403 而红
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"phone\":\"13800000001\",\"code\":\"123456\"}"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/v1/auth/me"))
+                .andExpect(status().isNotFound());
     }
 
     @Test
@@ -778,18 +720,26 @@ class KurosBackendApplicationTests {
                 .andExpect(jsonPath("$.code").value("REPORT_ALREADY_HANDLED"));
     }
 
-    private Cookie login(String phone) throws Exception {
-        mockMvc.perform(post("/api/v1/auth/code")
-                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
-                        .contentType(APPLICATION_JSON)
-                        .content("{\"phone\":\"" + phone + "\"}"))
-                .andExpect(status().isOk());
-        return mockMvc.perform(post("/api/v1/auth/login")
-                        .cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
-                        .contentType(APPLICATION_JSON)
-                        .content("{\"phone\":\"" + phone + "\",\"code\":\"123456\"}"))
-                .andExpect(status().isOk())
-                .andReturn().getResponse().getCookie("KUROS_SESSION");
+    /**
+     * 测试用"直建会话"helper（split-06 起认证端点已迁至 kuros-user，本测试不再走 HTTP 登录）。
+     *
+     * 为什么可以脱离请求上下文直接建会话：
+     * StpUtil.createLoginSession 只依赖 config/DAO/EventCenter（1.39.0 源码实证），
+     * 不触碰 SaHolder 的请求上下文（那是 login() 写 Cookie 才需要的步骤）。
+     * Token 由它写入与生产同一份 Redis，语义等价于真实登录产生的会话，
+     * 后续请求携带同名 KUROS_SESSION Cookie 即可通过 SaToken 的 checkLogin。
+     *
+     * 用户行兜底：内容域测试依赖作者组装读本库 users（如断言"漂泊者0008"），
+     * 所以建会话前确保手机号在库中存在——种子命中则复用（13800000001 → 潮声档案员），
+     * 否则按登录规则补建（漂泊者+后四位）。不分配 RBAC 角色：
+     * 普通用户端点只做 checkLogin；管理员测试用种子用户，角色由 DB 回源解析。
+     */
+    private Cookie login(String phone) {
+        CommunityUser user = userRepository.findByPhone(phone).orElseGet(() -> userRepository.save(
+                new CommunityUser(UUID.randomUUID().toString(), phone,
+                        "漂泊者" + phone.substring(phone.length() - 4), UserStatus.NORMAL, LocalDateTime.now())));
+        String token = StpUtil.createLoginSession(user.getId());
+        return new Cookie("KUROS_SESSION", token);
     }
 
 }

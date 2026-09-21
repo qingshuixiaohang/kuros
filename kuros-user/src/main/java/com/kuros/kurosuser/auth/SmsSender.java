@@ -1,7 +1,7 @@
-package com.kuros.kurosbackend.user.auth;
+package com.kuros.kurosuser.auth;
 
 /**
- * 短信发送接口（策略模式）。
+ * 短信发送接口（策略模式，split-06 自 kuros-backend 迁入）。
  *
  * 为什么不直接写死阿里云短信 SDK？
  * 因为接真实短信需要阿里云账号 + 签名审核 + 模板审核，这是运维问题不是代码问题。

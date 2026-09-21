@@ -70,9 +70,8 @@ public class SentinelRateLimitInterceptor implements HandlerInterceptor {
         if (path != null && path.matches("/api/v1/posts/[^/]+") && "GET".equals(method)) {
             return "api-post-detail";
         }
-        if ("/api/v1/auth/code".equals(path) && "POST".equals(method)) {
-            return "api-auth-code";
-        }
+        // 原 /api/v1/auth/code 精确规则随认证链路迁出删除（split-06）：
+        // 该端点已属 kuros-user，直连本服务的同路径是 404，无流量可限
 
         // 兜底：所有 /api/ 路径
         if (path != null && path.startsWith("/api/")) {
