@@ -94,5 +94,6 @@
 
 - **版本策略**：沿用 Slice #8/#9 组合（Boot 4.1.1 + Spring Cloud 2025.1.1 + SCA 2025.1.0.0）；OpenFeign starter 名称已查证无改名风险，但需留意 2025.1 线 4.x → 5.0 的 AOT/急切属性解析变化（`spring.cloud.openfeign.lazy-attributes-resolution`）。
 - **关键风险**：跨库无外键后数据一致性从数据库约束降级为服务契约——seed 对齐、降级占位、注释标注是本切片的三道防线；这也是面试可深挖的架构讨论点。
+- **窗口期限制（split-06~split-08）**：非种子手机号首次登录只在 kuros_user 建号，而后端内容域（发帖/评论/个人中心）仍按登录 ID 查本库 users——这类新用户的内容操作会 404/403，等 split-08 Feign 回填用户域后收口；种子号（双库 UUID 逐字一致）不受影响，compose-smoke / session-persistence-check 已改用种子号验证。
 - **执行模式**：完全自主开发（AI 执行依赖拉取、mvn test、compose 构建等耗时操作），CI 作为权威验证证据。
 - **产出物**：spec（本文档）+ ADR [0003](../adr/0003-user-service-split.md) + CONTEXT.md 更新 + 学习复盘 `docs/learning/10-service-split.md`（切片惯例）。

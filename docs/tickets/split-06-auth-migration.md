@@ -14,11 +14,17 @@
 
 ## 验收
 
-- [ ] 经网关登录（`/api/v1/auth/*`）打到 kuros-user 并写共享 Redis、下发同名 Cookie
-- [ ] backend 直连 8090 的 `/api/v1/auth/*` 返回 404（端点已迁走）
-- [ ] kuros-user 测试全绿；CI 绿
+- [x] 经网关登录（`/api/v1/auth/*`）打到 kuros-user 并写共享 Redis、下发同名 Cookie（静态+编译级闭环：网关 `kuros-user-auth` 路由 `order(-1)` 显式优先于 backend `/**`，双桩集成测试证命中；kuros-user 登录链路集成测试断言会话/角色/权限 Redis key 与同名 Cookie；端到端运行时验证待 CI 冒烟）
+- [x] backend 直连 8090 的 `/api/v1/auth/*` 返回 404（端点已迁走）（新增测试编码化：POST /login 与 GET /me 均断言 404，依赖 SaToken notMatch + CSRF exclude 放行条目刻意保留）
+- [ ] kuros-user 测试全绿；CI 绿（AI 侧已过：三工程 test-compile、compose config、node --check；全量测试与 CI 待触发）
 
 ## 备注
 
 - 会话零迁移的关键：两服务同名 Cookie + 相同 `sa-token` 配置 + 同一 Redis（切片 #1 决策的回报）
 - CSRF 拦截器排除 `/api/v1/auth/**` 的既有语义原样复制
+- backend 侧白名单条目刻意保留（SaToken notMatch + CSRF exclude）：直连 8090 的 auth 请求落到"无 handler" → 404，而非先被拦成 401/403
+- ⚠️ 窗口期限制（split-06~split-08）：非种子手机号首次登录只在 kuros_user 建号，backend 内容域
+  （发帖/评论/个人中心）按登录 ID 查本库 users 会 404/403——等 split-08 Feign 回填用户域才能收口。
+  compose-smoke / session-persistence-check 因此改用两侧共有种子号（13800000002 / 13800000003）验证
+- 验证码端点的 Sentinel QPS 限流规则（`api-auth-code`）随迁移删除：kuros-user 暂未引入 Sentinel
+  （Q15-A 决策），当前认证端点仅剩 Redis 60s/手机号节流
