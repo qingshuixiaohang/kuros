@@ -10,8 +10,10 @@
 |---|---|---|---|
 | `api-posts-list` | 100 | GET /api/v1/posts | 帖子列表 |
 | `api-post-detail` | 50 | GET /api/v1/posts/{id} | 帖子详情 |
-| `api-auth-code` | 10 | POST /api/v1/auth/code | 验证码发送（防刷） |
 | `api-default` | 200 | /api/** 其余 | 兜底限流 |
+
+> split-06 变更：原 `api-auth-code`（POST /api/v1/auth/code）规则已随认证链路迁至 kuros-user；
+> 该服务暂未引入 Sentinel（Q15-A 决策），认证防刷当前依赖 Redis 的 60s/手机号节流。
 
 ## 技术方案
 

@@ -145,3 +145,31 @@ _避免_：草稿帖子（当前后端不存在草稿状态）
 - 演进路线：Redis+SaToken → MinIO → Nacos/Gateway → 服务拆分 → RocketMQ → ES+Canal → Sentinel → XXL-JOB → Cassandra+Leaf → Jmeter+CI/CD。
 - 分工规则：中间件下载/安装/启动由用户执行，代码/配置/测试由 AI 编写，vibe learning 模式。
 - 本决策**不引入**：MQ、MinIO、Elasticsearch、Nacos、Gateway、Sentinel（留到后续切片）。
+
+## 2026-09-21 服务拆分决策（切片 #10）
+
+- 拆出用户域微服务 `kuros-user`：认证、验证码、RBAC（四表 + StpInterface）、用户资料实体、关注关系；独立数据库 `kuros_user`（同 MySQL 实例），backend 新增迁移 DROP 迁走的表。
+- **组合视图留在内容域组装**（公开资料、个人中心、用户帖子列表），经 OpenFeign 取用户数据；依赖方向固定为**内容域 → 用户域**，不制造双向依赖。
+- 跨库无外键：一致性降级为服务契约（约定 ID 对齐种子 + 降级占位 + 生产事件驱动，事件驱动留 RocketMQ 切片）。
+- 登录态零迁移：两个服务共享同一 Redis + 同名 Cookie（`KUROS_SESSION`）+ 相同 SaToken 配置。
+- 网关路由：`/api/v1/auth/**`、`/api/v1/users/*/follow` → `lb://kuros-user`；其余 → `lb://kuros-backend`。
+- 架构决策记录：`docs/adr/0003-user-service-split.md`；实现规格：`docs/slice10-service-split-spec.md`。
+
+### 术语补充
+
+**用户域**：认证、会话、RBAC 权限、用户资料、关注关系的归属边界，由 kuros-user 服务拥有。
+_避免_：账户中心（口语化，边界不明确）
+
+**内容域**：帖子、评论、互动、举报、媒体的归属边界，由 kuros-backend（内容服务）拥有；组合视图也在此域组装。
+_避免_：主服务、核心服务（暗示等级，而非边界）
+
+## 2026-09-21 方向纠偏（立即生效，适用于 #11 及以后所有切片）
+
+- **项目唯一目标**：求职作品 + 面试兵器库——"专门用于 Java 后端面试的高并发内容社区"，每个核心模块承载一个可被深挖追问的技术难点。面试评估逻辑：遇到什么问题 → 原方案为何不行 → 用什么技术解决 → 收益是什么。
+- **切片定义模式（强制）**：以技术矛盾为起点，四段式——① 难点叙事（具体问题 + 原方案为何不行，附规模假设/真实数据）→ ② 方案选型（≥2 候选，选/拒理由必须写进 spec，是面试追问核心）→ ③ 功能载体（只实现"能完整演示并验证该难点"的功能，不做与难点无关的功能）→ ④ 验证与叙事（真实测试/压测数据 + STAR 面试故事 + 追问链回答清单）。
+- **硬性纪律**：禁止无压测依据的并发表述（模板："对 X 接口压测，Y 并发下 P95 从 A 降到 B，Redis 命中率 C%"）；禁止低价值功能（管理后台 CRUD 等）；面试素材优先复用真实踩坑（CSRF 拦截器顺序、锁-事务竞态、Nacos 启动崩溃、Gateway DSL 绑定失败），不编造。
+- **技术栈锁定**：MySQL 8 + Redis + MinIO + RocketMQ；禁止迁移 PostgreSQL/pgvector/RustFS（换库对面试无增益）；RocketMQ 为异步主线（顺序/事务/死信/重试），Redis Stream 仅进方案对比不实现。
+- **切片优先级**：#11 互动写路径异步化 + RocketMQ → #12 Feed 流（ZSet Timeline + Push/Pull 混合） → #13 读路径加固（缓存击穿/游标分页/两级缓存） → #14 搜索 + CDC（ES 分词 + Canal 订阅 binlog） → #15+ 可选增强（秒传/Presigned 直传/Jmeter 压测/Leaf/Cassandra） → AI 标签/向量推荐最后单独立项。
+- **切片 DoD 增量**（除原六步流程外必须交付）：STAR 面试故事 + ≥5 条追问链回答清单 + 方案对比表（含适用边界）+ 真实数据 + docs/learning 七段式复盘。
+- **执行分工调整**：耗时测试（全量 mvn test、e2e、compose 冒烟）由用户执行；AI 只做快速编译级验证。
+- **#10 不打断**：按既有工单（split-01~09）完成；#10 收尾后不直接开工功能，先对 #11 执行 grill-with-docs 并按新模式出 spec。

@@ -1,0 +1,57 @@
+package com.kuros.kurosbackend.post.repository;
+
+import com.kuros.kurosbackend.post.domain.CommunityPost;
+import com.kuros.kurosbackend.post.domain.PostStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.util.Optional;
+
+public interface CommunityPostRepository extends JpaRepository<CommunityPost, String> {
+
+    @Query("""
+            select distinct p from CommunityPost p
+            left join p.tags tag
+            where p.status = :status
+              and (:category is null or p.category = :category)
+              and (:tag is null or tag.name = :tag)
+              and (:keyword is null or lower(p.title) like lower(concat('%', :keyword, '%'))
+                   or lower(p.excerpt) like lower(concat('%', :keyword, '%')))
+            """)
+    Page<CommunityPost> findVisiblePosts(
+            @Param("status") PostStatus status,
+            @Param("category") String category,
+            @Param("tag") String tag,
+            @Param("keyword") String keyword,
+            Pageable pageable
+    );
+
+    Optional<CommunityPost> findByIdAndStatus(String id, PostStatus status);
+
+    Page<CommunityPost> findByAuthorIdAndStatus(String authorId, PostStatus status, Pageable pageable);
+
+    long countByAuthorIdAndStatus(String authorId, PostStatus status);
+
+    @Query("select coalesce(sum(p.likeCount), 0) from CommunityPost p where p.authorId = :authorId and p.status = :status")
+    long sumLikeCountByAuthorIdAndStatus(@Param("authorId") String authorId, @Param("status") PostStatus status);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update CommunityPost p set p.likeCount = p.likeCount + 1 where p.id = :postId")
+    int incrementLikeCount(@Param("postId") String postId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update CommunityPost p set p.likeCount = case when p.likeCount > 0 then p.likeCount - 1 else 0 end where p.id = :postId")
+    int decrementLikeCount(@Param("postId") String postId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update CommunityPost p set p.favoriteCount = p.favoriteCount + 1 where p.id = :postId")
+    int incrementFavoriteCount(@Param("postId") String postId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update CommunityPost p set p.favoriteCount = case when p.favoriteCount > 0 then p.favoriteCount - 1 else 0 end where p.id = :postId")
+    int decrementFavoriteCount(@Param("postId") String postId);
+}

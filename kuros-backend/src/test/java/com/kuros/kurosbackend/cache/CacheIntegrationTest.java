@@ -1,12 +1,10 @@
 package com.kuros.kurosbackend.cache;
 
-import com.kuros.kurosbackend.api.CreatePostRequest;
-import com.kuros.kurosbackend.api.PostDetailResponse;
-import com.kuros.kurosbackend.domain.CommunityUser;
-import com.kuros.kurosbackend.domain.UserStatus;
-import com.kuros.kurosbackend.repository.CommunityUserRepository;
-import com.kuros.kurosbackend.service.CommunityPostService;
-import com.kuros.kurosbackend.service.PostPublishingService;
+import com.kuros.kurosbackend.TestDatabases;
+import com.kuros.kurosbackend.post.api.CreatePostRequest;
+import com.kuros.kurosbackend.post.api.PostDetailResponse;
+import com.kuros.kurosbackend.post.service.CommunityPostService;
+import com.kuros.kurosbackend.post.service.PostPublishingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +21,6 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
@@ -49,10 +46,16 @@ class CacheIntegrationTest {
     @Container
     static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
 
+    // split-07：用户表已迁出本库，发帖作者直接用固定 UUID——
+    // 本测试只验证缓存行为，作者展示无关紧要（占位作者由 toAuthor 统一处理）
+    private static final String TEST_USER_ID = "10000000-0000-0000-0000-000000000001";
+
     @DynamicPropertySource
     static void redisProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+        // 唯一 H2 库名：库生命周期与本类 context 对齐（详见 TestDatabases 注释）
+        registry.add("spring.datasource.url", () -> TestDatabases.h2Url("cache"));
     }
 
     @Autowired
@@ -65,30 +68,14 @@ class CacheIntegrationTest {
     private PostPublishingService publishingService;
 
     @Autowired
-    private CommunityUserRepository userRepository;
-
-    @Autowired
     private StringRedisTemplate redisTemplate;
-
-    private String testUserId;
 
     @BeforeEach
     void setUp() {
         // 清空 Redis（SaToken 会话数据）
         Objects.requireNonNull(redisTemplate.getConnectionFactory()).getConnection().serverCommands().flushDb();
-        // 清空缓存
+        // 清空缓存（split-07：publicProfile 缓存已随用户域迁出移除）
         Objects.requireNonNull(cacheManager.getCache("postDetail")).clear();
-        Objects.requireNonNull(cacheManager.getCache("publicProfile")).clear();
-
-        // 查找或创建测试用户
-        testUserId = userRepository.findAll().stream().findFirst()
-                .map(CommunityUser::getId)
-                .orElseGet(() -> {
-                    LocalDateTime now = LocalDateTime.now();
-                    return userRepository.save(new CommunityUser(
-                            "cache-test-user", "13900000099", "缓存测试员", UserStatus.NORMAL, now
-                    )).getId();
-                });
     }
 
     @Test
@@ -97,7 +84,7 @@ class CacheIntegrationTest {
         CreatePostRequest request = new CreatePostRequest(
                 "GUIDE", "攻略", "缓存测试帖", "测试摘要", "测试正文内容", List.of(), List.of()
         );
-        PostDetailResponse published = publishingService.publish(request, testUserId);
+        PostDetailResponse published = publishingService.publish(request, TEST_USER_ID);
         String postId = published.id();
 
         // 清空缓存，确保从干净状态开始
@@ -124,7 +111,7 @@ class CacheIntegrationTest {
         CreatePostRequest original = new CreatePostRequest(
                 "GUIDE", "攻略", "原始标题", "原始摘要", "原始正文", List.of(), List.of()
         );
-        PostDetailResponse published = publishingService.publish(original, testUserId);
+        PostDetailResponse published = publishingService.publish(original, TEST_USER_ID);
         String postId = published.id();
 
         // 查询一次让缓存生效
@@ -136,7 +123,7 @@ class CacheIntegrationTest {
         CreatePostRequest updated = new CreatePostRequest(
                 "GUIDE", "攻略", "更新后标题", "更新后摘要", "更新后正文", List.of(), List.of()
         );
-        publishingService.update(postId, testUserId, updated);
+        publishingService.update(postId, TEST_USER_ID, updated);
 
         // 再次查询应返回新数据（缓存已更新）
         PostDetailResponse afterUpdate = postService.findPublishedById(postId);

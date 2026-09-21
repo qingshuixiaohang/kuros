@@ -121,10 +121,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       APP_CORS_ALLOWED_ORIGIN: ${APP_CORS_ALLOWED_ORIGIN:-http://localhost:3000}
-      # dev 环境默认固定验证码 123456（与旧版 DevVerificationCodeService 的默认值一致）：
-      # compose-smoke.mjs 和前端演示登录都硬编码用它；生产环境走 .env.production.example，必须置空
-      APP_AUTH_DEV_CODE: ${APP_AUTH_DEV_CODE:-123456}
-      APP_AUTH_DEV_CODE_EXPOSED: ${APP_AUTH_DEV_CODE_EXPOSED:-false}
+      # split-06：验证码环境变量（APP_AUTH_DEV_CODE*）已随认证链路迁至 user 服务；
+      # backend 只保留 cookie-secure（sa-token.cookie-secure 配置项仍引用它）
       APP_AUTH_SESSION_COOKIE_SECURE: ${APP_AUTH_SESSION_COOKIE_SECURE:-false}
       APP_STORAGE_LOCAL_DIR: ${APP_STORAGE_LOCAL_DIR:-/app/storage}
       APP_STORAGE_PUBLIC_BASE_URL: ${APP_STORAGE_PUBLIC_BASE_URL:-http://localhost:8080}
@@ -164,7 +162,9 @@ services:
       retries: 30
 
   # Spring Cloud Gateway 统一入口（切片 #9）：占宿主 8080 正门，前端零改动（Q1 决策）。
-  # 纯换门（Q6 决策）：路由 lb://kuros-backend 原样透传，不加限流/鉴权/CORS。
+  # 纯换门（Q6 决策）：路由原样透传，不加限流/鉴权/CORS；split-06 起
+  # /api/v1/auth/** → user（认证链路），split-07 起 /api/v1/users/*/follow → user
+  # （关注链路），其余 → backend。
   # WebFlux 网关无法嵌入 Servlet 后端，必须独立容器，故为平级新工程 kuros-gateway/
   gateway:
     build:
@@ -179,6 +179,50 @@ services:
         condition: service_healthy
       # backend 就绪后才对外放行：正门刚打开就该能出去
       backend:
+        condition: service_healthy
+      # split-06 起认证、split-07 起关注的路由都指向 user：等它就绪后再放行
+      user:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # 用户服务（切片 #10 / split-05）：第一个从 backend 拆出的业务微服务，
+  # 独立库 kuros_user（建库脚本见 docker/mysql-init/40-kuros-user-create-db.sh）。
+  # 骨架阶段只交付"能启动、能注册、能迁移"三项能力；split-06 迁入认证链路，
+  # split-07 迁入关注链路（用户域从此只在本服务读写）；宿主映射 8091 与
+  # backend 的 8090 并列，是调试直连通道（容器内仍是 8080）
+  user:
+    build:
+      context: ./kuros-user
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/kuros_user?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8
+      DB_USERNAME: ${MYSQL_USER:-kuros}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-kuros_dev_password}
+      # 共享同一 Redis 实例：拆服务不拆会话（SaToken 会话跨服务可见的地基）
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      NACOS_SERVER_ADDR: ${NACOS_SERVER_ADDR:-nacos:8848}
+      # 认证链路环境变量（split-06 随 /api/v1/auth/** 从 backend 迁入）：
+      # 登录响应会 Set-Cookie 且浏览器从宿主机 :3000 跨域调用，CORS 响应头由本服务给出
+      APP_CORS_ALLOWED_ORIGIN: ${APP_CORS_ALLOWED_ORIGIN:-http://localhost:3000}
+      # dev 环境默认固定验证码 123456（与旧版 DevVerificationCodeService 的默认值一致）：
+      # compose-smoke.mjs 和前端演示登录都硬编码用它；生产环境走 .env.production.example，必须置空
+      APP_AUTH_DEV_CODE: ${APP_AUTH_DEV_CODE:-123456}
+      APP_AUTH_DEV_CODE_EXPOSED: ${APP_AUTH_DEV_CODE_EXPOSED:-false}
+      APP_AUTH_SESSION_COOKIE_SECURE: ${APP_AUTH_SESSION_COOKIE_SECURE:-false}
+    ports:
+      - "${USER_PORT:-8091}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      # 与 backend 同款：注册失败等于服务不在微服务体系中（fail-fast 由编排层承担）
+      nacos:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null || exit 1"]
