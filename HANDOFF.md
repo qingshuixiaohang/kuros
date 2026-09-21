@@ -17,8 +17,8 @@
 | 9 | Gateway 统一入口 | DSL 路由 + 鉴权前置 + 全局过滤器 |
 
 **进行中：切片 #10 服务拆分**（Issue #67，分支 `codex/issue-67-service-split`）：
-- 已完成：spec（`docs/slice10-service-split-spec.md`）+ ADR `docs/adr/0003-user-service-split.md` + 9 个工单（`docs/tickets/split-01~09` + `split-ticket-index.md`）+ **split-01 shared 模块重排**（编译绿，待全量测试）
-- 下一步：**split-02 起按工单顺序推进**（Phase A 重排 → Phase B 拆出 `kuros-user` 微服务）
+- 已完成：spec + ADR 0003 + 9 个工单 + **Phase A 四批重排全部提交**（split-01~04：shared / user / post+comment / interaction+report+media 归位，纯移动零行为变化）+ **全量测试 45/45 绿**（cbae01c 修复跨类污染，见"常见陷阱 11"）
+- 下一步：**split-05（Phase B 第一步）：`kuros-user` 独立工程骨架**（独立库 + Flyway V1/V2 + compose 8091 + CI 第 5 job）
 
 **已合并 PR**：#59（切片 #1-#9 汇总）、#66（Prometheus registry 修复）；`main` @ `905c7b8`
 
@@ -141,15 +141,14 @@ SaRouter.match(SaHttpMethod.GET).match("/api/v1/posts/**").stop();
 8. **Nacos 集成八坑**：版本对齐、gRPC 端口偏移、IPv6、刷新时序、init SQL 建错库等（详见 `docs/learning/08-*.md`）
 9. **Gateway DSL 绑定失败**：详见 `docs/learning/09-*.md`
 10. **Actuator 不传递 Prometheus registry**：`/actuator/prometheus` 404，需显式加 `micrometer-registry-prometheus`（PR #66）
+11. **全量测试跨类污染双根因**：① H2 库名固定 + Spring context 缓存 → @DirtiesContext 失效、数据串类（单类绿全量红）；② Sca Nacos 地址解析 JVM 级静态缓存 → 首解析地址粘住 JVM、静默回退默认值（阈值 100 vs 555）。修复：唯一 H2 库名工厂（TestDatabases）+ surefire `reuseForks=false` 每类独立 JVM（cbae01c，详见 pom 与测试类注释）
 
 ---
 
 ## 下一步行动
 
-1. **split-01 收尾**：编译已绿 → 用户跑全量测试 → 提交（纯移动零行为变化）
-2. **split-02~09 按工单顺序推进**（`docs/tickets/split-02-user-reorder.md` 起）：
-   - Phase A（02-04）：模块重排，每批全量测试绿才进入下一批
-   - Phase B（05-09）：kuros-user 骨架 → 认证迁移 → 关注迁移 + Feign → 冒烟 + 复盘
+1. **split-05 开工**：`kuros-user` 独立工程骨架（Phase B 第一步，工单见 `docs/tickets/`）
+2. **split-06~09**：认证迁移 → 关注迁移 + OpenFeign → 网关路由 + 冒烟 → 复盘收尾（每切片全量测试绿才推进）
 3. **#10 收尾后**：不直接开工功能，先对 **#11（互动写路径异步化 + RocketMQ）执行 `grill-with-docs`**，按难点→方案→功能→叙事新模式出 spec
 4. 本文件随进展更新
 
