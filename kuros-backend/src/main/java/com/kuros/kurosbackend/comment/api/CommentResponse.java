@@ -1,4 +1,4 @@
-package com.kuros.kurosbackend.api;
+package com.kuros.kurosbackend.comment.api;
 
 import com.kuros.kurosbackend.shared.api.AuthorResponse;
 

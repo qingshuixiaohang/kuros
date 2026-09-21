@@ -2,7 +2,7 @@ package com.kuros.kurosbackend.repository;
 
 import com.kuros.kurosbackend.domain.PostFavorite;
 import com.kuros.kurosbackend.domain.PostFavoriteId;
-import com.kuros.kurosbackend.domain.PostStatus;
+import com.kuros.kurosbackend.post.domain.PostStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

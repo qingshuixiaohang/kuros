@@ -1,4 +1,4 @@
-package com.kuros.kurosbackend.api;
+package com.kuros.kurosbackend.post.api;
 
 import java.util.List;
 

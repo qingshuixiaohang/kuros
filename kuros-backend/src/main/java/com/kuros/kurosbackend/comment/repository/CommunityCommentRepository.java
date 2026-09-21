@@ -1,6 +1,6 @@
-package com.kuros.kurosbackend.repository;
+package com.kuros.kurosbackend.comment.repository;
 
-import com.kuros.kurosbackend.domain.CommunityComment;
+import com.kuros.kurosbackend.comment.domain.CommunityComment;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

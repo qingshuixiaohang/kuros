@@ -1,12 +1,12 @@
 package com.kuros.kurosbackend.cache;
 
-import com.kuros.kurosbackend.api.CreatePostRequest;
-import com.kuros.kurosbackend.api.PostDetailResponse;
+import com.kuros.kurosbackend.post.api.CreatePostRequest;
+import com.kuros.kurosbackend.post.api.PostDetailResponse;
 import com.kuros.kurosbackend.user.domain.CommunityUser;
 import com.kuros.kurosbackend.user.domain.UserStatus;
 import com.kuros.kurosbackend.user.repository.CommunityUserRepository;
-import com.kuros.kurosbackend.service.CommunityPostService;
-import com.kuros.kurosbackend.service.PostPublishingService;
+import com.kuros.kurosbackend.post.service.CommunityPostService;
+import com.kuros.kurosbackend.post.service.PostPublishingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

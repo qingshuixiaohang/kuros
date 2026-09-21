@@ -1,13 +1,13 @@
-package com.kuros.kurosbackend.web;
+package com.kuros.kurosbackend.post.web;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.kuros.kurosbackend.shared.api.ApiResponse;
-import com.kuros.kurosbackend.api.CreatePostRequest;
+import com.kuros.kurosbackend.post.api.CreatePostRequest;
 import com.kuros.kurosbackend.shared.api.PageResult;
-import com.kuros.kurosbackend.api.PostDetailResponse;
-import com.kuros.kurosbackend.api.PostSummaryResponse;
-import com.kuros.kurosbackend.service.CommunityPostService;
-import com.kuros.kurosbackend.service.PostPublishingService;
+import com.kuros.kurosbackend.post.api.PostDetailResponse;
+import com.kuros.kurosbackend.post.api.PostSummaryResponse;
+import com.kuros.kurosbackend.post.service.CommunityPostService;
+import com.kuros.kurosbackend.post.service.PostPublishingService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PutMapping;

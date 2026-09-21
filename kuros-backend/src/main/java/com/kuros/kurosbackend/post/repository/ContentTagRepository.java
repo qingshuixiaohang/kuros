@@ -1,6 +1,6 @@
-package com.kuros.kurosbackend.repository;
+package com.kuros.kurosbackend.post.repository;
 
-import com.kuros.kurosbackend.domain.ContentTag;
+import com.kuros.kurosbackend.post.domain.ContentTag;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

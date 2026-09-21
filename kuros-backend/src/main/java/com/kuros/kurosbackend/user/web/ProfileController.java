@@ -3,7 +3,7 @@ package com.kuros.kurosbackend.user.web;
 import cn.dev33.satoken.stp.StpUtil;
 import com.kuros.kurosbackend.shared.api.ApiResponse;
 import com.kuros.kurosbackend.shared.api.PageResult;
-import com.kuros.kurosbackend.api.PostSummaryResponse;
+import com.kuros.kurosbackend.post.api.PostSummaryResponse;
 import com.kuros.kurosbackend.user.api.ProfileOverviewResponse;
 import com.kuros.kurosbackend.user.api.PublicProfileResponse;
 import com.kuros.kurosbackend.user.service.ProfileService;

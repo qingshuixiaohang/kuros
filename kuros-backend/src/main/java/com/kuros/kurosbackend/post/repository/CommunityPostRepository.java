@@ -1,7 +1,7 @@
-package com.kuros.kurosbackend.repository;
+package com.kuros.kurosbackend.post.repository;
 
-import com.kuros.kurosbackend.domain.CommunityPost;
-import com.kuros.kurosbackend.domain.PostStatus;
+import com.kuros.kurosbackend.post.domain.CommunityPost;
+import com.kuros.kurosbackend.post.domain.PostStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

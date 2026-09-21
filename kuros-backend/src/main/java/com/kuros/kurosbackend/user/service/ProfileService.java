@@ -5,18 +5,18 @@ import com.kuros.kurosbackend.shared.api.PageResult;
 import com.kuros.kurosbackend.user.api.ProfileCommentResponse;
 import com.kuros.kurosbackend.user.api.ProfileOverviewResponse;
 import com.kuros.kurosbackend.user.api.PublicProfileResponse;
-import com.kuros.kurosbackend.domain.CommentStatus;
-import com.kuros.kurosbackend.domain.CommunityComment;
-import com.kuros.kurosbackend.domain.CommunityPost;
+import com.kuros.kurosbackend.comment.domain.CommentStatus;
+import com.kuros.kurosbackend.comment.domain.CommunityComment;
+import com.kuros.kurosbackend.post.domain.CommunityPost;
 import com.kuros.kurosbackend.user.domain.CommunityUser;
-import com.kuros.kurosbackend.domain.PostStatus;
+import com.kuros.kurosbackend.post.domain.PostStatus;
 import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
-import com.kuros.kurosbackend.repository.CommunityCommentRepository;
-import com.kuros.kurosbackend.repository.CommunityPostRepository;
+import com.kuros.kurosbackend.comment.repository.CommunityCommentRepository;
+import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.user.repository.CommunityUserRepository;
 import com.kuros.kurosbackend.repository.PostFavoriteRepository;
 import com.kuros.kurosbackend.user.repository.UserFollowRepository;
-import com.kuros.kurosbackend.service.CommunityPostService;
+import com.kuros.kurosbackend.post.service.CommunityPostService;
 import org.springframework.data.domain.Page;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
@@ -64,16 +64,16 @@ public class ProfileService {
         return toPublic(user);
     }
 
-    public PageResult<com.kuros.kurosbackend.api.PostSummaryResponse> findPublicPosts(String userId, int page, int pageSize) {
+    public PageResult<com.kuros.kurosbackend.post.api.PostSummaryResponse> findPublicPosts(String userId, int page, int pageSize) {
         findUser(userId);
         return postService.findPublishedByAuthor(userId, page, pageSize);
     }
 
     public ProfileOverviewResponse findOwn(String userId, int page, int pageSize) {
         CommunityUser user = findUser(userId);
-        PageResult<com.kuros.kurosbackend.api.PostSummaryResponse> posts = postService.findPublishedByAuthor(userId, page, pageSize);
+        PageResult<com.kuros.kurosbackend.post.api.PostSummaryResponse> posts = postService.findPublishedByAuthor(userId, page, pageSize);
         PageResult<ProfileCommentResponse> comments = findOwnComments(userId, page, pageSize);
-        PageResult<com.kuros.kurosbackend.api.PostSummaryResponse> favorites = postService.findPublishedByIds(favoriteRepository.findVisiblePostIds(userId, PostStatus.PUBLISHED, pageRequest(page, pageSize)));
+        PageResult<com.kuros.kurosbackend.post.api.PostSummaryResponse> favorites = postService.findPublishedByIds(favoriteRepository.findVisiblePostIds(userId, PostStatus.PUBLISHED, pageRequest(page, pageSize)));
         PageResult<PublicProfileResponse> following = findFollowing(userId, page, pageSize);
         PageResult<PublicProfileResponse> fans = findFans(userId, page, pageSize);
         long postCount = postService.publishedPostCount(userId);

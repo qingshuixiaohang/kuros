@@ -1,8 +1,8 @@
-package com.kuros.kurosbackend.api;
+package com.kuros.kurosbackend.post.api;
 
 import com.kuros.kurosbackend.shared.api.AuthorResponse;
 
-import com.kuros.kurosbackend.domain.PostType;
+import com.kuros.kurosbackend.post.domain.PostType;
 
 import java.time.LocalDateTime;
 import java.util.List;

@@ -1,4 +1,4 @@
-package com.kuros.kurosbackend.domain;
+package com.kuros.kurosbackend.post.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

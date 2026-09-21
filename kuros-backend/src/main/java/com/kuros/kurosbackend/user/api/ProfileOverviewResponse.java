@@ -1,6 +1,6 @@
 package com.kuros.kurosbackend.user.api;
 
-import com.kuros.kurosbackend.api.PostSummaryResponse;
+import com.kuros.kurosbackend.post.api.PostSummaryResponse;
 import com.kuros.kurosbackend.shared.api.PageResult;
 
 public record ProfileOverviewResponse(

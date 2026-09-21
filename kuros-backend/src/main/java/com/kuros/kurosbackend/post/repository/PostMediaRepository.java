@@ -1,6 +1,6 @@
-package com.kuros.kurosbackend.repository;
+package com.kuros.kurosbackend.post.repository;
 
-import com.kuros.kurosbackend.domain.PostMedia;
+import com.kuros.kurosbackend.post.domain.PostMedia;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
