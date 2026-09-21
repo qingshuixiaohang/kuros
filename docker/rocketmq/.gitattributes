@@ -1,0 +1,4 @@
+# broker.conf 被挂载进 Linux 容器由 RocketMQ 加载（Java Properties 语义）：
+# 宿主机 Windows（core.autocrlf=true）检出成 CRLF 虽多数能被 Properties.load 容忍，
+# 但为与 mysql-init 脚本一致、杜绝行尾歧义，统一锁 LF
+*.conf text eol=lf

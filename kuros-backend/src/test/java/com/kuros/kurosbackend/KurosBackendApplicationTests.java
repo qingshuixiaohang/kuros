@@ -289,6 +289,12 @@ class KurosBackendApplicationTests {
         }
     }
 
+    // 切片 #11（互动写路径异步化）：本套件在 test profile 下 app.interaction.async.enabled=false，
+    // 写路径经 Noop 发布器走「同步降级落库」，读路径改为 Redis 优先（每用例 @BeforeEach flushDb 冷启动，
+    // miss 回源 DB 冗余列并回填）。同步降级下 Redis 实时值与 DB 逐步对齐，故下列「精确计数」断言
+    // （3700→3701、重复仍 3701、取消回 3700）依旧成立——它们现在验证的是「Redis 读源 + 降级落库 + 幂等」。
+    // 真正的异步链路（发消息→顺序消费→DB 最终一致）由 InteractionAsyncIntegrationTest（无 broker）
+    // 与 InteractionRocketMQIntegrationTest（真实 broker，gated 交 CI）覆盖。
     @Test
     @DirtiesContext
     void 登录用户点赞和取消点赞帖子且重复操作幂等() throws Exception {
@@ -335,6 +341,19 @@ class KurosBackendApplicationTests {
         mockMvc.perform(delete(interactionPath + "/favorite").cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.favorited").value(false))
+                .andExpect(jsonPath("$.data.favoriteCount").value(1200));
+    }
+
+    @Test
+    void 游客查看互动快照返回计数但不带个人赞藏状态() throws Exception {
+        // 切片 #11：GET interactions 是公开端点（未登录 → userId=null）。
+        // 计数走 Redis 优先读源（flushDb 后 miss → 回源 DB 冗余列 like_count=3700/favorite_count=1200 并回填），
+        // liked/favorited 因无用户身份恒为 false——游客看得到热度，不带个人状态。
+        mockMvc.perform(get("/api/v1/posts/10000000-0000-0000-0000-000000000001/interactions"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.liked").value(false))
+                .andExpect(jsonPath("$.data.favorited").value(false))
+                .andExpect(jsonPath("$.data.likeCount").value(3700))
                 .andExpect(jsonPath("$.data.favoriteCount").value(1200));
     }
 

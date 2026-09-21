@@ -136,6 +136,10 @@ services:
       APP_STORAGE_MINIO_BUCKET: ${APP_STORAGE_MINIO_BUCKET:-kuros-media}
       # Nacos 连接（切片 #8）：backend 通过服务名 nacos 访问注册中心
       NACOS_SERVER_ADDR: ${NACOS_SERVER_ADDR:-nacos:8848}
+      # RocketMQ（切片 #11）：互动事件异步落库的 name-server（compose 网络内用服务名）。
+      # MQ 不可用时写路径同步降级落库，故 broker 不是硬依赖（见下方 depends_on required:false）
+      ROCKETMQ_NAME_SERVER: ${ROCKETMQ_NAME_SERVER:-rocketmq-namesrv:9876}
+      APP_INTERACTION_ASYNC_ENABLED: ${APP_INTERACTION_ASYNC_ENABLED:-true}
     # 宿主映射挪至 8090（Q1/Q5 决策）：8080 正门让给 gateway，8090 保留调试直连通道；
     # 容器内仍是 8080，compose 内部服务间通信不受影响
     ports:
@@ -155,6 +159,11 @@ services:
       # Nacos 是硬依赖：注册失败等于服务不在微服务体系中（Q10 决策，fail-fast 由编排层承担）
       nacos:
         condition: service_healthy
+      # RocketMQ 是软依赖（切片 #11）：broker 就绪时优先异步落库；未就绪/不可用时
+      # 写路径同步降级（不丢互动），故用 required:false —— 编排层等待但不因它失败
+      rocketmq-broker:
+        condition: service_healthy
+        required: false
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null || exit 1"]
       interval: 5s
@@ -230,6 +239,69 @@ services:
       timeout: 5s
       retries: 30
 
+  # RocketMQ NameServer（切片 #11）：路由注册中心——broker 向其注册、producer/consumer 从其拉路由。
+  # 无状态、轻量；9876 是 RocketMQ namesrv 默认端口。镜像版本与 client 严格对齐（rocketmq-client 5.3.1）
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.3.1
+    restart: unless-stopped
+    command: sh mqnamesrv
+    ports:
+      - "${ROCKETMQ_NAMESRV_PORT:-9876}:9876"
+    healthcheck:
+      # mqadmin clusterList 能连上 namesrv 即视为就绪（比纯 TCP 探活更贴近可用）
+      test: ["CMD-SHELL", "sh mqadmin clusterList -n localhost:9876 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 20s
+
+  # RocketMQ Broker（切片 #11）：消息存储与投递。单 broker、无主从（ASYNC_MASTER），够演示。
+  # broker.conf（docker/rocketmq/broker.conf）里 brokerIP1 显式设为服务名 rocketmq-broker：
+  # broker 默认把"本机自动探测 IP"注册到 namesrv，容器内探测到的 IP 其他容器/宿主不可达，
+  # 客户端拿到路由却连不上——设为 compose 服务名让网络内可解析。autoCreateTopicEnable=true 便于 dev。
+  rocketmq-broker:
+    image: apache/rocketmq:5.3.1
+    restart: unless-stopped
+    environment:
+      NAMESRV_ADDR: rocketmq-namesrv:9876
+      # 收敛 broker JVM 堆，避免与 mysql/nacos/backend 抢内存导致 compose 整体 OOM
+      JAVA_OPT_EXT: "-Xms512m -Xmx512m -Xmn256m"
+    command: sh mqbroker -c /home/rocketmq/broker.conf
+    volumes:
+      - ./docker/rocketmq/broker.conf:/home/rocketmq/broker.conf:ro
+      - kuros_rocketmq_broker_data:/home/rocketmq/store
+    depends_on:
+      rocketmq-namesrv:
+        condition: service_healthy
+    ports:
+      - "${ROCKETMQ_BROKER_PORT:-10911}:10911"
+    healthcheck:
+      # 从 broker 侧向 namesrv 查集群，能列出本 broker（BROKER）即就绪
+      test: ["CMD-SHELL", "sh mqadmin clusterList -n rocketmq-namesrv:9876 2>/dev/null | grep -q broker-a || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+
+  # RocketMQ Dashboard（切片 #11）：可视化 topic/消费组/死信，运维观测面。
+  # 宿主 8082（避开 gateway 8080 / nacos 8081）；不参与业务链路，仅排障用
+  rocketmq-dashboard:
+    image: apacherocketmq/rocketmq-dashboard:latest
+    restart: unless-stopped
+    environment:
+      JAVA_OPTS: "-Drocketmq.namesrv.addr=rocketmq-namesrv:9876 -Dserver.port=8080"
+    ports:
+      - "${ROCKETMQ_DASHBOARD_PORT:-8082}:8080"
+    depends_on:
+      rocketmq-broker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
   frontend:
     build:
       context: ./front
@@ -256,3 +328,4 @@ volumes:
   kuros_storage:
   kuros_redis_data:
   kuros_minio_data:
+  kuros_rocketmq_broker_data:
