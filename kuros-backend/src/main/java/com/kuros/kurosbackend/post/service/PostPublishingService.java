@@ -12,6 +12,7 @@ import com.kuros.kurosbackend.post.domain.PostStatus;
 import com.kuros.kurosbackend.shared.exception.AuthRequestException;
 import com.kuros.kurosbackend.shared.exception.ForbiddenException;
 import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
+import com.kuros.kurosbackend.feed.event.PostPublishedEvent;
 import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.post.repository.ContentTagRepository;
 import com.kuros.kurosbackend.media.repository.MediaAssetRepository;
@@ -19,6 +20,7 @@ import com.kuros.kurosbackend.post.repository.PostMediaRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +41,7 @@ public class PostPublishingService {
     private final PostMediaRepository postMediaRepository;
     private final Counter postsPublishedCounter;
     private final Timer postsPublishTimer;
+    private final ApplicationEventPublisher eventPublisher;
 
     public PostPublishingService(
             CommunityPostRepository postRepository,
@@ -47,7 +50,8 @@ public class PostPublishingService {
             MediaAssetRepository mediaAssetRepository,
             PostMediaRepository postMediaRepository,
             Counter postsPublishedCounter,
-            Timer postsPublishTimer
+            Timer postsPublishTimer,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.postRepository = postRepository;
         this.tagRepository = tagRepository;
@@ -56,6 +60,7 @@ public class PostPublishingService {
         this.postMediaRepository = postMediaRepository;
         this.postsPublishedCounter = postsPublishedCounter;
         this.postsPublishTimer = postsPublishTimer;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -71,6 +76,11 @@ public class PostPublishingService {
             replaceMedia(saved.getId(), List.of(), mediaAssets(request.mediaAssetIds(), authorId, null));
             // 业务指标埋点：每发布一个帖子计数器 +1
             postsPublishedCounter.increment();
+            // 切片 #12：发帖成功后 emit PostPublishedEvent，由 FeedFanoutListener
+            // @TransactionalEventListener(AFTER_COMMIT) 在事务提交后扇出到粉丝 timeline。
+            // 不直接调用 FeedTimelineStore 是因为：① 解耦 post 与 feed 模块；② 时序保证
+            // （AFTER_COMMIT 确保帖子已落库，粉丝读 timeline 时 DB 可查）。
+            eventPublisher.publishEvent(new PostPublishedEvent(saved.getId(), authorId, saved.getPublishedAt()));
             return postService.findPublishedById(saved.getId());
         });
     }
