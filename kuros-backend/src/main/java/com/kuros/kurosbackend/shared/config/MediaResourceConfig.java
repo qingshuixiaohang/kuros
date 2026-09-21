@@ -1,6 +1,6 @@
 package com.kuros.kurosbackend.shared.config;
 
-import com.kuros.kurosbackend.storage.LocalStorageStrategy;
+import com.kuros.kurosbackend.media.storage.LocalStorageStrategy;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;

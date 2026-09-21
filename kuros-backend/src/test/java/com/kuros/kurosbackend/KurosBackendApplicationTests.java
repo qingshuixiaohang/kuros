@@ -13,7 +13,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.mock.web.MockMultipartFile;
-import com.kuros.kurosbackend.storage.MediaAssetService;
+import com.kuros.kurosbackend.media.storage.MediaAssetService;
 // Testcontainers 2.x 中 GenericContainer 仍在 org.testcontainers.containers 包（已用 jar tf 核实 2.0.5 实际结构，
 // 官方迁移说明只适用于部分模块专属容器类）
 import org.testcontainers.containers.GenericContainer;

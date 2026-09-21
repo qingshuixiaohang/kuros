@@ -1,6 +1,6 @@
 package com.kuros.kurosbackend.shared.health;
 
-import com.kuros.kurosbackend.storage.StorageStrategy;
+import com.kuros.kurosbackend.media.storage.StorageStrategy;
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.stereotype.Component;

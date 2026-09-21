@@ -14,7 +14,7 @@ import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.comment.repository.CommunityCommentRepository;
 import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.user.repository.CommunityUserRepository;
-import com.kuros.kurosbackend.repository.PostFavoriteRepository;
+import com.kuros.kurosbackend.interaction.repository.PostFavoriteRepository;
 import com.kuros.kurosbackend.user.repository.UserFollowRepository;
 import com.kuros.kurosbackend.post.service.CommunityPostService;
 import org.springframework.data.domain.Page;

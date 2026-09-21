@@ -1,5 +1,7 @@
 package com.kuros.kurosbackend.storage;
 
+import com.kuros.kurosbackend.media.storage.MinIOStorageStrategy;
+import com.kuros.kurosbackend.media.storage.StorageStrategy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
