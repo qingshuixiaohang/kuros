@@ -1,3 +1,12 @@
+-- Nacos 3.1.1 官方 MySQL schema（来源: nacos/nacos-server:v3.1.1 镜像 /home/nacos/conf/mysql-schema.sql）
+-- 注意: schema 版本必须与服务端镜像版本对齐，否则 v3.1.1 启动时的 3.0→3.1 命名空间
+-- 迁移预检（ConfigMigrateService）会对旧 schema 失败，Nacos 启动即崩。
+-- 升级 Nacos 镜像版本时务必同步替换本文件。
+-- 必须显式 USE：mysql 官方镜像 entrypoint 默认在本文件上下文库（MYSQL_DATABASE=kuros）
+-- 执行 init 脚本，缺 USE 会导致 Nacos 表全部建进 kuros 库，Nacos 连接的
+-- nacos_config 为空库，启动时 SelectMasterTask 静默失败 → No DataSource set 崩溃
+USE nacos_config;
+
 /*
  * Copyright 1999-2018 Alibaba Group Holding Ltd.
  *

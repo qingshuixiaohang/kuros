@@ -88,6 +88,12 @@ services:
       NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:-VGhpc0lzTXlDdXN0b21TZWNyZXRLZXkwMTIzNDU2Nzg=}
       NACOS_AUTH_IDENTITY_KEY: serverIdentity
       NACOS_AUTH_IDENTITY_VALUE: kuros
+      # 关闭命名空间兼容模式：它为 2.x→3.x 平滑升降级服务（空 namespace 与 public
+      # 双向同步），我们全新安装无历史数据，不需要。保留默认开启时，启动期的命名空间
+      # 迁移预检会在 DataSource 就绪前抢跑（No DataSource set，重试仅 3 秒），
+      # MySQL 冷启动（CI 全新 volume）时直接崩，见上游 issue #14613。
+      # 环境变量经 Spring 宽松绑定映射到 nacos.config.namespace.compatible.mode
+      NACOS_CONFIG_NAMESPACE_COMPATIBLE_MODE: "false"
     ports:
       - "${NACOS_API_PORT:-8848}:8848"
       - "${NACOS_GRPC_PORT:-9848}:9848"

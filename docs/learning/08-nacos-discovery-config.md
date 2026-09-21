@@ -71,6 +71,24 @@ refresh 事件只清缓存实例，等下次有人访问才重建。规则注册
 - **eager**：监听 RefreshScopeRefreshedEvent 重读 Environment（SentinelRuleRefresher）
 - **lazy**：@RefreshScope 代理，适合状态观察类（SpringDocStatusBridge）
 
+### 2.9 CI 才暴露的两层叠加故障：init SQL 建错库 + Nacos 静默吞异常
+本地全绿、CI 上 nacos 启动即崩（unhealthy）——排查最终定位到两层问题叠加：
+1. **我们的 init SQL 建错了库**：mysql 官方镜像 entrypoint 执行 initdb 脚本时，
+   默认上下文库是 MYSQL_DATABASE（=kuros）；`10-xxx.sql` 末尾的 `USE nacos_config;`
+   只作用于自己文件的会话，`20-nacos-schema.sql` 没 USE → Nacos 表全部建进
+   kuros 库，Nacos 连的 nacos_config 是空库。本地没暴露是因为老 volume 早于
+   init 脚本挂载、当时手动执行时手动指定了库。**多文件 init 脚本每个文件都要
+   自带 USE**，SQL 会话不跨文件。
+2. **Nacos 的帮凶行为**：主 JdbcTemplate 的数据源绑定靠 SelectMasterTask 对
+   config_info 执行 DELETE 成功；表不存在时 BadSqlGrammarException 被 catch
+   吞掉只打 warn，不重试不报真错 → 崩溃表象是误导性的 `No DataSource set`
+   （先看到 migrate pre check failed，底层都是同一个数据源问题）。
+   全新安装同时应设 `NACOS_CONFIG_NAMESPACE_COMPATIBLE_MODE=false`
+   （环境变量经 Spring 宽松绑定生效）关掉命名空间迁移——那是 2.x 升级用的，
+   官方在 issue #13510 认可全新安装直接关；它还依赖同一条有问题的数据源路径。
+**教训**：报错信息会说谎，真正的错误藏在 catch 吞掉的第一现场；CI 与本地的
+差异（全新 volume vs 存量数据）本身就是最重要的排查线索。
+
 ## 3. 简历 STAR 写法
 
 **Situation**：单体应用配置硬编码、无服务注册，微服务演进缺少基础设施。
