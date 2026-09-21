@@ -157,6 +157,19 @@
             <artifactId>spring-cloud-starter-loadbalancer</artifactId>
         </dependency>
 
+        <!-- RocketMQ Binder（切片 #11）：互动写路径异步化的消息通道。
+             为什么选 SCA 的 spring-cloud-starter-stream-rocketmq 而不是 rocketmq-spring-boot-starter？
+             1. 与现有 SCA 栈（Nacos discovery/config，2025.1.0.0）同源同版本，BOM 统一管理
+             2. SCA 2025.1.x 已适配 Spring Boot 4 / Spring 7；独立的 rocketmq-spring-boot-starter 2.3.x
+                面向 Boot 3.x/Spring 6，对 Spring 7 无官方适配保证
+             3. Spring Cloud Stream function 模型（StreamBridge 发送 + Consumer<T> 消费）由 binder
+                屏蔽底层 client 细节，顺序消息/重试/死信走 binder 配置
+             实际捆绑的 rocketmq-client 版本以 mvn dependency:tree 为准 -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-stream-rocketmq</artifactId>
+        </dependency>
+
         <!-- SpringDoc OpenAPI：自动生成 Swagger UI 交互式 API 文档。
              springdoc 2.x 基于 Jakarta EE，兼容 Spring Boot 4.x。
              为什么不用 springfox？springfox 已停止维护，不支持 Jakarta EE -->
