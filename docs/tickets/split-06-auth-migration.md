@@ -16,7 +16,7 @@
 
 - [x] 经网关登录（`/api/v1/auth/*`）打到 kuros-user 并写共享 Redis、下发同名 Cookie（静态+编译级闭环：网关 `kuros-user-auth` 路由 `order(-1)` 显式优先于 backend `/**`，双桩集成测试证命中；kuros-user 登录链路集成测试断言会话/角色/权限 Redis key 与同名 Cookie；端到端运行时验证待 CI 冒烟）
 - [x] backend 直连 8090 的 `/api/v1/auth/*` 返回 404（端点已迁走）（新增测试编码化：POST /login 与 GET /me 均断言 404，依赖 SaToken notMatch + CSRF exclude 放行条目刻意保留）
-- [ ] kuros-user 测试全绿；CI 绿（AI 侧已过：三工程 test-compile、compose config、node --check；全量测试与 CI 待触发）
+- [x] kuros-user 测试全绿；CI 绿（PR #68 首轮 CI 五 job 全绿：User service 1m55s / Backend 3m11s / Gateway 1m37s / Frontend 48s / Deployment 4m1s 含 compose 全栈冒烟；run 35587464883）
 
 ## 备注
 

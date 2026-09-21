@@ -19,7 +19,7 @@
 **进行中：切片 #10 服务拆分**（Issue #67，分支 `codex/issue-67-service-split`）：
 - 已完成：spec + ADR 0003 + 9 个工单 + **Phase A 四批重排全部提交**（split-01~04：shared / user / post+comment / interaction+report+media 归位，纯移动零行为变化）+ **全量测试 45/45 绿**（cbae01c 修复跨类污染，见"常见陷阱 11"）
 - 已完成：**split-05 `kuros-user` 工程骨架**（7f61947）：独立库 `kuros_user` + Flyway V1/V2（种子与 backend 逐字一致，user1=ADMIN）+ compose `user` 服务（宿主 8091）+ CI 第 5 job + backend job 扩全量；集成测试 4/4 绿（Nacos 注册 + health UP + prometheus 200 + 迁移种子）
-- 已完成：**split-06 认证链路迁移**：登录/会话/RBAC 查询迁入 kuros-user（AuthController/AuthService/验证码三件套/StpInterfaceImpl/CommunityUser + RBAC 仓储）；backend 移除认证代码、刻意保留 SaToken/CSRF 放行条目（直连 auth 落到"无 handler"→404，新测试编码化）；网关新增 `kuros-user-auth` 路由（`order(-1)` 显式优先 + 声明在 `/**` 之前双保障，双桩集成测试证命中）；compose user 服务补 `APP_AUTH_*`、gateway 挂 user 依赖；冒烟/会话脚本改用双库共有种子号（窗口期限制见"常见陷阱 13"）。AI 侧验证：三工程 test-compile + compose config + node --check 通过；全量测试与端到端待 CI
+- 已完成：**split-06 认证链路迁移**：登录/会话/RBAC 查询迁入 kuros-user（AuthController/AuthService/验证码三件套/StpInterfaceImpl/CommunityUser + RBAC 仓储）；backend 移除认证代码、刻意保留 SaToken/CSRF 放行条目（直连 auth 落到"无 handler"→404，新测试编码化）；网关新增 `kuros-user-auth` 路由（`order(-1)` 显式优先 + 声明在 `/**` 之前双保障，双桩集成测试证命中）；compose user 服务补 `APP_AUTH_*`、gateway 挂 user 依赖；冒烟/会话脚本改用双库共有种子号（窗口期限制见"常见陷阱 13"）。CI 五 job 全绿（PR #68 首轮 run 35587464883，含 deployment 全栈冒烟 4m1s）；AI 侧快验：三工程 test-compile + compose config + node --check 通过
 - 下一步：**split-07：关注迁移 + 内部 API + 数据清理**（工单 `docs/tickets/split-07-follow-migration.md`；本地 compose volume 若为 split-05 前创建，需先手动建 `kuros_user` 库，命令见 `docker/mysql-init/40-kuros-user-create-db.sh` 注释）
 
 **已合并 PR**：#59（切片 #1-#9 汇总）、#66（Prometheus registry 修复）；`main` @ `905c7b8`
