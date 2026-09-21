@@ -1,6 +1,5 @@
 package com.kuros.kurosbackend.comment.service;
 
-import com.kuros.kurosbackend.shared.api.AuthorResponse;
 import com.kuros.kurosbackend.comment.api.CommentResponse;
 import com.kuros.kurosbackend.comment.api.CreateCommentRequest;
 import com.kuros.kurosbackend.shared.api.PageMeta;
@@ -14,6 +13,8 @@ import com.kuros.kurosbackend.shared.exception.ForbiddenException;
 import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.comment.repository.CommunityCommentRepository;
 import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
+import com.kuros.kurosbackend.user.client.UserBriefDto;
+import com.kuros.kurosbackend.user.client.UserDirectoryFacade;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -33,13 +35,16 @@ public class CommunityCommentService {
 
     private final CommunityCommentRepository commentRepository;
     private final CommunityPostRepository postRepository;
+    private final UserDirectoryFacade userDirectory;
 
     public CommunityCommentService(
             CommunityCommentRepository commentRepository,
-            CommunityPostRepository postRepository
+            CommunityPostRepository postRepository,
+            UserDirectoryFacade userDirectory
     ) {
         this.commentRepository = commentRepository;
         this.postRepository = postRepository;
+        this.userDirectory = userDirectory;
     }
 
     @Transactional(readOnly = true)
@@ -49,8 +54,11 @@ public class CommunityCommentService {
         int normalizedPageSize = Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE);
         Pageable pageable = PageRequest.of(normalizedPage - 1, normalizedPageSize, sortOf(sort));
         Page<CommunityComment> comments = commentRepository.findByPostId(postId, pageable);
+        // split-08：整页评论作者一次批量回填（Feign），避免逐条单查的 N+1 跨服务调用
+        Map<String, UserBriefDto> authors = userDirectory.findAuthors(
+                comments.getContent().stream().map(CommunityComment::getAuthorId).toList());
         List<CommentResponse> items = comments.getContent().stream()
-                .map(this::toResponse)
+                .map(comment -> toResponse(comment, authors))
                 .toList();
         return new PageResult<>(items, new PageMeta(normalizedPage, normalizedPageSize, comments.getTotalElements(), comments.getTotalPages()));
     }
@@ -78,7 +86,7 @@ public class CommunityCommentService {
         CommunityComment comment = commentRepository.save(new CommunityComment(
                 UUID.randomUUID().toString(), postId, authorId, parentId, content, now
         ));
-        return toResponse(comment);
+        return toResponse(comment, userDirectory.findAuthors(List.of(authorId)));
     }
 
     // 评论删除后驱逐帖子详情缓存
@@ -110,21 +118,13 @@ public class CommunityCommentService {
         return Sort.by(Sort.Order.desc("createdAt"));
     }
 
-    private CommentResponse toResponse(CommunityComment comment) {
+    private CommentResponse toResponse(CommunityComment comment, Map<String, UserBriefDto> authors) {
         boolean deleted = comment.getStatus() == CommentStatus.DELETED;
         return new CommentResponse(
-                comment.getId(), comment.getParentId(), toAuthor(comment.getAuthorId()),
+                comment.getId(), comment.getParentId(), userDirectory.toAuthor(comment.getAuthorId(), authors),
                 deleted ? "该评论已删除" : comment.getContent(), deleted,
                 comment.getLikeCount(), comment.getCreatedAt()
         );
-    }
-
-    /**
-     * split-07：用户表迁出本库后作者资料不再可读，统一返回占位作者。
-     * 保留 authorId 的原因与 CommunityPostService.toAuthor 相同（前端关注按钮依赖 id）。
-     */
-    private AuthorResponse toAuthor(String authorId) {
-        return new AuthorResponse(authorId, "未知漂泊者", null, null);
     }
 
     private String blankToNull(String value) {

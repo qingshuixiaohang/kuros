@@ -21,7 +21,8 @@
 - 已完成：**split-05 `kuros-user` 工程骨架**（7f61947）：独立库 `kuros_user` + Flyway V1/V2（种子与 backend 逐字一致，user1=ADMIN）+ compose `user` 服务（宿主 8091）+ CI 第 5 job + backend job 扩全量；集成测试 4/4 绿（Nacos 注册 + health UP + prometheus 200 + 迁移种子）
 - 已完成：**split-06 认证链路迁移**：登录/会话/RBAC 查询迁入 kuros-user（AuthController/AuthService/验证码三件套/StpInterfaceImpl/CommunityUser + RBAC 仓储）；backend 移除认证代码、刻意保留 SaToken/CSRF 放行条目（直连 auth 落到"无 handler"→404，新测试编码化）；网关新增 `kuros-user-auth` 路由（`order(-1)` 显式优先 + 声明在 `/**` 之前双保障，双桩集成测试证命中）；compose user 服务补 `APP_AUTH_*`、gateway 挂 user 依赖；冒烟/会话脚本改用双库共有种子号（窗口期限制见"常见陷阱 13"）。CI 五 job 全绿（PR #68 首轮 run 35587464883，含 deployment 全栈冒烟 4m1s）；AI 侧快验：三工程 test-compile + compose config + node --check 通过
 - 已完成：**split-07 关注迁移 + 内部 API + 数据清理**（f9fae25）：关注链路（UserFollow 实体/仓储/Service/Controller，分布式锁与幂等语义逐字保持）与内部 API（`/internal/v1/users`：batch 简档/follow-stats/following/followers）迁入 kuros-user；backend 删用户域 16 文件（含 UserSession 死代码）、资料/个人中心整端 503 降级、作者占位"未知漂泊者"保留 authorId、StpInterfaceImpl 改 Redis-only；V10 先摘 7 FK 再 DROP 7 张用户域表；网关新增 `kuros-user-follow` 路由（`order(-1)`，单段通配不误伤 `/{id}` 与 `/me/profile`）；smoke 增 follow 冒烟、会话探针改 `/api/v1/auth/me`。AI 侧快验：三工程 test-compile + compose config + node --check + 本地 gateway 构建通过；CI 第 3 轮五 job 全绿（run 35591315920；第 2 轮部署构建竞态修复见陷阱 14）
-- 下一步：**split-08：OpenFeign 回填用户域**（backend 消费 `/internal/v1/users`，接回昵称/头像，撤 503 降级与占位作者；窗口期限制收口，见"常见陷阱 13"）
+- 已完成：**split-08：OpenFeign 回填用户域**：backend 经 `@FeignClient(name="kuros-user", url="${app.feign.kuros-user.url:}")` 消费 `/internal/v1/users` 的 batch/following/followers（url 留空走 lb 服务发现、测试注入桩地址直连）；`UserDirectoryFacade` 收敛两条**相反**降级路线——内容域列表 `findAuthors` 吞异常返空 map→占位作者"用户"不 500、资料页 `requireUser/following/followers` 失败即 503、未知 id→404；`CommunityPostService/CommunityCommentService` 整页批量回填消除跨服务 N+1（详情走单元素 batch）；`ProfileService.findPublic/findOwn` 重建为"用户字段经 Feign + postCount/likeCount/posts/comments/favorites 本地聚合"的跨服务组合（依赖单向：内容域→用户域）；`CacheConfig` 恢复 `publicProfile` 缓存名（60s TTL 兜底，事件驱动失效留待 RocketMQ 切片）。测试：`UserDirectoryStub`（JDK HttpServer 桩 + url 直连，含 healthy 降级开关）翻转作者昵称断言 + 新增"列表占位/资料页 503"降级用例；`NacosFeignIntegrationTest`（Testcontainers nacos + `NamingService` 把桩注册为 kuros-user、url 留空走 lb 真实链路）。AI 侧快验：test-compile 全绿 + code-review 子代理（静态+编译级）无阻断问题、修复桩 executor 非守护线程泄漏（陷阱 15）；全量测试待 CI/用户执行
+- 下一步：**split-09：全链路冒烟 + 复盘收尾**（每切片全量测试绿才推进；`docs/learning/` 七段式复盘统一产出；全栈耗时验证由用户执行）
 
 **已合并 PR**：#59（切片 #1-#9 汇总）、#66（Prometheus registry 修复）；`main` @ `905c7b8`
 
@@ -52,7 +53,7 @@
 ```
 com.kuros.kurosbackend
 ├── shared/          # 共享基建：config / exception / health / api / lock（split-01 已归位）
-├── user/            # 用户域残留壳（split-07 后）：资料端点 503 降级待 split-08 回填 + StpInterfaceImpl（Redis-only）；主体已拆出 kuros-user
+├── user/            # 用户域残留壳（split-08 后）：资料端点经 Feign 回填恢复 200 + `client/`（UserDirectoryClient/Facade/UserBriefDto）+ StpInterfaceImpl（Redis-only）；主体已拆出 kuros-user
 ├── post/            # 帖子域（split-03）
 ├── comment/         # 评论域（split-03）
 ├── interaction/     # 互动域：点赞/收藏（split-04）
@@ -147,17 +148,17 @@ SaRouter.match(SaHttpMethod.GET).match("/api/v1/posts/**").stop();
 10. **Actuator 不传递 Prometheus registry**：`/actuator/prometheus` 404，需显式加 `micrometer-registry-prometheus`（PR #66）
 11. **全量测试跨类污染双根因**：① H2 库名固定 + Spring context 缓存 → @DirtiesContext 失效、数据串类（单类绿全量红）；② Sca Nacos 地址解析 JVM 级静态缓存 → 首解析地址粘住 JVM、静默回退默认值（阈值 100 vs 555）。修复：唯一 H2 库名工厂（TestDatabases）+ surefire `reuseForks=false` 每类独立 JVM（cbae01c，详见 pom 与测试类注释）
 12. **mysql-init 授权脚本两坑（split-05）**：① GRANT 写死账号名——MySQL 8 起 GRANT 不再隐式建号，换 `MYSQL_USER` 后报 1410，entrypoint 带 `set -e` 使初始化整体失败（改用 `.sh` 展开环境变量；`mysql` CLI 在 source/子进程两种执行模式下都成立）；② Windows（`core.autocrlf=true`）检出 `.sh` 变 CRLF 会破坏 shebang/heredoc（目录级 `.gitattributes` 锁 `eol=lf`）
-13. **跨库用户身份窗口期（split-06~08）**：认证迁入 kuros-user 后，非种子手机号首次登录只在 `kuros_user` 建号。split-06 期为"内容域按登录 ID 查 backend 本库 `users` → 404/403"；split-07 起 backend 已删用户域（V10），资料/个人中心整端 503 `SERVICE_UNAVAILABLE`（不用 404——误导"用户不存在"；不用 500——计划内可恢复），帖子列表仍可用且作者占位"未知漂泊者"（保留 `authorId`，关注按钮窗口期可用）；关注链路已 100% 在 kuros-user。冒烟/会话脚本用种子号（13800000002/03）；split-08 Feign 从用户库回填后收口
+13. **跨库用户身份窗口期（split-06~08，已收口）**：认证迁入 kuros-user 后，非种子手机号首次登录只在 `kuros_user` 建号。split-06 期为"内容域按登录 ID 查 backend 本库 `users` → 404/403"；split-07 起 backend 已删用户域（V10），资料/个人中心整端 503、帖子列表作者占位"未知漂泊者"（保留 `authorId`）；**split-08 已经 Feign 从 kuros-user 回填昵称/头像/关注，窗口期收口**——列表/详情/评论作者命中即真实昵称、未命中（用户域不可用或未知 id）降级占位"用户"且不 500，资料页/个人中心恢复 200 组合视图、仅 kuros-user 不可用时 503
 14. **三 Java 服务并行构建的 BuildKit 共享 cache mount 竞态（split-07 CI 第二轮）**：compose 并行构建 backend/user/gateway 共享 `/root/.m2` cache mount（默认 `sharing=shared`），冷缓存下三方同时下载解包 maven-wrapper；而 mvnw 3.3.4（only-script）以"目录存在"判断已安装（不校验 `bin/mvn` 完整性）——并发中一方看到另一方刚建的目录即跳过下载，直接 exec 未解包出的 `bin/mvn` → `exit 127`。修复：三个 Dockerfile 的挂载加 `sharing=locked`（并发构建互斥，同时消除 `~/.m2/repository` 并发写入的同类竞态）；此前轮次全绿属时序侥幸（flaky），根因是共享写入无互斥——本地热缓存永远复现不了
+15. **JDK HttpServer 测试桩的 executor 线程泄漏挂住 Surefire fork JVM（split-08，code-review 静态发现）**：`HttpServer.stop(delay)` 按 JDK 契约**不关闭**调用方 `setExecutor` 传入的 executor；若用 `Executors.newFixedThreadPool`（非守护线程）且未显式关闭，残留非守护线程会阻止 fork 出的测试 JVM 自然退出——症状是构建末尾挂起或 `The forked VM terminated without properly saying goodbye`，直接威胁"全量测试绿"。修复双保险：① executor 用守护线程工厂（`thread.setDaemon(true)`），即便某测试类漏关也不挂 JVM；② `close()` 里 `server.stop(0)` 后显式 `executor.shutdownNow()`，且每个持桩测试类补 `@AfterAll` 关闭。教训：自带 executor 的 JDK 网络/服务类，stop 与 executor 生命周期是两件事，必须分别释放
 
 ---
 
 ## 下一步行动
 
-1. **split-08 开工**：backend OpenFeign 回填用户域（消费 `/internal/v1/users`：批量简档/关注查询），撤 503 降级与占位作者；⚠️ 窗口期限制持续到本切片收口
-2. **split-09**：全链路冒烟 + 复盘收尾（每切片全量测试绿才推进；全栈耗时验证由用户执行）
-3. **#10 收尾后**：不直接开工功能，先对 **#11（互动写路径异步化 + RocketMQ）执行 `grill-with-docs`**，按难点→方案→功能→叙事新模式出 spec
-4. 本文件随进展更新
+1. **split-09 开工**：全链路冒烟 + 复盘收尾（`docs/learning/` 七段式复盘统一产出；每切片全量测试绿才推进，全栈耗时验证由用户执行）
+2. **#10 收尾后**：不直接开工功能，先对 **#11（互动写路径异步化 + RocketMQ）执行 `grill-with-docs`**，按难点→方案→功能→叙事新模式出 spec
+3. 本文件随进展更新
 
 ---
 

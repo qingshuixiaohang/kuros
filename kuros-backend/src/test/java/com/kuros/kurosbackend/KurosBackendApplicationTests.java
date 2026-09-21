@@ -2,6 +2,7 @@ package com.kuros.kurosbackend;
 
 import cn.dev33.satoken.stp.StpUtil;
 import jakarta.servlet.http.Cookie;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +53,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * - 用户资料/个人中心端点整端降级为 503（split-08 Feign 回填后恢复）
  * - 关注端点迁至 kuros-user：本测试改为断言"直连 404"
  *
+ * split-08 起 backend 经 OpenFeign 从 kuros-user 回填用户域，本测试相应恢复：
+ * - 新增 UserDirectoryStub（JDK HttpServer 桩），经 @DynamicPropertySource 注入 app.feign.kuros-user.url 直连（免起 Nacos）
+ * - 种子作者（...0001~...0004）断言恢复真实昵称；桩中不存在的作者（如 login 派生 UUID）回退占位"用户"
+ * - 资料页/个人中心从 503 恢复为 200 组合视图；新增"桩置为不健康"的降级用例（列表占位、资料页 503）
+ *
  * 与之前版本的核心区别：
  * - 使用 Testcontainers 启动真实 Redis 容器（替代原来的纯 H2 内存测试）
  * - CSRF 不再用 Spring Security 的 csrf() post-processor，改为手动设置双重提交 Cookie + Header
@@ -66,12 +72,18 @@ class KurosBackendApplicationTests {
     @Container
     static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
 
+    // kuros-user 内部 API 桩（split-08）：Feign 经 url 属性直连它，免起 Nacos（秒级）。
+    // static 字段在类加载时即启动 HttpServer，@DynamicPropertySource 注入其端口时端口已就绪。
+    static final UserDirectoryStub userDirectory = new UserDirectoryStub();
+
     @DynamicPropertySource
     static void redisProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
         // 唯一 H2 库名：库生命周期与本类 context 对齐（详见 TestDatabases 注释）
         registry.add("spring.datasource.url", () -> TestDatabases.h2Url("main"));
+        // Feign 直连桩地址：url 非空时绕过 Nacos/LoadBalancer（真实 lb 链路另由 NacosFeignIntegrationTest 覆盖）
+        registry.add("app.feign.kuros-user.url", userDirectory::baseUrl);
     }
 
     // 测试用固定 CSRF Token：CsrfInterceptor 只校验 cookie == header，不校验服务端存储
@@ -91,6 +103,14 @@ class KurosBackendApplicationTests {
     void flushRedis() {
         // 每个测试前清空 Redis，保证测试隔离（H2 已经是内存模式，每次上下文重建时自动清空）
         Objects.requireNonNull(redisTemplate.getConnectionFactory()).getConnection().serverCommands().flushDb();
+        // 复位桩健康：降级用例会临时置 false，必须每用例前恢复，避免污染后续用例
+        userDirectory.setHealthy(true);
+    }
+
+    @AfterAll
+    static void closeStub() {
+        // 关闭桩 HttpServer + 其 executor 线程，避免残留线程阻止 Surefire fork JVM 退出
+        userDirectory.close();
     }
 
     @Test
@@ -120,7 +140,7 @@ class KurosBackendApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.title").value("长离焚火队：从零到毕业的配队思路"))
                 .andExpect(jsonPath("$.data.content").isNotEmpty())
-                .andExpect(jsonPath("$.data.author.nickname").value("未知漂泊者"));
+                .andExpect(jsonPath("$.data.author.nickname").value("潮声档案员"));
     }
 
     @Test
@@ -202,35 +222,71 @@ class KurosBackendApplicationTests {
     }
 
     @Test
-    void 窗口期用户资料端整端降级为503而帖子列表仍可用() throws Exception {
+    void 用户资料经Feign回填真实昵称而按作者查帖照常可用() throws Exception {
         String userId = "10000000-0000-0000-0000-000000000001";
 
-        // split-07：用户域数据迁出本库，资料聚合整端降级为 503——
-        // 语义是"服务端能力暂不可用"（split-08 经 Feign 回填后恢复），而非 404"用户不存在"
+        // split-08：资料页经 Feign 从 kuros-user 取用户字段（潮声档案员），postCount/likeCount 本地聚合
         mockMvc.perform(get("/api/v1/users/" + userId))
-                .andExpect(status().isServiceUnavailable())
-                .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.nickname").value("潮声档案员"))
+                .andExpect(jsonPath("$.data.postCount").value(1))
+                .andExpect(jsonPath("$.data.likeCount").value(3700));
 
-        // 按作者查帖子不依赖用户表：帖子仍在本库，窗口期保持可用；
-        // 作者为占位（authorId 保留——前端关注按钮据此调用 kuros-user 的关注 API）
+        // 按作者查帖：帖子本库自持，作者昵称经 Feign 批量回填为真实昵称
         mockMvc.perform(get("/api/v1/users/" + userId + "/posts"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(1)))
                 .andExpect(jsonPath("$.data[0].title").value("长离焚火队：从零到毕业的配队思路"))
-                .andExpect(jsonPath("$.data[0].author.nickname").value("未知漂泊者"))
+                .andExpect(jsonPath("$.data[0].author.nickname").value("潮声档案员"))
                 .andExpect(jsonPath("$.data[0].author.id").value(userId))
                 .andExpect(jsonPath("$.meta.totalItems").value(1));
     }
 
     @Test
-    void 个人中心窗口期整端降级为503() throws Exception {
-        Cookie sessionCookie = login("13800000001");
+    void 个人中心经Feign回填返回跨服务组合聚合() throws Exception {
+        // 直接以种子用户 ...0001 建会话（不走 login(phone) 的派生 UUID）：
+        // 这样 findOwn 的用户资料能命中桩、且其本地帖子/统计非空，可断言"用户域经 Feign + 内容域本地"的完整组合
+        String userId = "10000000-0000-0000-0000-000000000001";
+        Cookie sessionCookie = sessionCookie(userId);
 
-        // 个人中心聚合依赖用户资料与关注关系，两者均已迁出本库（V10），窗口期整端降级；
-        // 能拿到 503（而非 401）说明会话鉴权通过、请求已到达控制器——降级不影响登录本身
         mockMvc.perform(get("/api/v1/users/me/profile").cookie(sessionCookie))
-                .andExpect(status().isServiceUnavailable())
-                .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.profile.nickname").value("潮声档案员"))
+                .andExpect(jsonPath("$.data.stats.postCount").value(1))
+                .andExpect(jsonPath("$.data.stats.likeCount").value(3700))
+                .andExpect(jsonPath("$.data.posts.items", hasSize(1)))
+                // following/fans 来自桩（...0002 / ...0003），postCount/likeCount 由本地聚合补全
+                .andExpect(jsonPath("$.data.following.items[0].nickname").value("无音区夜行者"))
+                .andExpect(jsonPath("$.data.following.items[0].likeCount").value(5100))
+                .andExpect(jsonPath("$.data.fans.items[0].nickname").value("今汐的留声机"));
+    }
+
+    @Test
+    void kurosUser不可用时帖子列表降级为占位作者而不500() throws Exception {
+        userDirectory.setHealthy(false);
+        try {
+            // 工单 #3：用户域不可用时列表照常 200，作者回退中性占位"用户"、保留 id（前端关注按钮仍可定位）
+            mockMvc.perform(get("/api/v1/posts").param("category", "配队攻略"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data", hasSize(1)))
+                    .andExpect(jsonPath("$.data[0].author.nickname").value("用户"))
+                    .andExpect(jsonPath("$.data[0].author.id").value("10000000-0000-0000-0000-000000000001"));
+        } finally {
+            userDirectory.setHealthy(true);
+        }
+    }
+
+    @Test
+    void kurosUser不可用时资料页降级为503() throws Exception {
+        userDirectory.setHealthy(false);
+        try {
+            // 资料页强依赖用户资料：Feign 失败 → 503（区别于列表的占位降级），语义是"能力暂不可用"而非"用户不存在"
+            mockMvc.perform(get("/api/v1/users/10000000-0000-0000-0000-000000000001"))
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
+        } finally {
+            userDirectory.setHealthy(true);
+        }
     }
 
     @Test
@@ -312,7 +368,7 @@ class KurosBackendApplicationTests {
                         .content("{\"content\":\"实战里这套循环很好上手。\",\"parentId\":\"30000000-0000-0000-0000-000000000001\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.parentId").value("30000000-0000-0000-0000-000000000001"))
-                .andExpect(jsonPath("$.data.author.nickname").value("未知漂泊者"));
+                .andExpect(jsonPath("$.data.author.nickname").value("用户"));
 
         mockMvc.perform(post(commentsPath)
                         .cookie(sessionCookie)
@@ -379,7 +435,7 @@ class KurosBackendApplicationTests {
                         .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"长离实战循环记录\",\"content\":\"循环内容\",\"tags\":[\"长离\",\"实战\"]}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.type").value("GUIDE"))
-                .andExpect(jsonPath("$.data.author.nickname").value("未知漂泊者"))
+                .andExpect(jsonPath("$.data.author.nickname").value("用户"))
                 .andExpect(jsonPath("$.data.author.id").value(testUserId("13800000008")))
                 .andExpect(jsonPath("$.data.likeCount").value(0))
                 .andExpect(jsonPath("$.data.favoriteCount").value(0))
@@ -391,7 +447,7 @@ class KurosBackendApplicationTests {
         mockMvc.perform(get("/api/v1/posts/" + postId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.title").value("长离实战循环记录"))
-                .andExpect(jsonPath("$.data.author.nickname").value("未知漂泊者"))
+                .andExpect(jsonPath("$.data.author.nickname").value("用户"))
                 .andExpect(jsonPath("$.data.author.id").value(testUserId("13800000008")));
     }
 

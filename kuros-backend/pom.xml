@@ -143,6 +143,20 @@
             <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
         </dependency>
 
+        <!-- OpenFeign（split-08）：backend 经服务发现声明式调用 kuros-user 内部 API，
+             把拆分后丢失的“本库 JOIN”重建为跨服务组合视图 -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+        <!-- LoadBalancer：Feign 的 lb://kuros-user 需要它把服务名解析为实例地址。
+             显式声明而非依赖传递——nacos-discovery 是否带入 loadbalancer 随 SCA 版本浮动，
+             显式依赖让“服务发现 → 负载均衡 → Feign 调用”这条链在 pom 里一目了然 -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
+
         <!-- SpringDoc OpenAPI：自动生成 Swagger UI 交互式 API 文档。
              springdoc 2.x 基于 Jakarta EE，兼容 Spring Boot 4.x。
              为什么不用 springfox？springfox 已停止维护，不支持 Jakarta EE -->

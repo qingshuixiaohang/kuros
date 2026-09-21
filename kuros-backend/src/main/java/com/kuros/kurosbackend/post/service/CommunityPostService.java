@@ -1,6 +1,5 @@
 package com.kuros.kurosbackend.post.service;
 
-import com.kuros.kurosbackend.shared.api.AuthorResponse;
 import com.kuros.kurosbackend.shared.api.PageMeta;
 import com.kuros.kurosbackend.shared.api.PageResult;
 import com.kuros.kurosbackend.post.api.PostDetailResponse;
@@ -14,6 +13,8 @@ import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.media.repository.MediaAssetRepository;
 import com.kuros.kurosbackend.post.repository.PostMediaRepository;
+import com.kuros.kurosbackend.user.client.UserBriefDto;
+import com.kuros.kurosbackend.user.client.UserDirectoryFacade;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -37,17 +38,20 @@ public class CommunityPostService {
     private final CommunityPostRepository postRepository;
     private final PostMediaRepository postMediaRepository;
     private final MediaAssetRepository mediaAssetRepository;
+    private final UserDirectoryFacade userDirectory;
     private final String publicBaseUrl;
 
     public CommunityPostService(
             CommunityPostRepository postRepository,
             PostMediaRepository postMediaRepository,
             MediaAssetRepository mediaAssetRepository,
+            UserDirectoryFacade userDirectory,
             @Value("${app.storage.public-base-url:http://localhost:8080}") String publicBaseUrl
     ) {
         this.postRepository = postRepository;
         this.postMediaRepository = postMediaRepository;
         this.mediaAssetRepository = mediaAssetRepository;
+        this.userDirectory = userDirectory;
         this.publicBaseUrl = publicBaseUrl.replaceAll("/$", "");
     }
 
@@ -69,8 +73,11 @@ public class CommunityPostService {
                 blankToNull(keyword),
                 pageable
         );
+        // split-08：整页作者一次批量回填（Feign），避免逐帖单查的 N+1 跨服务调用
+        Map<String, UserBriefDto> authors = userDirectory.findAuthors(
+                posts.getContent().stream().map(CommunityPost::getAuthorId).toList());
         List<PostSummaryResponse> items = posts.getContent().stream()
-                .map(this::toSummary)
+                .map(post -> toSummary(post, authors))
                 .toList();
         PageMeta meta = new PageMeta(normalizedPage, normalizedPageSize, posts.getTotalElements(), posts.getTotalPages());
         return new PageResult<>(items, meta);
@@ -83,7 +90,8 @@ public class CommunityPostService {
     public PostDetailResponse findPublishedById(String id) {
         CommunityPost post = postRepository.findByIdAndStatus(id, PostStatus.PUBLISHED)
                 .orElseThrow(() -> new ResourceNotFoundException("帖子不存在或已删除"));
-        return toDetail(post);
+        // 详情单帖：批量接口取单元素（内部契约只有 batch，无需为单查扩面）
+        return toDetail(post, userDirectory.findAuthors(List.of(post.getAuthorId())));
     }
 
     public PageResult<PostSummaryResponse> findPublishedByAuthor(String authorId, int page, int pageSize) {
@@ -91,8 +99,9 @@ public class CommunityPostService {
         int normalizedPageSize = Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE);
         Pageable pageable = PageRequest.of(normalizedPage - 1, normalizedPageSize, Sort.by(Sort.Order.desc("publishedAt")));
         Page<CommunityPost> posts = postRepository.findByAuthorIdAndStatus(authorId, PostStatus.PUBLISHED, pageable);
+        Map<String, UserBriefDto> authors = userDirectory.findAuthors(List.of(authorId));
         List<PostSummaryResponse> items = posts.getContent().stream()
-                .map(this::toSummary)
+                .map(post -> toSummary(post, authors))
                 .toList();
         return new PageResult<>(items, new PageMeta(normalizedPage, normalizedPageSize, posts.getTotalElements(), posts.getTotalPages()));
     }
@@ -100,10 +109,12 @@ public class CommunityPostService {
     public PageResult<PostSummaryResponse> findPublishedByIds(Page<String> ids) {
         List<CommunityPost> posts = postRepository.findAllById(ids.getContent());
         Map<String, CommunityPost> postsById = posts.stream().collect(Collectors.toMap(CommunityPost::getId, Function.identity()));
+        Map<String, UserBriefDto> authors = userDirectory.findAuthors(
+                posts.stream().map(CommunityPost::getAuthorId).toList());
         List<PostSummaryResponse> items = ids.getContent().stream()
                 .map(postsById::get)
                 .filter(java.util.Objects::nonNull)
-                .map(this::toSummary)
+                .map(post -> toSummary(post, authors))
                 .toList();
         return new PageResult<>(items, new PageMeta(ids.getNumber() + 1, ids.getSize(), ids.getTotalElements(), ids.getTotalPages()));
     }
@@ -123,34 +134,22 @@ public class CommunityPostService {
         return Sort.by(Sort.Order.desc("publishedAt"));
     }
 
-    private PostSummaryResponse toSummary(CommunityPost post) {
+    private PostSummaryResponse toSummary(CommunityPost post, Map<String, UserBriefDto> authors) {
         List<PostMediaResponse> media = media(post.getId());
         return new PostSummaryResponse(
                 post.getId(), post.getType(), post.getCategory(), post.getTitle(), post.getExcerpt(),
-                toAuthor(post.getAuthorId()), post.getPublishedAt(), post.getViewCount(), post.getLikeCount(),
+                userDirectory.toAuthor(post.getAuthorId(), authors), post.getPublishedAt(), post.getViewCount(), post.getLikeCount(),
                 post.getFavoriteCount(), post.getCommentCount(), tagNames(post), coverUrl(media), media
         );
     }
 
-    private PostDetailResponse toDetail(CommunityPost post) {
+    private PostDetailResponse toDetail(CommunityPost post, Map<String, UserBriefDto> authors) {
         List<PostMediaResponse> media = media(post.getId());
         return new PostDetailResponse(
                 post.getId(), post.getType(), post.getCategory(), post.getTitle(), post.getExcerpt(), post.getContent(),
-                toAuthor(post.getAuthorId()), post.getPublishedAt(), post.getViewCount(), post.getLikeCount(),
+                userDirectory.toAuthor(post.getAuthorId(), authors), post.getPublishedAt(), post.getViewCount(), post.getLikeCount(),
                 post.getFavoriteCount(), post.getCommentCount(), tagNames(post), coverUrl(media), media
         );
-    }
-
-    /**
-     * split-07：用户表迁出本库后作者资料不再可读，统一返回占位作者。
-     *
-     * 为什么保留 authorId（而不是像原先作者缺失时返回 id=null）：
-     * 前端关注按钮以 author.id 作为目标用户标识，id 非空时按钮可真实调用
-     * 网关到 kuros-user 的关注 API——窗口期“关注”链路因此仍然可用；
-     * 昵称等展示信息由 split-08 经 Feign 批量回填（kuros-user 内部 API /internal/v1/users/batch）。
-     */
-    private AuthorResponse toAuthor(String authorId) {
-        return new AuthorResponse(authorId, "未知漂泊者", null, null);
     }
 
     private List<String> tagNames(CommunityPost post) {
