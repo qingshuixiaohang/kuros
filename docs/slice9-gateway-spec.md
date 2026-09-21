@@ -27,7 +27,7 @@
 ### 第一轮：端口 / 路由 / 边界
 
 1. **端口策略（Q1-A）**：Gateway 容器监听 8080 并占宿主 8080 正门；backend 宿主映射改为 `${BACKEND_PORT:-8090}:8080`（容器内不变），实现前端零改动。
-2. **路由配置（Q2-A）**：application.properties 显式声明路由 `lb://kuros-backend`，路径原样透传，不加 StripPrefix/RewritePath 等过滤器。
+2. **路由配置（Q2-A）**：显式声明唯一路由 `lb://kuros-backend`，路径原样透传，不加 StripPrefix/RewritePath 等过滤器。实现注：原计划用 properties 索引写法，但 CI 实测 Boot 4.1 + SCG 4.3 下 predicates[0] 标量绑定失败（列表留空触发 @NotEmpty 拒绝启动），改为 GatewayRoutesConfig 编程式 DSL，决策意图不变。
 3. **Sentinel 归属（Q3-A）**：留 backend，本切片只做"门"，不引入网关限流。
 4. **CORS 归属（Q4-A）**：留 backend，避免网关与后端重复追加 CORS 头。
 5. **backend 端口暴露（Q5-A）**：保留 8090 宿主映射，作为调试直连通道。

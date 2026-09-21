@@ -46,9 +46,8 @@ class GatewayRoutingIntegrationTest {
 
     @DynamicPropertySource
     static void routingProperties(DynamicPropertyRegistry registry) {
-        // 覆盖主配置中的 lb://kuros-backend：纯转发测试不依赖服务发现
-        registry.add("spring.cloud.gateway.server.webflux.routes[0].uri",
-                () -> "http://127.0.0.1:" + stub.port());
+        // 覆盖 GatewayRoutesConfig 中的 lb://kuros-backend：纯转发测试不依赖服务发现
+        registry.add("app.routes.backend-uri", () -> "http://127.0.0.1:" + stub.port());
     }
 
     @Autowired

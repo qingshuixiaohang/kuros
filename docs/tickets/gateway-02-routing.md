@@ -6,7 +6,7 @@
 
 ## 范围
 
-1. `application.properties` 显式声明路由：`spring.cloud.gateway.routes[0].id=kuros-backend`、`uri=lb://kuros-backend`、`predicates[0]=Path=/**`（路径原样透传，不加 StripPrefix/RewritePath 过滤器——Q2/Q6 决策）
+1. 显式声明路由（路径原样透传，不加 StripPrefix/RewritePath 过滤器——Q2/Q6 决策）。实现注：properties 索引写法（`routes[0].predicates[0]=Path=/**`）在 Boot 4.1 + SCG 4.3 下绑定失败（CI 实测），改在 GatewayRoutesConfig 用编程式 DSL 声明，uri 经 `app.routes.backend-uri` 属性注入以便测试覆盖
 2. 集成测试（TDD 先 RED）：`GatewayRoutingIntegrationTest`——`com.sun.net.httpserver.HttpServer` 桩服务器模拟 backend，路由 uri 直指桩地址，断言：
    - GET/POST 请求原样到达桩（路径、查询串、Cookie/Header 透传）
    - 桩响应（状态码、body、Content-Type）原样返回给客户端

@@ -41,26 +41,36 @@ class 下同时有 spring-webmvc 与 gateway 会导致启动失败（Boot 要求
 - 路由属性：`spring.cloud.gateway.routes` → **`spring.cloud.gateway.server.webflux.routes`**
   （旧前缀在新版本绑定失败）
 
-教训：Spring Cloud 2025.x 时代的组件命名从"全家桶单一坐标"转向"栈 + 实现后缀"，
+教训：Spring Cloud 2025.x 时代的组件命名从“全家桶单一坐标”转向“栈 + 实现后缀”，
 老博客的坐标与配置不能直接抄。
 
-### 2.3 lb:// 路由不自动生效
+### 2.3 properties 索引路由在 Boot 4.1 + SCG 4.3 下绑定失败
+官方文档标准写法 `spring.cloud.gateway.server.webflux.routes[0].predicates[0]=Path=/**`
+实测绑定失败：`Path=/**` 标量值无法绑定到 PredicateDefinition，predicates 列表留空，
+@NotEmpty 校验直接拒绝启动（APPLICATION FAILED TO START，rejected value [[]]）。
+排障线索是错误说“predicates must not be empty”但配置明明写了——真错在标量→
+复杂对象的构造器转换链没被走到。逃逸路径：改用 RouteLocatorBuilder 编程式 DSL，
+不依赖 properties 索引 + 构造器转换链，且 uri 走属性注入天然可测试。
+教训：**文档写法也要过真实版本组合的集成测试**，绑定类失败报错在“校验”层，
+根因在“转换”层。
+
+### 2.4 lb:// 路由不自动生效
 `uri=lb://kuros-backend` 的解析依赖 `spring-cloud-starter-loadbalancer`
 （ReactiveLoadBalancerClientFilter + ServiceInstanceListSupplier）。nacos-discovery
 只提供 DiscoveryClient 数据源，不会传递 loadbalancer 依赖——缺了它启动后路由
 直接 503。必须显式引入。
 
-### 2.4 会话穿透几乎免费
+### 2.5 会话穿透几乎免费
 SaToken 的会话 Cookie 是 Host-only（无 Domain 属性），浏览器对
 localhost:8080（网关）与 localhost:8090（backend）一视同仁地携带；网关原样
 转发 Cookie，backend 无感知。因此"纯换门"不需要在网关层做任何会话处理。
 
-### 2.5 端口策略是前端零改动的关键
+### 2.6 端口策略是前端零改动的关键
 前端 `NEXT_PUBLIC_API_BASE_URL` 是**构建期注入**的，默认值即 8080。
 把网关放在 8080 而不是给 backend 加 StripPrefix 转发前缀，前端与移动端
 零改动完成切换；backend 宿主 8090 仅作调试直连通道。
 
-### 2.6 集成测试的两条缝
+### 2.7 集成测试的两条缝
 - **桩服务器缝**：JDK 自带 `com.sun.net.httpserver.HttpServer` 模拟后端，
   路由 uri 用 `@DynamicPropertySource` 覆盖为桩地址——不起 Nacos，秒级。
 - **服务发现缝**：Testcontainers 起真实 Nacos（固定端口方案与 backend 一致），
