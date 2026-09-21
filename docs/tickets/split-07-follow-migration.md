@@ -14,10 +14,10 @@
 
 ## 验收
 
-- [x] 关注操作经网关由 kuros-user 提供，并发防重复行为保持（静态+编译级闭环：网关 `kuros-user-follow` 路由 `order(-1)` 显式优先于 backend `/**`，双桩集成测试证命中；kuros-user 关注集成测试含 16 线程并发防重复、幂等与 401/400/404 断言；端到端运行时验证待 CI 冒烟）
+- [x] 关注操作经网关由 kuros-user 提供，并发防重复行为保持（静态+编译级闭环：网关 `kuros-user-follow` 路由 `order(-1)` 显式优先于 backend `/**`，双桩集成测试证命中；kuros-user 关注集成测试含 16 线程并发防重复、幂等与 401/400/404 断言；端到端运行时验证由第 3 轮 CI 冒烟覆盖：compose-smoke 经网关 POST follow 断言 followed=true）
 - [x] 内部 API 可返回批量用户与关注信息（kuros-user 集成测试覆盖 `/internal/v1/users`：batch 简档、follow-stats、following/followers 分页）
-- [x] backend 库中用户域表已 DROP（V10），死代码已删（V10 先摘 7 个 FK 再 DROP 7 张表，MySQL 8 / H2 双兼容；16 个用户域文件删除，编译零残留引用；Flyway 实际执行待 CI）
-- [ ] 两侧测试全绿；CI 绿（待触发）
+- [x] backend 库中用户域表已 DROP（V10），死代码已删（V10 先摘 7 个 FK 再 DROP 7 张表，MySQL 8 / H2 双兼容；16 个用户域文件删除，编译零残留引用；Flyway 实际执行已由 CI compose 冒烟覆盖——V10 迁移成功且全栈冒烟全过）
+- [x] 两侧测试全绿；CI 绿（第 2 轮 4/5 绿：四个测试 job 全绿、部署构建暴露三服务并行构建共享 Maven cache mount 的 wrapper 解包竞态（gateway exit 127）已修复（97c3036，HANDOFF 陷阱 14）；第 3 轮五 job 全绿：User service 2m6s / Backend 2m57s / Gateway 1m8s / Frontend 51s / Deployment 3m53s（含 compose 全栈冒烟）；run 35591315920）
 
 ## 备注
 
