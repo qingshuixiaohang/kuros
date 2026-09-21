@@ -16,10 +16,10 @@
 
 ## 验收
 
-- [ ] compose 8 服务 healthy；compose config 校验通过
-- [ ] 冒烟脚本全过（三服务注册 + 跨服务链路）
-- [ ] CI 五 job 全绿
-- [ ] 学习复盘产出；Issue #67 关闭
+- [x] compose 8 服务 healthy；compose config 校验通过（CI run 35599511878 deployment job：`docker compose config --quiet` + `up -d --build` + health 探测 8090/8091/8080/3000 全绿）
+- [x] 冒烟脚本全过（三服务注册 + 跨服务链路）（`Nacos smoke passed: kuros-backend & kuros-user & kuros-gateway registered as healthy ephemeral instances`；`Cross-service smoke passed: … 详情作者昵称经 Feign 回填为「无音区夜行者」`，创建 + 重启复用两路径均过）
+- [x] CI 五 job 全绿（run [#35599511878](https://github.com/qingshuixiaohang/kuros/actions/runs/35599511878)：Frontend / Backend / Gateway / User service / Deployment 全 success）
+- [ ] 学习复盘产出（`docs/learning/10-service-split.md` 已完成：七段式 + STAR 收益量化 + 7 条追问链 + 3 方案对比表）；Issue #67 关闭（待用户确认）
 
 ## 备注
 
