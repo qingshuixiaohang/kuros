@@ -145,3 +145,20 @@ _避免_：草稿帖子（当前后端不存在草稿状态）
 - 演进路线：Redis+SaToken → MinIO → Nacos/Gateway → 服务拆分 → RocketMQ → ES+Canal → Sentinel → XXL-JOB → Cassandra+Leaf → Jmeter+CI/CD。
 - 分工规则：中间件下载/安装/启动由用户执行，代码/配置/测试由 AI 编写，vibe learning 模式。
 - 本决策**不引入**：MQ、MinIO、Elasticsearch、Nacos、Gateway、Sentinel（留到后续切片）。
+
+## 2026-09-21 服务拆分决策（切片 #10）
+
+- 拆出用户域微服务 `kuros-user`：认证、验证码、RBAC（四表 + StpInterface）、用户资料实体、关注关系；独立数据库 `kuros_user`（同 MySQL 实例），backend 新增迁移 DROP 迁走的表。
+- **组合视图留在内容域组装**（公开资料、个人中心、用户帖子列表），经 OpenFeign 取用户数据；依赖方向固定为**内容域 → 用户域**，不制造双向依赖。
+- 跨库无外键：一致性降级为服务契约（约定 ID 对齐种子 + 降级占位 + 生产事件驱动，事件驱动留 RocketMQ 切片）。
+- 登录态零迁移：两个服务共享同一 Redis + 同名 Cookie（`KUROS_SESSION`）+ 相同 SaToken 配置。
+- 网关路由：`/api/v1/auth/**`、`/api/v1/users/*/follow` → `lb://kuros-user`；其余 → `lb://kuros-backend`。
+- 架构决策记录：`docs/adr/0003-user-service-split.md`；实现规格：`docs/slice10-service-split-spec.md`。
+
+### 术语补充
+
+**用户域**：认证、会话、RBAC 权限、用户资料、关注关系的归属边界，由 kuros-user 服务拥有。
+_避免_：账户中心（口语化，边界不明确）
+
+**内容域**：帖子、评论、互动、举报、媒体的归属边界，由 kuros-backend（内容服务）拥有；组合视图也在此域组装。
+_避免_：主服务、核心服务（暗示等级，而非边界）
