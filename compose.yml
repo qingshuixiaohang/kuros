@@ -16,7 +16,10 @@ services:
       # 已有 volume 需手动执行：见 docs/learning 或 docker exec mysql < 脚本
       - ./docker/mysql-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      # 必须用 TCP（127.0.0.1）而非 localhost/socket：MySQL 首次初始化时的临时服务器
+      # （跑 init SQL，含 nacos 建表）禁用了 TCP，socket ping 会提前报告 healthy，
+      # 导致 nacos 被过早拉起连不上库（CI 全新 volume 实测踩坑）
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
       interval: 5s
       timeout: 5s
       retries: 20
