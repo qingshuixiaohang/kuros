@@ -20,7 +20,8 @@
 - 已完成：spec + ADR 0003 + 9 个工单 + **Phase A 四批重排全部提交**（split-01~04：shared / user / post+comment / interaction+report+media 归位，纯移动零行为变化）+ **全量测试 45/45 绿**（cbae01c 修复跨类污染，见"常见陷阱 11"）
 - 已完成：**split-05 `kuros-user` 工程骨架**（7f61947）：独立库 `kuros_user` + Flyway V1/V2（种子与 backend 逐字一致，user1=ADMIN）+ compose `user` 服务（宿主 8091）+ CI 第 5 job + backend job 扩全量；集成测试 4/4 绿（Nacos 注册 + health UP + prometheus 200 + 迁移种子）
 - 已完成：**split-06 认证链路迁移**：登录/会话/RBAC 查询迁入 kuros-user（AuthController/AuthService/验证码三件套/StpInterfaceImpl/CommunityUser + RBAC 仓储）；backend 移除认证代码、刻意保留 SaToken/CSRF 放行条目（直连 auth 落到"无 handler"→404，新测试编码化）；网关新增 `kuros-user-auth` 路由（`order(-1)` 显式优先 + 声明在 `/**` 之前双保障，双桩集成测试证命中）；compose user 服务补 `APP_AUTH_*`、gateway 挂 user 依赖；冒烟/会话脚本改用双库共有种子号（窗口期限制见"常见陷阱 13"）。CI 五 job 全绿（PR #68 首轮 run 35587464883，含 deployment 全栈冒烟 4m1s）；AI 侧快验：三工程 test-compile + compose config + node --check 通过
-- 下一步：**split-07：关注迁移 + 内部 API + 数据清理**（工单 `docs/tickets/split-07-follow-migration.md`；本地 compose volume 若为 split-05 前创建，需先手动建 `kuros_user` 库，命令见 `docker/mysql-init/40-kuros-user-create-db.sh` 注释）
+- 已完成：**split-07 关注迁移 + 内部 API + 数据清理**（f9fae25）：关注链路（UserFollow 实体/仓储/Service/Controller，分布式锁与幂等语义逐字保持）与内部 API（`/internal/v1/users`：batch 简档/follow-stats/following/followers）迁入 kuros-user；backend 删用户域 16 文件（含 UserSession 死代码）、资料/个人中心整端 503 降级、作者占位"未知漂泊者"保留 authorId、StpInterfaceImpl 改 Redis-only；V10 先摘 7 FK 再 DROP 7 张用户域表；网关新增 `kuros-user-follow` 路由（`order(-1)`，单段通配不误伤 `/{id}` 与 `/me/profile`）；smoke 增 follow 冒烟、会话探针改 `/api/v1/auth/me`。AI 侧快验：三工程 test-compile + compose config + node --check 通过；CI 待跑
+- 下一步：**split-08：OpenFeign 回填用户域**（backend 消费 `/internal/v1/users`，接回昵称/头像，撤 503 降级与占位作者；窗口期限制收口，见"常见陷阱 13"）
 
 **已合并 PR**：#59（切片 #1-#9 汇总）、#66（Prometheus registry 修复）；`main` @ `905c7b8`
 
@@ -51,7 +52,7 @@
 ```
 com.kuros.kurosbackend
 ├── shared/          # 共享基建：config / exception / health / api / lock（split-01 已归位）
-├── user/            # 用户域：认证、资料、关注（split-02 归位；Phase B 拆出 kuros-user）
+├── user/            # 用户域残留壳（split-07 后）：资料端点 503 降级待 split-08 回填 + StpInterfaceImpl（Redis-only）；主体已拆出 kuros-user
 ├── post/            # 帖子域（split-03）
 ├── comment/         # 评论域（split-03）
 ├── interaction/     # 互动域：点赞/收藏（split-04）
@@ -106,8 +107,8 @@ SaRouter.match(SaHttpMethod.GET).match("/api/v1/posts/**").stop();
 68 个 e2e（登录、发帖、评论、上传、UI 回归），对着 compose 容器跑。
 
 ### 全栈验证
-- `scripts/compose-smoke.mjs`：登录 → 发帖 → 评论 → 传图 → 持久化
-- `scripts/session-persistence-check.mjs`：重启后端后用旧 Cookie 验证 Redis 会话
+- `scripts/compose-smoke.mjs`：登录 → 关注（经网关到 user）→ 发帖 → 评论 → 传图 → 持久化
+- `scripts/session-persistence-check.mjs`：重启 user 后用旧 Cookie 验证 Redis 会话（探针 `/api/v1/auth/me`，探活直连 8091）
 
 ### 执行分工（2026-09-21 起）
 上述耗时测试**由用户执行**；AI 只做编译等快速验证；GitHub Actions CI 为权威证据。
@@ -123,8 +124,8 @@ SaRouter.match(SaHttpMethod.GET).match("/api/v1/posts/**").stop();
 - 通用响应：`shared/api/`（ApiResponse、PageResult 等）
 - 分布式锁：`shared/lock/DistributedLock.java`
 - 存储策略：`storage/`（StorageStrategy、LocalStorageStrategy、MinIOStorageStrategy）
-- 迁移脚本：`kuros-backend/src/main/resources/db/migration/`（V1~V9 已应用，V10 预留 DROP）
-- 用户服务：`kuros-user/`（split-06 起承载认证链路：`web/AuthController`、`service/AuthService`、`auth/`（SaToken 配置子集/CSRF/验证码三件套/StpInterfaceImpl）、`repository/`（RBAC nativeQuery）；Flyway 在 `kuros-user/src/main/resources/db/migration/`；建库/授权脚本在 `docker/mysql-init/`）
+- 迁移脚本：`kuros-backend/src/main/resources/db/migration/`（V1~V9 已应用；V10 起用户域表整体离场）
+- 用户服务：`kuros-user/`（split-06 起承载认证链路：`web/AuthController`、`service/AuthService`、`auth/`（SaToken 配置子集/CSRF/验证码三件套/StpInterfaceImpl）、`repository/`（RBAC nativeQuery）；split-07 起承载关注链路与内部 API：`service/UserFollowService`、`web/UserFollowController`、`web/InternalUserController`（`/internal/v1/users`）；Flyway 在 `kuros-user/src/main/resources/db/migration/`；建库/授权脚本在 `docker/mysql-init/`）
 - 规格与决策：`docs/specs/`、`docs/adr/`、`docs/slice10-service-split-spec.md`
 - 工单：`docs/tickets/split-01~09*.md`
 - 学习复盘：`docs/learning/README.md`（索引）
@@ -146,14 +147,14 @@ SaRouter.match(SaHttpMethod.GET).match("/api/v1/posts/**").stop();
 10. **Actuator 不传递 Prometheus registry**：`/actuator/prometheus` 404，需显式加 `micrometer-registry-prometheus`（PR #66）
 11. **全量测试跨类污染双根因**：① H2 库名固定 + Spring context 缓存 → @DirtiesContext 失效、数据串类（单类绿全量红）；② Sca Nacos 地址解析 JVM 级静态缓存 → 首解析地址粘住 JVM、静默回退默认值（阈值 100 vs 555）。修复：唯一 H2 库名工厂（TestDatabases）+ surefire `reuseForks=false` 每类独立 JVM（cbae01c，详见 pom 与测试类注释）
 12. **mysql-init 授权脚本两坑（split-05）**：① GRANT 写死账号名——MySQL 8 起 GRANT 不再隐式建号，换 `MYSQL_USER` 后报 1410，entrypoint 带 `set -e` 使初始化整体失败（改用 `.sh` 展开环境变量；`mysql` CLI 在 source/子进程两种执行模式下都成立）；② Windows（`core.autocrlf=true`）检出 `.sh` 变 CRLF 会破坏 shebang/heredoc（目录级 `.gitattributes` 锁 `eol=lf`）
-13. **跨库用户身份窗口期（split-06~08）**：认证迁入 kuros-user 后，非种子手机号首次登录只在 `kuros_user` 建号；backend 内容域（发帖/评论/资料/关注）按登录 ID 查本库 `users`（`orElseThrow`）→ 404/403。冒烟/会话脚本已改用双库共有种子号（13800000002/13800000003，UUID 逐字一致）；split-08 Feign 从用户库回填后收口
+13. **跨库用户身份窗口期（split-06~08）**：认证迁入 kuros-user 后，非种子手机号首次登录只在 `kuros_user` 建号。split-06 期为"内容域按登录 ID 查 backend 本库 `users` → 404/403"；split-07 起 backend 已删用户域（V10），资料/个人中心整端 503 `SERVICE_UNAVAILABLE`（不用 404——误导"用户不存在"；不用 500——计划内可恢复），帖子列表仍可用且作者占位"未知漂泊者"（保留 `authorId`，关注按钮窗口期可用）；关注链路已 100% 在 kuros-user。冒烟/会话脚本用种子号（13800000002/03）；split-08 Feign 从用户库回填后收口
 
 ---
 
 ## 下一步行动
 
-1. **split-07 开工**：关注迁移 + 内部 API + 数据清理（工单 `docs/tickets/split-07-follow-migration.md`）；⚠️ 窗口期限制持续：内容域按登录 ID 查本库用户的行为在 split-08 Feign 回填后收口
-2. **split-08~09**：backend OpenFeign 回填用户域 → 全链路冒烟 + 复盘收尾（每切片全量测试绿才推进；全栈耗时验证由用户执行）
+1. **split-08 开工**：backend OpenFeign 回填用户域（消费 `/internal/v1/users`：批量简档/关注查询），撤 503 降级与占位作者；⚠️ 窗口期限制持续到本切片收口
+2. **split-09**：全链路冒烟 + 复盘收尾（每切片全量测试绿才推进；全栈耗时验证由用户执行）
 3. **#10 收尾后**：不直接开工功能，先对 **#11（互动写路径异步化 + RocketMQ）执行 `grill-with-docs`**，按难点→方案→功能→叙事新模式出 spec
 4. 本文件随进展更新
 
