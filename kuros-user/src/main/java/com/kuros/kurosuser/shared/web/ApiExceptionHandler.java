@@ -5,6 +5,7 @@ import cn.dev33.satoken.exception.NotPermissionException;
 import cn.dev33.satoken.exception.NotRoleException;
 import com.kuros.kurosuser.shared.api.ErrorResponse;
 import com.kuros.kurosuser.shared.exception.AuthRequestException;
+import com.kuros.kurosuser.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosuser.shared.exception.UnauthorizedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -75,5 +76,20 @@ public class ApiExceptionHandler {
     public ResponseEntity<ErrorResponse> unauthorized(UnauthorizedException exception) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ErrorResponse("UNAUTHORIZED", exception.getMessage(), null));
+    }
+
+    /**
+     * 资源不存在异常 → 404（split-07 随关注链迁入）。
+     *
+     * 为什么错误码是 USER_NOT_FOUND 而不是 backend 那样的资源前缀码
+     * （POST_NOT_FOUND 等）：本服务的 404 生产者当前只有关注链的用户查询
+     * （公开 follow 端点的目标校验 + 内部 API 的 follow-stats/following/followers），
+     * 语义上全是“用户不存在”，用具体错误码让前端/调用方免于猜测资源类型；
+     * 未来若本服务出现其他资源 404，再按类型拆分专用码。
+     */
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ErrorResponse> resourceNotFound(ResourceNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse("USER_NOT_FOUND", exception.getMessage(), null));
     }
 }

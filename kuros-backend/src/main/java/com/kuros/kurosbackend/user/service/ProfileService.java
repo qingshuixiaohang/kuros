@@ -1,147 +1,62 @@
 package com.kuros.kurosbackend.user.service;
 
-import com.kuros.kurosbackend.shared.api.PageMeta;
 import com.kuros.kurosbackend.shared.api.PageResult;
-import com.kuros.kurosbackend.user.api.ProfileCommentResponse;
+import com.kuros.kurosbackend.post.api.PostSummaryResponse;
 import com.kuros.kurosbackend.user.api.ProfileOverviewResponse;
 import com.kuros.kurosbackend.user.api.PublicProfileResponse;
-import com.kuros.kurosbackend.comment.domain.CommentStatus;
-import com.kuros.kurosbackend.comment.domain.CommunityComment;
-import com.kuros.kurosbackend.post.domain.CommunityPost;
-import com.kuros.kurosbackend.user.domain.CommunityUser;
-import com.kuros.kurosbackend.post.domain.PostStatus;
-import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
-import com.kuros.kurosbackend.comment.repository.CommunityCommentRepository;
-import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
-import com.kuros.kurosbackend.user.repository.CommunityUserRepository;
-import com.kuros.kurosbackend.interaction.repository.PostFavoriteRepository;
-import com.kuros.kurosbackend.user.repository.UserFollowRepository;
+import com.kuros.kurosbackend.shared.exception.ServiceUnavailableException;
 import com.kuros.kurosbackend.post.service.CommunityPostService;
-import org.springframework.data.domain.Page;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-
+/**
+ * 用户资料服务（split-07 后进入"窗口期降级"状态）。
+ *
+ * 背景：split-07 把用户域数据整体迁往 kuros-user（V10 从本库 DROP users 等表），
+ * 本服务已无法在本库读出用户资料与关注关系，因此：
+ * - findPublic / findOwn：直接 503（语义与恢复路径见 ServiceUnavailableException 注释）
+ * - findPublicPosts：保持可用——帖子数据仍在本库，按作者查帖不依赖用户表
+ *   （作者显示为占位作者，authorId 保留，见 CommunityPostService.toAuthor）
+ *
+ * 为什么保留这些 503 方法的签名而不是随缓存一起删掉：
+ * 端点契约（路径/方法/返回结构）由 ProfileController 保持不变，
+ * split-08 用 Feign 回填实现时只改方法体，控制器与前端零改动。
+ * findOwn 的 userId/page/pageSize 参数在窗口期未使用，同样为 split-08 保留。
+ */
 @Service
 @Transactional(readOnly = true)
 public class ProfileService {
 
-    private static final int MAX_PAGE_SIZE = 50;
-
-    private final CommunityUserRepository userRepository;
-    private final CommunityPostRepository postRepository;
-    private final CommunityCommentRepository commentRepository;
     private final CommunityPostService postService;
-    private final PostFavoriteRepository favoriteRepository;
-    private final UserFollowRepository followRepository;
 
-    public ProfileService(
-            CommunityUserRepository userRepository,
-            CommunityPostRepository postRepository,
-            CommunityCommentRepository commentRepository,
-            CommunityPostService postService,
-            PostFavoriteRepository favoriteRepository,
-            UserFollowRepository followRepository
-    ) {
-        this.userRepository = userRepository;
-        this.postRepository = postRepository;
-        this.commentRepository = commentRepository;
+    public ProfileService(CommunityPostService postService) {
         this.postService = postService;
-        this.favoriteRepository = favoriteRepository;
-        this.followRepository = followRepository;
     }
 
-    // @Cacheable：用户公开资料查询缓存。
-    // 用户资料页是高频访问路径，包含帖子数和点赞数的聚合查询，缓存可显著减少 DB 压力。
-    @Cacheable(cacheNames = "publicProfile", key = "#userId")
+    /**
+     * 公开资料：GET /api/v1/users/{userId}（资料页头部）。
+     * split-08 起改经 Feign 读 kuros-user 的内部 API（批量用户摘要）。
+     */
     public PublicProfileResponse findPublic(String userId) {
-        CommunityUser user = findUser(userId);
-        return toPublic(user);
+        throw new ServiceUnavailableException("用户资料暂不可用");
     }
 
-    public PageResult<com.kuros.kurosbackend.post.api.PostSummaryResponse> findPublicPosts(String userId, int page, int pageSize) {
-        findUser(userId);
+    /**
+     * 按作者查已发布帖子：GET /api/v1/users/{userId}/posts。
+     * 帖子本库自持，无需用户表；不再前置校验用户存在性——
+     * 未知作者 ID 自然命中空列表（meta.totalItems=0），对调用方语义不退化。
+     */
+    public PageResult<PostSummaryResponse> findPublicPosts(String userId, int page, int pageSize) {
         return postService.findPublishedByAuthor(userId, page, pageSize);
     }
 
+    /**
+     * 个人中心聚合：GET /api/v1/users/me/profile。
+     * 聚合依赖用户资料 + 帖子/评论/收藏/关注，其中用户资料与关注关系已迁出本库，
+     * 窗口期整端降级（而不是部分降级——半截数据比明确的 503 更难被前端消费）；
+     * split-08 经 Feign 回填后恢复完整聚合。
+     */
     public ProfileOverviewResponse findOwn(String userId, int page, int pageSize) {
-        CommunityUser user = findUser(userId);
-        PageResult<com.kuros.kurosbackend.post.api.PostSummaryResponse> posts = postService.findPublishedByAuthor(userId, page, pageSize);
-        PageResult<ProfileCommentResponse> comments = findOwnComments(userId, page, pageSize);
-        PageResult<com.kuros.kurosbackend.post.api.PostSummaryResponse> favorites = postService.findPublishedByIds(favoriteRepository.findVisiblePostIds(userId, PostStatus.PUBLISHED, pageRequest(page, pageSize)));
-        PageResult<PublicProfileResponse> following = findFollowing(userId, page, pageSize);
-        PageResult<PublicProfileResponse> fans = findFans(userId, page, pageSize);
-        long postCount = postService.publishedPostCount(userId);
-        long likeCount = postService.publishedPostLikeCount(userId);
-        return new ProfileOverviewResponse(
-                toPublic(user),
-                new ProfileOverviewResponse.ProfileStats(postCount, likeCount, comments.meta().totalItems()),
-                posts,
-                comments,
-                favorites,
-                following,
-                fans
-        );
-    }
-
-    private PageResult<PublicProfileResponse> findFollowing(String userId, int page, int pageSize) {
-        Page<com.kuros.kurosbackend.user.domain.UserFollow> follows = followRepository.findByFollowerIdOrderByCreatedAtDesc(userId, pageRequest(page, pageSize));
-        java.util.Map<String, CommunityUser> usersById = userRepository.findAllById(follows.getContent().stream().map(com.kuros.kurosbackend.user.domain.UserFollow::getFollowedId).toList())
-                .stream().collect(java.util.stream.Collectors.toMap(CommunityUser::getId, user -> user));
-        List<PublicProfileResponse> items = follows.getContent().stream().map(com.kuros.kurosbackend.user.domain.UserFollow::getFollowedId).map(usersById::get).filter(java.util.Objects::nonNull).map(this::toPublic).toList();
-        return new PageResult<>(items, new PageMeta(follows.getNumber() + 1, follows.getSize(), follows.getTotalElements(), follows.getTotalPages()));
-    }
-
-    private PageResult<PublicProfileResponse> findFans(String userId, int page, int pageSize) {
-        Page<com.kuros.kurosbackend.user.domain.UserFollow> follows = followRepository.findByFollowedIdOrderByCreatedAtDesc(userId, pageRequest(page, pageSize));
-        java.util.Map<String, CommunityUser> usersById = userRepository.findAllById(follows.getContent().stream().map(com.kuros.kurosbackend.user.domain.UserFollow::getFollowerId).toList())
-                .stream().collect(java.util.stream.Collectors.toMap(CommunityUser::getId, user -> user));
-        List<PublicProfileResponse> items = follows.getContent().stream().map(com.kuros.kurosbackend.user.domain.UserFollow::getFollowerId).map(usersById::get).filter(java.util.Objects::nonNull).map(this::toPublic).toList();
-        return new PageResult<>(items, new PageMeta(follows.getNumber() + 1, follows.getSize(), follows.getTotalElements(), follows.getTotalPages()));
-    }
-
-    private Pageable pageRequest(int page, int pageSize) {
-        int normalizedPage = Math.max(page, 1);
-        int normalizedPageSize = Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE);
-        return PageRequest.of(normalizedPage - 1, normalizedPageSize);
-    }
-
-    private PageResult<ProfileCommentResponse> findOwnComments(String userId, int page, int pageSize) {
-        int normalizedPage = Math.max(page, 1);
-        int normalizedPageSize = Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE);
-        Pageable pageable = PageRequest.of(normalizedPage - 1, normalizedPageSize, Sort.by(Sort.Order.desc("createdAt")));
-        Page<CommunityComment> comments = commentRepository.findByAuthorId(userId, pageable);
-        List<CommunityPost> posts = postRepository.findAllById(comments.getContent().stream().map(CommunityComment::getPostId).toList());
-        java.util.Map<String, CommunityPost> postsById = posts.stream()
-                .collect(java.util.stream.Collectors.toMap(CommunityPost::getId, post -> post));
-        List<ProfileCommentResponse> items = comments.getContent().stream()
-                .map(comment -> toComment(comment, postsById.get(comment.getPostId())))
-                .toList();
-        return new PageResult<>(items, new PageMeta(normalizedPage, normalizedPageSize, comments.getTotalElements(), comments.getTotalPages()));
-    }
-
-    private ProfileCommentResponse toComment(CommunityComment comment, CommunityPost post) {
-        boolean deleted = comment.getStatus() == CommentStatus.DELETED;
-        return new ProfileCommentResponse(
-                comment.getId(), comment.getPostId(), post == null || post.getStatus() == PostStatus.DELETED ? "帖子已删除" : post.getTitle(), comment.getParentId(),
-                deleted ? "该评论已删除" : comment.getContent(), deleted, comment.getCreatedAt()
-        );
-    }
-
-    private PublicProfileResponse toPublic(CommunityUser user) {
-        return new PublicProfileResponse(
-                user.getId(), user.getNickname(), user.getAvatarUrl(), user.getBio(),
-                postService.publishedPostCount(user.getId()), postService.publishedPostLikeCount(user.getId())
-        );
-    }
-
-    private CommunityUser findUser(String userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("用户不存在"));
+        throw new ServiceUnavailableException("个人中心暂不可用");
     }
 }

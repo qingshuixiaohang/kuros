@@ -8,14 +8,12 @@ import com.kuros.kurosbackend.shared.api.PageResult;
 import com.kuros.kurosbackend.comment.domain.CommentStatus;
 import com.kuros.kurosbackend.comment.domain.CommunityComment;
 import com.kuros.kurosbackend.post.domain.CommunityPost;
-import com.kuros.kurosbackend.user.domain.CommunityUser;
 import com.kuros.kurosbackend.post.domain.PostStatus;
 import com.kuros.kurosbackend.shared.exception.AuthRequestException;
 import com.kuros.kurosbackend.shared.exception.ForbiddenException;
 import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.comment.repository.CommunityCommentRepository;
 import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
-import com.kuros.kurosbackend.user.repository.CommunityUserRepository;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -26,10 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Service
 public class CommunityCommentService {
@@ -38,16 +33,13 @@ public class CommunityCommentService {
 
     private final CommunityCommentRepository commentRepository;
     private final CommunityPostRepository postRepository;
-    private final CommunityUserRepository userRepository;
 
     public CommunityCommentService(
             CommunityCommentRepository commentRepository,
-            CommunityPostRepository postRepository,
-            CommunityUserRepository userRepository
+            CommunityPostRepository postRepository
     ) {
         this.commentRepository = commentRepository;
         this.postRepository = postRepository;
-        this.userRepository = userRepository;
     }
 
     @Transactional(readOnly = true)
@@ -57,9 +49,8 @@ public class CommunityCommentService {
         int normalizedPageSize = Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE);
         Pageable pageable = PageRequest.of(normalizedPage - 1, normalizedPageSize, sortOf(sort));
         Page<CommunityComment> comments = commentRepository.findByPostId(postId, pageable);
-        Map<String, CommunityUser> authors = authorsById(comments.getContent());
         List<CommentResponse> items = comments.getContent().stream()
-                .map(comment -> toResponse(comment, authors.get(comment.getAuthorId())))
+                .map(this::toResponse)
                 .toList();
         return new PageResult<>(items, new PageMeta(normalizedPage, normalizedPageSize, comments.getTotalElements(), comments.getTotalPages()));
     }
@@ -81,13 +72,13 @@ public class CommunityCommentService {
                 throw new AuthRequestException("COMMENT_NESTING_NOT_ALLOWED", "目前只支持一级回复");
             }
         }
-        CommunityUser author = userRepository.findById(authorId)
-                .orElseThrow(() -> new ForbiddenException("当前用户不存在"));
+        // split-07：不再校验作者在本库存在（用户表已迁出）——
+        // 能通过会话鉴权即为 kuros-user 认定的登录用户，无需本库二次确认
         LocalDateTime now = LocalDateTime.now();
         CommunityComment comment = commentRepository.save(new CommunityComment(
                 UUID.randomUUID().toString(), postId, authorId, parentId, content, now
         ));
-        return toResponse(comment, author);
+        return toResponse(comment);
     }
 
     // 评论删除后驱逐帖子详情缓存
@@ -119,25 +110,21 @@ public class CommunityCommentService {
         return Sort.by(Sort.Order.desc("createdAt"));
     }
 
-    private Map<String, CommunityUser> authorsById(List<CommunityComment> comments) {
-        return userRepository.findAllById(comments.stream().map(CommunityComment::getAuthorId).collect(Collectors.toSet()))
-                .stream().collect(Collectors.toMap(CommunityUser::getId, Function.identity()));
-    }
-
-    private CommentResponse toResponse(CommunityComment comment, CommunityUser author) {
+    private CommentResponse toResponse(CommunityComment comment) {
         boolean deleted = comment.getStatus() == CommentStatus.DELETED;
         return new CommentResponse(
-                comment.getId(), comment.getParentId(), toAuthor(author),
+                comment.getId(), comment.getParentId(), toAuthor(comment.getAuthorId()),
                 deleted ? "该评论已删除" : comment.getContent(), deleted,
                 comment.getLikeCount(), comment.getCreatedAt()
         );
     }
 
-    private AuthorResponse toAuthor(CommunityUser author) {
-        if (author == null) {
-            return new AuthorResponse(null, "未知漂泊者", null, null);
-        }
-        return new AuthorResponse(author.getId(), author.getNickname(), author.getAvatarUrl(), author.getBio());
+    /**
+     * split-07：用户表迁出本库后作者资料不再可读，统一返回占位作者。
+     * 保留 authorId 的原因与 CommunityPostService.toAuthor 相同（前端关注按钮依赖 id）。
+     */
+    private AuthorResponse toAuthor(String authorId) {
+        return new AuthorResponse(authorId, "未知漂泊者", null, null);
     }
 
     private String blankToNull(String value) {

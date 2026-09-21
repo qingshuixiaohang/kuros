@@ -163,7 +163,8 @@ services:
 
   # Spring Cloud Gateway 统一入口（切片 #9）：占宿主 8080 正门，前端零改动（Q1 决策）。
   # 纯换门（Q6 决策）：路由原样透传，不加限流/鉴权/CORS；split-06 起
-  # /api/v1/auth/** → user（认证链路），其余 → backend。
+  # /api/v1/auth/** → user（认证链路），split-07 起 /api/v1/users/*/follow → user
+  # （关注链路），其余 → backend。
   # WebFlux 网关无法嵌入 Servlet 后端，必须独立容器，故为平级新工程 kuros-gateway/
   gateway:
     build:
@@ -179,7 +180,7 @@ services:
       # backend 就绪后才对外放行：正门刚打开就该能出去
       backend:
         condition: service_healthy
-      # split-06：认证路由指向 user 服务，同样等它就绪后再放行
+      # split-06 起认证、split-07 起关注的路由都指向 user：等它就绪后再放行
       user:
         condition: service_healthy
     healthcheck:
@@ -190,8 +191,9 @@ services:
 
   # 用户服务（切片 #10 / split-05）：第一个从 backend 拆出的业务微服务，
   # 独立库 kuros_user（建库脚本见 docker/mysql-init/40-kuros-user-create-db.sh）。
-  # 骨架阶段只交付"能启动、能注册、能迁移"三项能力，业务端点自 split-06 起迁移过来；
-  # 宿主映射 8091 与 backend 的 8090 并列，是调试直连通道（容器内仍是 8080）
+  # 骨架阶段只交付"能启动、能注册、能迁移"三项能力；split-06 迁入认证链路，
+  # split-07 迁入关注链路（用户域从此只在本服务读写）；宿主映射 8091 与
+  # backend 的 8090 并列，是调试直连通道（容器内仍是 8080）
   user:
     build:
       context: ./kuros-user

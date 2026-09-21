@@ -8,6 +8,7 @@ import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.shared.exception.AuthRequestException;
 import com.kuros.kurosbackend.shared.exception.ForbiddenException;
 import com.kuros.kurosbackend.shared.exception.FileStorageException;
+import com.kuros.kurosbackend.shared.exception.ServiceUnavailableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -73,6 +74,14 @@ public class ApiExceptionHandler {
     public ResponseEntity<ErrorResponse> forbidden(ForbiddenException exception) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ErrorResponse("FORBIDDEN", exception.getMessage(), null));
+    }
+
+    @ExceptionHandler(ServiceUnavailableException.class)
+    public ResponseEntity<ErrorResponse> serviceUnavailable(ServiceUnavailableException exception) {
+        // split-07：用户域数据迁出后的窗口期降级（详见异常类注释），
+        // 前端据此识别“服务端能力暂不可用”并渲染降级提示，而非误报“用户不存在”
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ErrorResponse("SERVICE_UNAVAILABLE", exception.getMessage(), null));
     }
 
     @ExceptionHandler(FileStorageException.class)

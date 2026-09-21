@@ -13,7 +13,6 @@ import com.kuros.kurosbackend.shared.exception.AuthRequestException;
 import com.kuros.kurosbackend.shared.exception.ForbiddenException;
 import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
-import com.kuros.kurosbackend.user.repository.CommunityUserRepository;
 import com.kuros.kurosbackend.post.repository.ContentTagRepository;
 import com.kuros.kurosbackend.media.repository.MediaAssetRepository;
 import com.kuros.kurosbackend.post.repository.PostMediaRepository;
@@ -34,7 +33,6 @@ import java.util.stream.Collectors;
 public class PostPublishingService {
 
     private final CommunityPostRepository postRepository;
-    private final CommunityUserRepository userRepository;
     private final ContentTagRepository tagRepository;
     private final CommunityPostService postService;
     private final MediaAssetRepository mediaAssetRepository;
@@ -44,7 +42,6 @@ public class PostPublishingService {
 
     public PostPublishingService(
             CommunityPostRepository postRepository,
-            CommunityUserRepository userRepository,
             ContentTagRepository tagRepository,
             CommunityPostService postService,
             MediaAssetRepository mediaAssetRepository,
@@ -53,7 +50,6 @@ public class PostPublishingService {
             Timer postsPublishTimer
     ) {
         this.postRepository = postRepository;
-        this.userRepository = userRepository;
         this.tagRepository = tagRepository;
         this.postService = postService;
         this.mediaAssetRepository = mediaAssetRepository;
@@ -65,7 +61,8 @@ public class PostPublishingService {
     @Transactional
     public PostDetailResponse publish(CreatePostRequest request, String authorId) {
         return postsPublishTimer.record(() -> {
-            userRepository.findById(authorId).orElseThrow(() -> new ResourceNotFoundException("用户不存在"));
+            // split-07：不再校验作者在本库存在（用户表已迁出）——
+            // 能通过会话鉴权即为 kuros-user 认定的登录用户，无需本库二次确认
             ValidatedPost input = validate(request);
             List<String> tagNames = normalizeTags(request.tags());
             CommunityPost post = CommunityPost.publish(authorId, input.type(), input.category(), input.title(), input.excerpt(), input.content(), LocalDateTime.now());

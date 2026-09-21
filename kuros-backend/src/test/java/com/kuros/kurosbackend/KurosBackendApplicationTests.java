@@ -15,15 +15,13 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.mock.web.MockMultipartFile;
 import com.kuros.kurosbackend.media.storage.MediaAssetService;
-import com.kuros.kurosbackend.user.domain.CommunityUser;
-import com.kuros.kurosbackend.user.domain.UserStatus;
-import com.kuros.kurosbackend.user.repository.CommunityUserRepository;
 // Testcontainers 2.x 中 GenericContainer 仍在 org.testcontainers.containers 包（已用 jar tf 核实 2.0.5 实际结构，
 // 官方迁移说明只适用于部分模块专属容器类）
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
@@ -43,10 +41,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 后端集成测试（SaToken + Redis 版本）。
  *
  * split-06 起认证端点（/api/v1/auth/**）已迁至 kuros-user：
- * - 本测试不再走 HTTP 登录，改用"直建会话"helper（repository 建号 + StpUtil.createLoginSession）
+ * - 本测试不再走 HTTP 登录，改用"直建会话"helper（StpUtil.createLoginSession 写共享 Redis）
  * - 登录链路的完整验收（验证码→登录→会话写共享 Redis→/me）在 kuros-user 的
  *   AuthLoginIntegrationTest 里用 Testcontainers MySQL + Redis 覆盖
  * - CSRF 令牌 fixture 从 GET /api/v1/auth/csrf 改为公开帖子列表 GET（backend 侧该端点已 404）
+ *
+ * split-07 起用户域数据迁出本库（V10 DROP users 等表），本测试相应调整：
+ * - login helper 不再建用户行：会话主键改为手机号派生的确定性 UUID
+ * - 作者相关断言从真实昵称改为占位作者"未知漂泊者"（authorId 保留，见 CommunityPostService.toAuthor）
+ * - 用户资料/个人中心端点整端降级为 503（split-08 Feign 回填后恢复）
+ * - 关注端点迁至 kuros-user：本测试改为断言"直连 404"
  *
  * 与之前版本的核心区别：
  * - 使用 Testcontainers 启动真实 Redis 容器（替代原来的纯 H2 内存测试）
@@ -83,10 +87,6 @@ class KurosBackendApplicationTests {
     @Autowired
     private StringRedisTemplate redisTemplate;
 
-    // split-06：登录 helper 直接在本库补建/复用用户行（内容域作者组装仍读本库 users）
-    @Autowired
-    private CommunityUserRepository userRepository;
-
     @BeforeEach
     void flushRedis() {
         // 每个测试前清空 Redis，保证测试隔离（H2 已经是内存模式，每次上下文重建时自动清空）
@@ -120,7 +120,7 @@ class KurosBackendApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.title").value("长离焚火队：从零到毕业的配队思路"))
                 .andExpect(jsonPath("$.data.content").isNotEmpty())
-                .andExpect(jsonPath("$.data.author.nickname").value("潮声档案员"));
+                .andExpect(jsonPath("$.data.author.nickname").value("未知漂泊者"));
     }
 
     @Test
@@ -202,60 +202,35 @@ class KurosBackendApplicationTests {
     }
 
     @Test
-    void 公开用户资料只展示公开信息和已发布帖子() throws Exception {
+    void 窗口期用户资料端整端降级为503而帖子列表仍可用() throws Exception {
         String userId = "10000000-0000-0000-0000-000000000001";
-        mockMvc.perform(get("/api/v1/users/" + userId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.id").value(userId))
-                .andExpect(jsonPath("$.data.nickname").value("潮声档案员"))
-                .andExpect(jsonPath("$.data.phone").doesNotExist())
-                .andExpect(jsonPath("$.data.postCount").value(1));
 
+        // split-07：用户域数据迁出本库，资料聚合整端降级为 503——
+        // 语义是"服务端能力暂不可用"（split-08 经 Feign 回填后恢复），而非 404"用户不存在"
+        mockMvc.perform(get("/api/v1/users/" + userId))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
+
+        // 按作者查帖子不依赖用户表：帖子仍在本库，窗口期保持可用；
+        // 作者为占位（authorId 保留——前端关注按钮据此调用 kuros-user 的关注 API）
         mockMvc.perform(get("/api/v1/users/" + userId + "/posts"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(1)))
                 .andExpect(jsonPath("$.data[0].title").value("长离焚火队：从零到毕业的配队思路"))
+                .andExpect(jsonPath("$.data[0].author.nickname").value("未知漂泊者"))
+                .andExpect(jsonPath("$.data[0].author.id").value(userId))
                 .andExpect(jsonPath("$.meta.totalItems").value(1));
     }
 
     @Test
-    @DirtiesContext
-    void 当前用户个人中心包含自己的帖子和评论但不暴露手机号() throws Exception {
+    void 个人中心窗口期整端降级为503() throws Exception {
         Cookie sessionCookie = login("13800000001");
 
+        // 个人中心聚合依赖用户资料与关注关系，两者均已迁出本库（V10），窗口期整端降级；
+        // 能拿到 503（而非 401）说明会话鉴权通过、请求已到达控制器——降级不影响登录本身
         mockMvc.perform(get("/api/v1/users/me/profile").cookie(sessionCookie))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.profile.nickname").value("潮声档案员"))
-                .andExpect(jsonPath("$.data.profile.phone").doesNotExist())
-                .andExpect(jsonPath("$.data.stats.postCount").value(1))
-                .andExpect(jsonPath("$.data.posts.items", hasSize(1)))
-                .andExpect(jsonPath("$.data.comments.items", hasSize(1)))
-                .andExpect(jsonPath("$.data.comments.items[0].content").value("谢谢反馈！低配队伍可以先保证循环完整，再慢慢补面板，不用一开始就追求毕业词条。"));
-    }
-
-    @Test
-    @DirtiesContext
-    void 个人中心返回收藏帖子和关注用户() throws Exception {
-        Cookie sessionCookie = login("13800000008");
-
-        mockMvc.perform(post("/api/v1/posts/10000000-0000-0000-0000-000000000001/interactions/favorite").cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
-                .andExpect(status().isOk());
-        mockMvc.perform(post("/api/v1/users/10000000-0000-0000-0000-000000000002/follow").cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
-                .andExpect(status().isOk());
-
-        mockMvc.perform(get("/api/v1/users/me/profile").cookie(sessionCookie))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.favorites.items", hasSize(1)))
-                .andExpect(jsonPath("$.data.favorites.items[0].id").value("10000000-0000-0000-0000-000000000001"))
-                .andExpect(jsonPath("$.data.following.items", hasSize(1)))
-                .andExpect(jsonPath("$.data.following.items[0].nickname").value("无音区夜行者"))
-                .andExpect(jsonPath("$.data.fans.items", hasSize(0)));
-
-        Cookie followedUserSession = login("13800000002");
-        mockMvc.perform(get("/api/v1/users/me/profile").cookie(followedUserSession))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.fans.items", hasSize(1)))
-                .andExpect(jsonPath("$.data.fans.items[0].id").exists());
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
     }
 
     @Test
@@ -308,30 +283,20 @@ class KurosBackendApplicationTests {
     }
 
     @Test
-    @DirtiesContext
-    void 登录用户可以关注和取消关注其他用户且重复操作幂等() throws Exception {
+    void 关注端点已迁出本服务直连返回404() throws Exception {
+        // split-07 验收编码化：关注端点迁至 kuros-user 后，backend 直连必须 404。
+        // 与 auth 前缀不同，该路径未被拦截器放行——所以必须携带会话（否则先吃 401），
+        // 走完鉴权（POST/DELETE 再经 CSRF）后落到"无 handler"才是 404；
+        // 行为验收（幂等/并发防重复）由 kuros-user 的 UserFollowIntegrationTest 覆盖。
         Cookie sessionCookie = login("13800000008");
         String followPath = "/api/v1/users/10000000-0000-0000-0000-000000000002/follow";
 
         mockMvc.perform(get(followPath).cookie(sessionCookie))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.followed").value(false))
-                .andExpect(jsonPath("$.data.followerCount").value(0));
-
+                .andExpect(status().isNotFound());
         mockMvc.perform(post(followPath).cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.followed").value(true))
-                .andExpect(jsonPath("$.data.followerCount").value(1));
-
-        mockMvc.perform(post(followPath).cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.followed").value(true))
-                .andExpect(jsonPath("$.data.followerCount").value(1));
-
+                .andExpect(status().isNotFound());
         mockMvc.perform(delete(followPath).cookie(sessionCookie).cookie(CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.followed").value(false))
-                .andExpect(jsonPath("$.data.followerCount").value(0));
+                .andExpect(status().isNotFound());
     }
 
     @Test
@@ -347,7 +312,7 @@ class KurosBackendApplicationTests {
                         .content("{\"content\":\"实战里这套循环很好上手。\",\"parentId\":\"30000000-0000-0000-0000-000000000001\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.parentId").value("30000000-0000-0000-0000-000000000001"))
-                .andExpect(jsonPath("$.data.author.nickname").value("漂泊者0008"));
+                .andExpect(jsonPath("$.data.author.nickname").value("未知漂泊者"));
 
         mockMvc.perform(post(commentsPath)
                         .cookie(sessionCookie)
@@ -414,7 +379,8 @@ class KurosBackendApplicationTests {
                         .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"长离实战循环记录\",\"content\":\"循环内容\",\"tags\":[\"长离\",\"实战\"]}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.type").value("GUIDE"))
-                .andExpect(jsonPath("$.data.author.nickname").value("漂泊者0008"))
+                .andExpect(jsonPath("$.data.author.nickname").value("未知漂泊者"))
+                .andExpect(jsonPath("$.data.author.id").value(testUserId("13800000008")))
                 .andExpect(jsonPath("$.data.likeCount").value(0))
                 .andExpect(jsonPath("$.data.favoriteCount").value(0))
                 .andReturn();
@@ -425,7 +391,8 @@ class KurosBackendApplicationTests {
         mockMvc.perform(get("/api/v1/posts/" + postId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.title").value("长离实战循环记录"))
-                .andExpect(jsonPath("$.data.author.nickname").value("漂泊者0008"));
+                .andExpect(jsonPath("$.data.author.nickname").value("未知漂泊者"))
+                .andExpect(jsonPath("$.data.author.id").value(testUserId("13800000008")));
     }
 
     @Test
@@ -695,7 +662,7 @@ class KurosBackendApplicationTests {
         mockMvc.perform(get("/api/v1/admin/reports").cookie(normalCookie))
                 .andExpect(status().isForbidden());
 
-        Cookie adminCookie = login("13800000001");
+        Cookie adminCookie = loginAsAdmin("13800000001");
         mockMvc.perform(get("/api/v1/admin/reports").cookie(adminCookie)
                         .param("status", "PENDING"))
                 .andExpect(status().isOk())
@@ -729,17 +696,37 @@ class KurosBackendApplicationTests {
      * Token 由它写入与生产同一份 Redis，语义等价于真实登录产生的会话，
      * 后续请求携带同名 KUROS_SESSION Cookie 即可通过 SaToken 的 checkLogin。
      *
-     * 用户行兜底：内容域测试依赖作者组装读本库 users（如断言"漂泊者0008"），
-     * 所以建会话前确保手机号在库中存在——种子命中则复用（13800000001 → 潮声档案员），
-     * 否则按登录规则补建（漂泊者+后四位）。不分配 RBAC 角色：
-     * 普通用户端点只做 checkLogin；管理员测试用种子用户，角色由 DB 回源解析。
+     * split-07：用户表已迁出本库，不再建用户行——会话主键由手机号派生确定性 UUID
+     * （同手机号恒得同 id，多次 login 幂等；测试可用 testUserId() 复算后断言其本人数据）。
+     * 不分配 RBAC 角色：普通用户端点只做 checkLogin。
      */
     private Cookie login(String phone) {
-        CommunityUser user = userRepository.findByPhone(phone).orElseGet(() -> userRepository.save(
-                new CommunityUser(UUID.randomUUID().toString(), phone,
-                        "漂泊者" + phone.substring(phone.length() - 4), UserStatus.NORMAL, LocalDateTime.now())));
-        String token = StpUtil.createLoginSession(user.getId());
-        return new Cookie("KUROS_SESSION", token);
+        return sessionCookie(testUserId(phone));
+    }
+    
+    /**
+     * 管理员会话 helper：split-07 起角色表（sys_role/sys_user_role）已迁出本库，
+     * StpInterfaceImpl 改为 Redis-only——角色必须像真实登录那样出现在共享 Redis，
+     * 否则 checkRole("ADMIN") 读到空列表导致 403。
+     * 真实链路里这步由 kuros-user 的 AuthService.login 完成（key 契约 auth:roles:{userId}），
+     * 这里手工写入等价于"登录时已同步"的状态。
+     */
+    private Cookie loginAsAdmin(String phone) {
+        String userId = testUserId(phone);
+        redisTemplate.opsForSet().add("auth:roles:" + userId, "ADMIN");
+        return sessionCookie(userId);
+    }
+    
+    /**
+     * 手机号 → 确定性会话主键（UUID v3）：与真实"一号一账号"等价，且测试可复算；
+     * kuros-test: 前缀避免与任何真实 UUID 撞号。
+     */
+    private String testUserId(String phone) {
+        return UUID.nameUUIDFromBytes(("kuros-test:" + phone).getBytes(StandardCharsets.UTF_8)).toString();
+    }
+    
+    private Cookie sessionCookie(String userId) {
+        return new Cookie("KUROS_SESSION", StpUtil.createLoginSession(userId));
     }
 
 }

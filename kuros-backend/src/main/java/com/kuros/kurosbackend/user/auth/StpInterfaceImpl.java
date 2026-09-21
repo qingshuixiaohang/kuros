@@ -1,8 +1,6 @@
 package com.kuros.kurosbackend.user.auth;
 
 import cn.dev33.satoken.stp.StpInterface;
-import com.kuros.kurosbackend.user.repository.SysPermissionRepository;
-import com.kuros.kurosbackend.user.repository.SysRoleRepository;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -10,16 +8,17 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * SaToken 权限数据源实现。
+ * SaToken 权限数据源实现（split-07 后为 Redis-only）。
  *
- * SaToken 在调用 StpUtil.checkRole() / StpUtil.checkPermission() 时，
- * 会通过这个接口查询当前用户拥有的角色和权限列表。
+ * 为什么只读 Redis、不再回源 DB：
+ * 角色/权限表（sys_role、sys_permission 等）随用户域整体迁往 kuros-user
+ * （V10 从本库 DROP），本服务已无权限数据的权威副本；登录时 kuros-user 的
+ * AuthService 会把角色/权限写入共享 Redis（同一 key 契约
+ * auth:roles:{userId} / auth:permissions:{userId}），本服务直接读缓存即可。
  *
- * 为什么先查 Redis 再查 DB？
- * 登录时 kuros-user 的 AuthService.login 已把角色和权限同步到共享 Redis（split-06 后
- * 登录发生在 kuros-user，两个服务共用同一 Redis 与同一套缓存 key 契约），
- * 这里优先从 Redis 读取（O(1)），只有 Redis 缺失时才回源 DB。
- * 这样每次鉴权请求不需要查数据库，认证性能从 2 次 DB 查询降为 1 次 Redis 查询。
+ * 缓存缺失时返回空列表（=无角色/无权限）而不是报错或放行：
+ * SaToken 会把空列表当作鉴权失败（403）——这正是缺数据时的安全默认值，
+ * 宁可拒绝、不可放行；且正常链路（登录先写缓存）不会走到这里。
  *
  * 对应小哈书第五章：SaToken 权限认证 → StpInterface 实现。
  */
@@ -30,15 +29,9 @@ public class StpInterfaceImpl implements StpInterface {
     private static final String PERMISSION_CACHE_KEY = "auth:permissions:";
 
     private final StringRedisTemplate redisTemplate;
-    private final SysRoleRepository roleRepository;
-    private final SysPermissionRepository permissionRepository;
 
-    public StpInterfaceImpl(StringRedisTemplate redisTemplate,
-                            SysRoleRepository roleRepository,
-                            SysPermissionRepository permissionRepository) {
+    public StpInterfaceImpl(StringRedisTemplate redisTemplate) {
         this.redisTemplate = redisTemplate;
-        this.roleRepository = roleRepository;
-        this.permissionRepository = permissionRepository;
     }
 
     /**
@@ -47,18 +40,8 @@ public class StpInterfaceImpl implements StpInterface {
      */
     @Override
     public List<String> getPermissionList(Object loginId, String loginType) {
-        String userId = loginId.toString();
-        // 优先从 Redis 读取（登录时已同步）
-        Set<String> cached = redisTemplate.opsForSet().members(PERMISSION_CACHE_KEY + userId);
-        if (cached != null && !cached.isEmpty()) {
-            return List.copyOf(cached);
-        }
-        // Redis 缺失（可能是 Redis 重启或首次），回源 DB 并重新缓存
-        List<String> permissions = permissionRepository.findPermissionCodesByUserId(userId);
-        if (!permissions.isEmpty()) {
-            redisTemplate.opsForSet().add(PERMISSION_CACHE_KEY + userId, permissions.toArray(String[]::new));
-        }
-        return permissions;
+        Set<String> cached = redisTemplate.opsForSet().members(PERMISSION_CACHE_KEY + loginId);
+        return cached == null ? List.of() : List.copyOf(cached);
     }
 
     /**
@@ -67,15 +50,7 @@ public class StpInterfaceImpl implements StpInterface {
      */
     @Override
     public List<String> getRoleList(Object loginId, String loginType) {
-        String userId = loginId.toString();
-        Set<String> cached = redisTemplate.opsForSet().members(ROLE_CACHE_KEY + userId);
-        if (cached != null && !cached.isEmpty()) {
-            return List.copyOf(cached);
-        }
-        List<String> roles = roleRepository.findRoleCodesByUserId(userId);
-        if (!roles.isEmpty()) {
-            redisTemplate.opsForSet().add(ROLE_CACHE_KEY + userId, roles.toArray(String[]::new));
-        }
-        return roles;
+        Set<String> cached = redisTemplate.opsForSet().members(ROLE_CACHE_KEY + loginId);
+        return cached == null ? List.of() : List.copyOf(cached);
     }
 }

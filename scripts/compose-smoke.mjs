@@ -71,9 +71,9 @@ async function main() {
 
   const state = await readState();
 
-  // 登录用两侧共有种子号（backend V2 与 kuros_user V2 的 UUID 逐字一致）：
-  // split-06 起新手机号首次登录只在 kuros_user 建号，而 backend 内容域（发帖/评论）
-  // 按登录 ID 查本库 users 会 404——只有种子号才有跨库同 ID 的用户行（split-08 收口前）
+  // 登录用 kuros_user V2 种子号 13800000002：split-07 起 backend 已删用户域（V10），
+  // 内容域不再查 users 表——作者/评论人一律占位渲染"未知漂泊者"，发帖/评论/上传
+  // 与新旧号无关，用种子号只是沿用既有的稳定演示账号
   await request(apiBase, "/api/v1/auth/code", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -85,6 +85,17 @@ async function main() {
     body: JSON.stringify({ phone: "13800000002", code: "123456" }),
   });
   await request(apiBase, "/api/v1/auth/csrf");
+
+  // split-07：关注链路（/api/v1/users/{id}/follow）经网关优先路由到 kuros-user，
+  // backend 同路径已无 handler——冒烟验证网关转发确实命中用户服务；
+  // POST 幂等（重复运行收敛到 followed=true），目标取 13800000003 的种子 UUID
+  const follow = await request(apiBase, "/api/v1/users/10000000-0000-0000-0000-000000000003/follow", {
+    method: "POST",
+    headers: csrfHeaders(),
+  });
+  if (follow.body?.data?.followed !== true) {
+    throw new Error(`Follow smoke failed: ${JSON.stringify(follow.body)}`);
+  }
 
   let persisted = state;
   if (!persisted) {
@@ -140,19 +151,20 @@ async function main() {
 }
 
 /**
- * 切片 #8：Nacos 注册发现端到端验证；切片 #9 扩展为同时校验网关注册。
+ * 切片 #8：Nacos 注册发现端到端验证；切片 #9 扩展为校验网关；split-07 起
+ * 认证与关注都由 kuros-user 承担，一并纳入注册校验。
  *
  * v3 client OpenAPI 查实例无需鉴权（实测行为）；console 独立监听 8080，
  * compose 映射到宿主机 8081。backend healthy 后注册应已存在（注册发生在
- * WebServerInitializedEvent，早于 compose 的 healthcheck 放行）；gateway
- * 同理（Q2 决策：仅多查一个服务名，业务断言不经网关重复跑——但下方既有
+ * WebServerInitializedEvent，早于 compose 的 healthcheck 放行）；user 与
+ * gateway 同理（Q2 决策：仅多查服务名，业务断言不经网关重复跑——但下方既有
  * 请求的 apiBase 已指向 8080 正门，事实上已天然经过网关）。
  */
 async function verifyNacosRegistration() {
   const consoleResponse = await fetch(nacosConsoleBase + "/v3/console/health/readiness");
   if (!consoleResponse.ok) throw new Error(`Nacos console readiness returned ${consoleResponse.status}`);
 
-  for (const serviceName of ["kuros-backend", "kuros-gateway"]) {
+  for (const serviceName of ["kuros-backend", "kuros-user", "kuros-gateway"]) {
     const url = `${nacosBase}/nacos/v3/client/ns/instance/list?serviceName=${serviceName}&groupName=DEFAULT_GROUP&namespaceId=public`;
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Nacos instance list returned ${response.status}`);
@@ -164,7 +176,7 @@ async function verifyNacosRegistration() {
       throw new Error(`${serviceName} is not registered as a healthy instance in Nacos: ${JSON.stringify(body)}`);
     }
   }
-  console.log("Nacos smoke passed: kuros-backend & kuros-gateway registered as healthy ephemeral instances");
+  console.log("Nacos smoke passed: kuros-backend & kuros-user & kuros-gateway registered as healthy ephemeral instances");
 }
 
 main().catch((error) => {

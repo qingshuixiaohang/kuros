@@ -54,9 +54,13 @@ public class SaTokenConfigure implements WebMvcConfigurer {
                     "/actuator/prometheus"     // Prometheus 指标采集
             ).stop();
 
-            // 其余所有路由要求登录（auth 端点除外）——对齐旧版 anyRequest().authenticated()
+            // 其余所有路由要求登录（auth 与 internal 前缀除外）——对齐旧版 anyRequest().authenticated()
+            // 为什么 /internal/** 要免会话：内部 API（split-07 新增）面向服务间调用（split-08 起 backend 经 Feign 消费），
+            // 不带用户会话 Cookie 也无 CSRF token；它的安全边界在生产由网络层承担（mTLS/内部 token，见 InternalUserController 注释），
+            // 而不是本服务的会话鉴权。注：CSRF 拦截器只挂 /api/**，/internal/** 天然不经 CSRF 校验。
             SaRouter.match("/**")
                     .notMatch("/api/v1/auth/**")
+                    .notMatch("/internal/**")
                     .check(r -> StpUtil.checkLogin());
         }))
                 .addPathPatterns("/**")
