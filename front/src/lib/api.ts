@@ -116,6 +116,19 @@ export async function fetchPosts(options: { category?: string; keyword?: string;
   return (await fetchPostPage(options)).items;
 }
 
+/**
+ * 关注流：GET /api/v1/feed/following?page&pageSize
+ * 返回当前登录用户关注的人发布的帖子（按时间倒序，来自后端 Redis ZSet timeline）。
+ * 未登录时后端返回 401，调用方应引导登录。
+ */
+export async function fetchFollowingFeed(options: { page?: number; pageSize?: number } = {}) {
+  const params = new URLSearchParams();
+  params.set("page", String(options.page ?? 1));
+  params.set("pageSize", String(options.pageSize ?? 20));
+  const envelope = await requestEnvelope<ApiPost[]>("/api/v1/feed/following?" + params.toString());
+  return { items: envelope?.data ?? [], meta: envelope?.meta };
+}
+
 export function fetchPost(id: string) {
   return request<ApiPost>("/api/v1/posts/" + encodeURIComponent(id));
 }
