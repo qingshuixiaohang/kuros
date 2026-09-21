@@ -71,9 +71,10 @@ async function main() {
 
   const state = await readState();
 
-  // 登录用 kuros_user V2 种子号 13800000002：split-07 起 backend 已删用户域（V10），
-  // 内容域不再查 users 表——作者/评论人一律占位渲染"未知漂泊者"，发帖/评论/上传
-  // 与新旧号无关，用种子号只是沿用既有的稳定演示账号
+  // 登录用 kuros_user V2 种子号 13800000002（UUID ...0002、昵称“无音区夜行者”）：
+  // 经网关打到 kuros-user 校验并把会话写进共享 Redis。split-08 起 backend 内容域
+  // 不再自带用户表，帖子作者昵称改由 backend 经 Feign 回访 kuros-user 回填——
+  // 下方“跨服务端到端”断言验收的正是这条“会话共享 + 拆分边界 + 服务间调用”链路。
   await request(apiBase, "/api/v1/auth/code", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -85,6 +86,17 @@ async function main() {
     body: JSON.stringify({ phone: "13800000002", code: "123456" }),
   });
   await request(apiBase, "/api/v1/auth/csrf");
+
+  // 跨服务端到端 · 第 1 跳：/auth/me 经网关回到 kuros-user，读它自己刚写进 Redis 的会话。
+  // 拿到权威用户身份（id + nickname），作为后续 backend 侧 Feign 回填的对照基准。
+  const me = await request(apiBase, "/api/v1/auth/me");
+  const myId = me.body?.data?.id;
+  const myNickname = me.body?.data?.nickname;
+  // 基线显式拒绝降级占位值“用户”：保证下方“昵称 === 基线”断言不会在
+  // “权威昵称恰好也是用户”的理论边界上自相矛盾（固定种子不会触发，防御性契约）
+  if (myId !== "10000000-0000-0000-0000-000000000002" || !myNickname || myNickname === "用户") {
+    throw new Error(`auth/me did not return the seed identity: ${JSON.stringify(me.body)}`);
+  }
 
   // split-07：关注链路（/api/v1/users/{id}/follow）经网关优先路由到 kuros-user，
   // backend 同路径已无 handler——冒烟验证网关转发确实命中用户服务；
@@ -138,6 +150,20 @@ async function main() {
 
   const afterRestart = await request(apiBase, `/api/v1/posts/${persisted.postId}`);
   if (afterRestart.body?.data?.title !== persisted.title) throw new Error("Post was not persisted");
+
+  // 跨服务端到端 · 第 2 跳：帖子详情由 backend 提供，但作者字段是 backend 经 Feign
+  // 回访 kuros-user 回填的。author.id === myId 验证存量帖作者身份与当前种子会话一致
+  // （登录号恒定，首发时 authorId 就是登录者）；而昵称断言才是每次重验的主跳——
+  // 它等于用户服务的权威记录、不是降级占位“用户”，证明 Feign 真的实时打通并命中。
+  const author = afterRestart.body?.data?.author;
+  if (author?.id !== myId) {
+    throw new Error(`Post author id ${author?.id} does not match session user ${myId}（跨服务会话未共享）`);
+  }
+  if (author?.nickname !== myNickname || author?.nickname === "用户") {
+    throw new Error(`Post author nickname was not back-filled via Feign: ${JSON.stringify(author)}（期望 ${myNickname}）`);
+  }
+  console.log(`Cross-service smoke passed: 网关登录(kuros-user 写 Redis) → 发帖(backend 读同一会话) → 详情作者昵称经 Feign 回填为「${author.nickname}」`);
+
   const comments = await request(apiBase, `/api/v1/posts/${persisted.postId}/comments?pageSize=50`);
   if (!comments.body?.data?.some((comment) => comment.content === "Compose smoke comment")) {
     throw new Error("Comment was not persisted");

@@ -27,3 +27,4 @@
 | #7 | [07-actuator-micrometer.md](./07-actuator-micrometer.md) | Actuator + Micrometer 应用监控 |
 | #8 | [08-nacos-discovery-config.md](./08-nacos-discovery-config.md) | Nacos 注册发现 + 配置中心分层迁移与动态刷新 |
 | #9 | [09-gateway.md](./09-gateway.md) | Spring Cloud Gateway 统一入口与 lb 服务发现路由 |
+| #10 | [10-service-split.md](./10-service-split.md) | 服务拆分：用户域独立微服务 kuros-user（两阶段渐进拆 + OpenFeign + 跨库一致性降级） |

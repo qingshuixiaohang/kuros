@@ -22,7 +22,7 @@
 - 已完成：**split-06 认证链路迁移**：登录/会话/RBAC 查询迁入 kuros-user（AuthController/AuthService/验证码三件套/StpInterfaceImpl/CommunityUser + RBAC 仓储）；backend 移除认证代码、刻意保留 SaToken/CSRF 放行条目（直连 auth 落到"无 handler"→404，新测试编码化）；网关新增 `kuros-user-auth` 路由（`order(-1)` 显式优先 + 声明在 `/**` 之前双保障，双桩集成测试证命中）；compose user 服务补 `APP_AUTH_*`、gateway 挂 user 依赖；冒烟/会话脚本改用双库共有种子号（窗口期限制见"常见陷阱 13"）。CI 五 job 全绿（PR #68 首轮 run 35587464883，含 deployment 全栈冒烟 4m1s）；AI 侧快验：三工程 test-compile + compose config + node --check 通过
 - 已完成：**split-07 关注迁移 + 内部 API + 数据清理**（f9fae25）：关注链路（UserFollow 实体/仓储/Service/Controller，分布式锁与幂等语义逐字保持）与内部 API（`/internal/v1/users`：batch 简档/follow-stats/following/followers）迁入 kuros-user；backend 删用户域 16 文件（含 UserSession 死代码）、资料/个人中心整端 503 降级、作者占位"未知漂泊者"保留 authorId、StpInterfaceImpl 改 Redis-only；V10 先摘 7 FK 再 DROP 7 张用户域表；网关新增 `kuros-user-follow` 路由（`order(-1)`，单段通配不误伤 `/{id}` 与 `/me/profile`）；smoke 增 follow 冒烟、会话探针改 `/api/v1/auth/me`。AI 侧快验：三工程 test-compile + compose config + node --check + 本地 gateway 构建通过；CI 第 3 轮五 job 全绿（run 35591315920；第 2 轮部署构建竞态修复见陷阱 14）
 - 已完成：**split-08：OpenFeign 回填用户域**：backend 经 `@FeignClient(name="kuros-user", url="${app.feign.kuros-user.url:}")` 消费 `/internal/v1/users` 的 batch/following/followers（url 留空走 lb 服务发现、测试注入桩地址直连）；`UserDirectoryFacade` 收敛两条**相反**降级路线——内容域列表 `findAuthors` 吞异常返空 map→占位作者"用户"不 500、资料页 `requireUser/following/followers` 失败即 503、未知 id→404；`CommunityPostService/CommunityCommentService` 整页批量回填消除跨服务 N+1（详情走单元素 batch）；`ProfileService.findPublic/findOwn` 重建为"用户字段经 Feign + postCount/likeCount/posts/comments/favorites 本地聚合"的跨服务组合（依赖单向：内容域→用户域）；`CacheConfig` 恢复 `publicProfile` 缓存名（60s TTL 兜底，事件驱动失效留待 RocketMQ 切片）。测试：`UserDirectoryStub`（JDK HttpServer 桩 + url 直连，含 healthy 降级开关）翻转作者昵称断言 + 新增"列表占位/资料页 503"降级用例；`NacosFeignIntegrationTest`（Testcontainers nacos + `NamingService` 把桩注册为 kuros-user、url 留空走 lb 真实链路）。AI 侧快验：test-compile 全绿 + code-review 子代理（静态+编译级）无阻断问题、修复桩 executor 非守护线程泄漏（陷阱 15）。**收尾还终修了 kuros-user 的锁-事务竞态 flaky**（`UserFollowService` 去类级 `@Transactional`、事务改在锁内提交，详见陷阱 7）。**CI run 35596400478 五 job 全绿**（Backend 首轮即绿；User service 首轮撞上该 flaky、重跑即绿）；工单 3 框已勾、PR body 已补 run 号（文档提交 00cc079）。flaky 终修提交 08bab65 经 **CI run 35597600427 五 job 全绿**验证（User service 确定性转绿）
-- 下一步：**split-09：全链路冒烟 + 复盘收尾**（每切片全量测试绿才推进；`docs/learning/` 七段式复盘统一产出；全栈耗时验证由用户执行）
+- 进行中：**split-09：全链路冒烟 + 复盘收尾**——`compose-smoke.mjs` 升级跨服务端到端链路（三服务 Nacos 注册校验 → 网关登录写共享 Redis → `/auth/me` 取权威身份 → 发帖读同一会话 → 详情作者昵称经 Feign 回填断言）；README 补服务拓扑/端口/网关调试说明 + HANDOFF 端口拓扑节；`docs/learning/10-service-split.md` 七段式复盘产出（含 STAR 收益量化 + 7 条追问链 + 模块化单体/一次性全拆/渐进式拆对比表）+ README 索引。AI 侧快验：compose config EXIT 0、node --check EXIT 0、code-review 子代理（静态）无阻断问题。**待用户执行 compose 全链冒烟 + CI 五 job 全绿 → Issue #67 验收关闭 + PR #68 合并**
 
 **已合并 PR**：#59（切片 #1-#9 汇总）、#66（Prometheus registry 修复）；`main` @ `905c7b8`
 
@@ -95,6 +95,9 @@ SaRouter.match(SaHttpMethod.GET).match("/api/v1/posts/**").stop();
 ### 7. 包结构与模块边界（切片 #10 后）
 按业务模块分包（user/post/comment/...），依赖方向单向：内容域 → 用户域；共享代码用**有纪律复制**，不建 common 模块（rule of three）。
 
+### 8. 端口拓扑与本地调试入口（切片 #10 后）
+gateway 8080（正门，前端/冒烟唯一入口）/ backend 8090 / user 8091（均为调试直连，容器内 8080）/ nacos 8848·9848·8081 / frontend 3000。**本地调试统一走网关 8080**：`/api/v1/auth/**` 与 `/api/v1/users/*/follow` → `lb://kuros-user`，其余 → `lb://kuros-backend`。**直连 8090 时用户域端点 404 属预期**（已迁出 backend、只在 kuros-user）；跨服务数据（帖子作者昵称等）由 backend 经 OpenFeign 回访 kuros-user 回填。
+
 ---
 
 ## 测试策略
@@ -108,7 +111,7 @@ SaRouter.match(SaHttpMethod.GET).match("/api/v1/posts/**").stop();
 68 个 e2e（登录、发帖、评论、上传、UI 回归），对着 compose 容器跑。
 
 ### 全栈验证
-- `scripts/compose-smoke.mjs`：登录 → 关注（经网关到 user）→ 发帖 → 评论 → 传图 → 持久化
+- `scripts/compose-smoke.mjs`：三服务 Nacos 注册校验 → 网关登录（kuros-user 写共享 Redis）→ `/auth/me` 取权威身份 → 关注 → 发帖（backend 读同一会话）→ **详情作者昵称经 Feign 回填断言（跨服务端到端）** → 评论 → 传图 → 持久化
 - `scripts/session-persistence-check.mjs`：重启 user 后用旧 Cookie 验证 Redis 会话（探针 `/api/v1/auth/me`，探活直连 8091）
 
 ### 执行分工（2026-09-21 起）
@@ -156,7 +159,7 @@ SaRouter.match(SaHttpMethod.GET).match("/api/v1/posts/**").stop();
 
 ## 下一步行动
 
-1. **split-09 开工**：全链路冒烟 + 复盘收尾（`docs/learning/` 七段式复盘统一产出；每切片全量测试绿才推进，全栈耗时验证由用户执行）
+1. **split-09 收尾**：用户执行 compose 全链冒烟（8 服务 healthy + 跨服务端到端；全新栈先删 `.compose-smoke-state.json` 避免复用死 postId）+ 等 CI 五 job 全绿 → Issue #67 逐项验收评论并关闭 + PR #68 合并（需用户确认）
 2. **#10 收尾后**：不直接开工功能，先对 **#11（互动写路径异步化 + RocketMQ）执行 `grill-with-docs`**，按难点→方案→功能→叙事新模式出 spec
 3. 本文件随进展更新
 
