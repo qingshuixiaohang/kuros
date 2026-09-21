@@ -4,6 +4,7 @@ import com.alibaba.nacos.api.NacosFactory;
 import com.alibaba.nacos.api.config.ConfigService;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRule;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRuleManager;
+import com.kuros.kurosbackend.TestDatabases;
 import com.kuros.kurosbackend.shared.config.SpringDocStatusBridge;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -40,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 })
 @ActiveProfiles("test")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class NacosConfigRefreshIntegrationTest {
 
     /** 默认 dataId 约定：${spring.application.name}.${file-extension} */
@@ -56,24 +59,58 @@ class NacosConfigRefreshIntegrationTest {
 
     @BeforeAll
     static void startNacosAndSeedConfig() throws Exception {
+        // config data 解析阶段（spring.config.import）就要读到测试容器地址，
+        // 但 @SpringBootTest 内联 properties 在同 JVM 先跑过其他 Spring 测试后实测失效
+        // （客户端回退 application.properties 的 ${NACOS_SERVER_ADDR:localhost:8848}，
+        // 而 compose 恰好跑在 8848——拉取结果为空后静默用本地默认值）。
+        // 系统属性为 JVM 级来源，在所有 environment 处理阶段均可见，覆盖默认值。
+        System.setProperty("spring.cloud.nacos.server-addr", NacosContainers.SERVER_ADDR);
+        System.setProperty("spring.cloud.nacos.config.server-addr", NacosContainers.SERVER_ADDR);
         nacos.start();
         redis.start();
         configService = NacosFactory.createConfigService(NacosContainers.SERVER_ADDR);
-        // 播种初始覆盖值：阈值 555（本地默认 100）、springdoc 关闭（本地默认 true）
-        configService.publishConfig(DATA_ID, GROUP,
-                "app.sentinel.posts-list-qps=555\nspringdoc.api-docs.enabled=false\n");
+        // 播种初始覆盖值：阈值 555（本地默认 100）、springdoc 关闭（本地默认 true）。
+        // 容器 HTTP 就绪 ≠ gRPC 就绪，而 Spring 的 config import 是一次性拉取
+        // （optional 失败即静默回退本地默认值）——必须先证明配置通道可用再放行 context，
+        // 否则全量跑高负载下会偶发拉取扑空。
+        seedConfigWhenChannelReady();
+    }
+
+    /** publish + 读回校验，直到 gRPC 配置通道真正可用（最长 60s）。 */
+    private static void seedConfigWhenChannelReady() throws Exception {
+        Exception lastFailure = null;
+        for (int attempt = 0; attempt < 60; attempt++) {
+            try {
+                configService.publishConfig(DATA_ID, GROUP,
+                        "app.sentinel.posts-list-qps=555\nspringdoc.api-docs.enabled=false\n");
+                String readBack = configService.getConfig(DATA_ID, GROUP, 5000);
+                if (readBack != null && readBack.contains("555")) {
+                    return;
+                }
+                lastFailure = new IllegalStateException("配置读回为空或不含 555: " + readBack);
+            } catch (Exception exception) {
+                lastFailure = exception;
+            }
+            Thread.sleep(1000);
+        }
+        throw new IllegalStateException("Nacos 配置通道 60s 内未就绪，种子配置写入失败", lastFailure);
     }
 
     @AfterAll
     static void stopContainers() {
         nacos.stop();
         redis.stop();
+        // 清理系统属性，避免污染同 JVM 后续测试类的 Nacos 地址解析
+        System.clearProperty("spring.cloud.nacos.server-addr");
+        System.clearProperty("spring.cloud.nacos.config.server-addr");
     }
 
     @DynamicPropertySource
     static void redisProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+        // 唯一 H2 库名：库生命周期与本类 context 对齐（详见 TestDatabases 注释）
+        registry.add("spring.datasource.url", () -> TestDatabases.h2Url("nacos-config"));
     }
 
     @Autowired

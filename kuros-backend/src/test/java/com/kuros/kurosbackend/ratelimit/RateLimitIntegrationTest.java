@@ -1,5 +1,6 @@
 package com.kuros.kurosbackend.ratelimit;
 
+import com.kuros.kurosbackend.TestDatabases;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,6 +52,8 @@ class RateLimitIntegrationTest {
     static void redisProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+        // 唯一 H2 库名：库生命周期与本类 context 对齐（详见 TestDatabases 注释）
+        registry.add("spring.datasource.url", () -> TestDatabases.h2Url("ratelimit"));
     }
 
     @Autowired

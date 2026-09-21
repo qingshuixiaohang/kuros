@@ -1,5 +1,6 @@
 package com.kuros.kurosbackend.storage;
 
+import com.kuros.kurosbackend.TestDatabases;
 import com.kuros.kurosbackend.media.storage.MinIOStorageStrategy;
 import com.kuros.kurosbackend.media.storage.StorageStrategy;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,6 +63,8 @@ class MinIOStorageStrategyTest {
         // Redis 动态端口注入（与 KurosBackendApplicationTests 一致）
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+        // 唯一 H2 库名：库生命周期与本类 context 对齐（详见 TestDatabases 注释）
+        registry.add("spring.datasource.url", () -> TestDatabases.h2Url("minio"));
         // 将 Testcontainers 动态分配的端口注入 Spring 配置
         // endpoint 格式：http://{host}:{port}
         String endpoint = String.format("http://%s:%d", minio.getHost(), minio.getMappedPort(9000));

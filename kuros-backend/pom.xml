@@ -261,6 +261,17 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- 每测试类独立 JVM（reuseForks=false）：Spring 测试 context 缓存、Sca Nacos
+                 配置地址解析都是 JVM 级静态状态，同 JVM 串跑多类会相互污染（表现为单类绿、
+                 全量红）。独立 JVM 从根上隔离；配套修复见 TestDatabases 与
+                 NacosConfigRefreshIntegrationTest 的注释。 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <reuseForks>false</reuseForks>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 

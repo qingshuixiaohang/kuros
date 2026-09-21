@@ -1,5 +1,6 @@
 package com.kuros.kurosbackend.cache;
 
+import com.kuros.kurosbackend.TestDatabases;
 import com.kuros.kurosbackend.post.api.CreatePostRequest;
 import com.kuros.kurosbackend.post.api.PostDetailResponse;
 import com.kuros.kurosbackend.user.domain.CommunityUser;
@@ -53,6 +54,8 @@ class CacheIntegrationTest {
     static void redisProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+        // 唯一 H2 库名：库生命周期与本类 context 对齐（详见 TestDatabases 注释）
+        registry.add("spring.datasource.url", () -> TestDatabases.h2Url("cache"));
     }
 
     @Autowired

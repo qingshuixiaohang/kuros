@@ -1,7 +1,9 @@
 package com.kuros.kurosbackend.discovery;
 
+import com.kuros.kurosbackend.TestDatabases;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -30,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Testcontainers
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class NacosDiscoveryIntegrationTest {
 
     // 容器构造细节（鉴权三件套/固定端口/版本对齐）见 NacosContainers
@@ -48,6 +51,8 @@ class NacosDiscoveryIntegrationTest {
         // 用 127.0.0.1 而非 localhost 的原因见 NacosContainers（IPv6 解析问题）
         registry.add("spring.cloud.nacos.server-addr", () -> NacosContainers.SERVER_ADDR);
         registry.add("spring.cloud.nacos.discovery.enabled", () -> "true");
+        // 唯一 H2 库名：库生命周期与本类 context 对齐（详见 TestDatabases 注释）
+        registry.add("spring.datasource.url", () -> TestDatabases.h2Url("nacos-discovery"));
     }
 
     @Test

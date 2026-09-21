@@ -56,6 +56,8 @@ class KurosBackendApplicationTests {
     static void redisProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+        // 唯一 H2 库名：库生命周期与本类 context 对齐（详见 TestDatabases 注释）
+        registry.add("spring.datasource.url", () -> TestDatabases.h2Url("main"));
     }
 
     // 测试用固定 CSRF Token：CsrfInterceptor 只校验 cookie == header，不校验服务端存储
