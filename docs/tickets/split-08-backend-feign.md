@@ -16,9 +16,11 @@
 
 ## 验收
 
-- [ ] 帖子列表/详情/评论的作者信息经 Feign 取得，字段与拆分前一致
-- [ ] kuros-user 不可用时列表降级占位不 500；资料页 503
-- [ ] Feign 桩测试 + Nacos 链路测试全绿；backend 全量测试绿
+- [x] 帖子列表/详情/评论的作者信息经 Feign 取得，字段与拆分前一致
+- [x] kuros-user 不可用时列表降级占位不 500；资料页 503
+- [x] Feign 桩测试 + Nacos 链路测试全绿；backend 全量测试绿
+
+> CI run [#35596400478](https://github.com/qingshuixiaohang/kuros/actions/runs/35596400478) 五 job 全绿（Backend tests 首轮即绿；User service 首轮的 `UserFollowIntegrationTest.并发重复关注` 为 split-07 已记录的锁-事务竞态 flaky，与本切片无关，重跑即绿）。
 
 ## 备注
 
