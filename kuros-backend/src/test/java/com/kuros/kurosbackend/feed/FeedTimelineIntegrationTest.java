@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -55,6 +56,7 @@ class FeedTimelineIntegrationTest {
     @Autowired FeedTimelineStore timelineStore;
     @Autowired FeedService feedService;
     @Autowired CommunityPostRepository postRepository;
+    @Autowired JdbcTemplate jdbcTemplate;
 
     private static final String USER_A = "user-a";
     private static final String USER_B = "user-b";
@@ -65,6 +67,12 @@ class FeedTimelineIntegrationTest {
         timelineStore.clear(USER_A);
         timelineStore.clear(USER_B);
         timelineStore.clear(USER_C);
+        // 按外键依赖倒序清理：子表先删，再删主表（Flyway 种子数据有帖子+评论）
+        jdbcTemplate.update("DELETE FROM post_media");
+        jdbcTemplate.update("DELETE FROM post_tags");
+        jdbcTemplate.update("DELETE FROM comments");
+        jdbcTemplate.update("DELETE FROM post_likes");
+        jdbcTemplate.update("DELETE FROM post_favorites");
         postRepository.deleteAll();
     }
 
