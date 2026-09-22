@@ -259,6 +259,17 @@ services:
   # broker.conf（docker/rocketmq/broker.conf）里 brokerIP1 显式设为服务名 rocketmq-broker：
   # broker 默认把"本机自动探测 IP"注册到 namesrv，容器内探测到的 IP 其他容器/宿主不可达，
   # 客户端拿到路由却连不上——设为 compose 服务名让网络内可解析。autoCreateTopicEnable=true 便于 dev。
+  # broker 存储卷权限初始化（一次性）：named volume 首次挂载属主为 root，而 broker
+  # 镜像以 uid 3000(rocketmq) 运行，写不了 store/lock → 启动即崩（CI 与本地同因）。
+  # 用 root 容器把卷 chown 给 3000，broker 再 depends_on 它成功完成，双环境都稳。
+  rocketmq-broker-init:
+    image: apache/rocketmq:5.3.1
+    restart: "no"
+    user: "0:0"
+    command: sh -c "mkdir -p /home/rocketmq/store && chown -R 3000:3000 /home/rocketmq/store"
+    volumes:
+      - kuros_rocketmq_broker_data:/home/rocketmq/store
+
   rocketmq-broker:
     image: apache/rocketmq:5.3.1
     restart: unless-stopped
@@ -273,6 +284,8 @@ services:
     depends_on:
       rocketmq-namesrv:
         condition: service_healthy
+      rocketmq-broker-init:
+        condition: service_completed_successfully
     ports:
       - "${ROCKETMQ_BROKER_PORT:-10911}:10911"
     healthcheck:
@@ -296,7 +309,7 @@ services:
       rocketmq-broker:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/ >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/ >/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 30
