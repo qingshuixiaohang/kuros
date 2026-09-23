@@ -32,8 +32,17 @@ public class PostSearchDoc {
     /** 对外读写别名；真实索引 {@code post_search_v{n}} 由 {@link SearchIndexManager} 管理。 */
     public static final String INDEX_ALIAS = "post_search";
 
-    /** = ES {@code _id}：以 postId 为文档主键，index 覆盖写天然幂等（重复索引不产生副本）。 */
+    /**
+     * = ES {@code _id}：以 postId 为文档主键，index 覆盖写天然幂等（重复索引不产生副本）。
+     *
+     * <p>为什么在 {@code @Id} 之外还要显式 {@code @Field(Keyword)}：se-04 的三种排序都以 postId 作
+     * search_after 的 tie-breaker（保证排序全序、翻页不重不漏），而**排序要求字段被索引且有 doc_values**。
+     * 仅 {@code @Id} 时 Spring Data ES 只把它当 {@code _id} 元字段处理，不保证在 mapping 里生成可排序的
+     * {@code postId} 字段——对未映射字段排序会触发 {@code search_phase_execution_exception: all shards failed}。
+     * 显式声明为 keyword 后，postId 同时是 {@code _id} 与一个可排序/可过滤的 keyword 字段（值不重复，同源于 _source）。
+     */
     @Id
+    @Field(type = FieldType.Keyword)
     private String postId;
 
     @Field(type = FieldType.Text, analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
