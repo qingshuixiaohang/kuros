@@ -149,6 +149,9 @@ services:
       # 全文检索（切片 #14 se-02）：ES 连接地址用 compose 服务名 elasticsearch（非 localhost）。
       # ES 软依赖：客户端懒连接 + ES 健康指示器已关（见 application.properties），ES 未就绪不阻断 backend 启动/健康。
       ES_URIS: ${ES_URIS:-http://elasticsearch:9200}
+      # CDC 增量索引（切片 #14 se-05）：开启后 backend 装配 RocketMQ CDC 消费者，订阅 canal 投递的 kuros-post-cdc topic
+      # → 帖子/标签变更经 PostCdcHandler 回源重组写入 ES。消费者连的是 broker（已 depends_on），canal 独立生产、无需 backend 等它。
+      APP_SEARCH_CDC_ENABLED: ${APP_SEARCH_CDC_ENABLED:-true}
     # 宿主映射挪至 8090（Q1/Q5 决策）：8080 正门让给 gateway，8090 保留调试直连通道；
     # 容器内仍是 8080，compose 内部服务间通信不受影响
     ports:
