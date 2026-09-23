@@ -34,6 +34,32 @@ type ApiEnvelope<T> = { data: T; meta?: ApiPageMeta };
  */
 export type CursorPageResult<T> = { items: T[]; nextCursor: string | null; hasMore: boolean };
 
+/**
+ * 全文检索命中条目（切片 #14 se-06）：对接后端 {@code GET /api/v1/search} 的 PostSearchItem。
+ *
+ * 与 {@link ApiPost} 的差异：搜索是高频读，后端用索引快照「零跨服务往返」组装，故不含
+ * {@code author} 对象 / {@code coverImageUrl} / {@code media}（这些都需回 DB/Feign），改带索引冗余的
+ * {@code authorId} + {@code authorName} 与 ES 的 {@code highlight} 命中片段。计数/作者名允许秒级滞后
+ * （CDC 最终一致），点进详情页时再由 #13 读路径叠加 #11 实时计数。
+ */
+export type PostSearchItem = {
+  id: string;
+  type: "GUIDE" | "GENERAL";
+  category: string;
+  title: string;
+  excerpt: string;
+  authorId: string;
+  authorName: string;
+  publishedAt: string;
+  viewCount: number;
+  likeCount: number;
+  favoriteCount: number;
+  commentCount: number;
+  tags: string[];
+  /** key=字段名(title/excerpt/content)，value=<mark> 包裹的命中片段；无命中字段不出现，前端回退原文。 */
+  highlight?: Record<string, string[]>;
+};
+
 export type AuthUser = { id: string; phone: string; nickname: string; avatarUrl: string | null; bio: string | null; role: "USER" | "ADMIN" };
 export type VerificationCode = { expiresIn: number; retryAfter: number; devCode?: string | null };
 
@@ -153,6 +179,40 @@ export async function fetchFollowingFeed(options: { page?: number; pageSize?: nu
 
 export function fetchPost(id: string) {
   return request<ApiPost>("/api/v1/posts/" + encodeURIComponent(id));
+}
+
+/**
+ * 全文检索（切片 #14 se-06）：{@code GET /api/v1/search}，走 ES（ik 分词 + search_after 深翻）。
+ *
+ * 复用 #13 游标契约 {@link CursorPageResult}：{@code nextCursor} 透传下一页、{@code hasMore} 控「加载更多」，
+ * 不含 COUNT(*)，深翻代价恒定（对齐后端 SearchController）。sort 默认 relevance（相关度），可选 latest/hot。
+ *
+ * 与 {@link fetchPostPage}（{@code /api/v1/posts?keyword=} 的 MySQL LIKE 轻量筛选）并存、互不影响：
+ * 社区约定「keyword 为空走 /api/v1/posts 浏览、非空走本函数走 ES」，故调用方仅在有关键词时用本函数。
+ *
+ * ES 软依赖降级：后端不可用时返回 503(code=SERVICE_UNAVAILABLE)，此处抛 {@link ApiError} 交调用方区分
+ * 「搜索暂不可用」(503) 与「后端整体不可用→本地 Demo 回退」(其他错误)。
+ */
+export async function searchPosts(options: {
+  keyword?: string;
+  category?: string;
+  tag?: string;
+  type?: "GUIDE" | "GENERAL";
+  sort?: "relevance" | "latest" | "hot";
+  cursor?: string | null;
+  limit?: number;
+} = {}): Promise<CursorPageResult<PostSearchItem>> {
+  const params = new URLSearchParams();
+  params.set("limit", String(options.limit ?? 10));
+  params.set("sort", options.sort ?? "relevance");
+  if (options.keyword?.trim()) params.set("keyword", options.keyword.trim());
+  if (options.category && options.category !== "全部") params.set("category", options.category);
+  if (options.tag?.trim()) params.set("tag", options.tag.trim());
+  if (options.type) params.set("type", options.type);
+  if (options.cursor) params.set("cursor", options.cursor);
+  const envelope = await requestEnvelope<CursorPageResult<PostSearchItem>>("/api/v1/search?" + params.toString());
+  const data = envelope?.data;
+  return { items: data?.items ?? [], nextCursor: data?.nextCursor ?? null, hasMore: data?.hasMore ?? false };
 }
 
 export type CreatePostInput = { type: "GUIDE" | "GENERAL"; category: string; title: string; excerpt?: string; content: string; tags: string[]; mediaAssetIds?: string[] };
