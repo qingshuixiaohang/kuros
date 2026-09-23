@@ -20,6 +20,12 @@ export interface Guide {
   tags: string[];
   /** 首图列表由帖子正文、列表封面字段或演示内容数据提供。 */
   mediaUrls?: string[];
+  /**
+   * ES 全文检索命中高亮片段（切片 #14 se-06）：key=字段名(title/excerpt/content)，
+   * value=后端用 <mark> 包裹的命中片段列表。仅走 /api/v1/search 的搜索结果会填充，
+   * 普通浏览（/api/v1/posts、mock demo）保持 undefined，渲染层据此回退到纯 title/excerpt。
+   */
+  highlight?: Record<string, string[]>;
 }
 
 export interface NewsItem {

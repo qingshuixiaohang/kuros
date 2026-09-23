@@ -1,4 +1,4 @@
-import type { ApiPost } from "@/lib/api";
+import type { ApiPost, PostSearchItem } from "@/lib/api";
 import type { Guide } from "@/types/community";
 
 const markdownImage = /!\[[^\]]*\]\(([^)\s]+)(?:\s+["'][^)]*["'])?\)/g;
@@ -37,5 +37,30 @@ export function toGuide(post: ApiPost): Guide {
     likes: formatPostCount(post.likeCount),
     tags: post.tags,
     mediaUrls: post.media?.length ? post.media.slice().sort((left, right) => left.sortOrder - right.sortOrder).map((item) => item.url) : post.mediaUrls?.length ? post.mediaUrls : post.coverImageUrl ? [post.coverImageUrl] : extractMarkdownImages(post.content),
+  };
+}
+
+/**
+ * 将 ES 搜索命中条目映射为列表可渲染的 {@link Guide}（切片 #14 se-06）。
+ *
+ * 与 {@link toGuide} 的差异：{@link PostSearchItem} 没有 {@code author} 对象/media（搜索零跨服务往返），
+ * 改用索引快照的 {@code authorName}；同时透传 {@code highlight} 供渲染层把命中词包成 {@code <mark>}。
+ * 搜索结果列表不展示配图（mediaUrls 留空），避免为了图片再回一趟 DB。
+ */
+export function searchItemToGuide(item: PostSearchItem): Guide {
+  return {
+    id: item.id,
+    category: item.category,
+    title: item.title,
+    excerpt: item.excerpt,
+    author: item.authorName,
+    authorMark: item.authorName?.slice(0, 1) || "漂",
+    avatarTone: "blue",
+    publishedAt: formatPublishedAt(item.publishedAt),
+    views: formatPostCount(item.viewCount),
+    replies: item.commentCount,
+    likes: formatPostCount(item.likeCount),
+    tags: item.tags,
+    highlight: item.highlight,
   };
 }

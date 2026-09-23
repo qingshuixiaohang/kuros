@@ -7,7 +7,13 @@ services:
       MYSQL_USER: ${MYSQL_USER:-kuros}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-kuros_dev_password}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-kuros_dev_root_password}
-    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--server-id=1", "--log-bin=mysql-bin", "--binlog-format=ROW", "--binlog-row-image=FULL"]
+    # ↑ 切片 #14 CDC 前提（se-02）：canal 伪装 slave 订阅 binlog 做增量索引。
+    #   --server-id=1：binlog 复制要求主库有唯一 server-id（canal 用另一个 slaveId，见 canal 配置）。
+    #   --log-bin=mysql-bin：开启 binlog（默认关闭，canal 无源可读）。
+    #   --binlog-format=ROW：行级记录（canal 只解析 ROW 格式；STATEMENT 记的是 SQL 无法还原行变更）。
+    #   --binlog-row-image=FULL：UPDATE 事件携带整行变更前镜像（old[]）——canal FlatMessage 的 old 字段依赖它，
+    #     MINIMAL 只记变更列会导致消费端拿不到完整旧值。
     ports:
       - "${MYSQL_PORT:-3307}:3306"
     volumes:
@@ -140,6 +146,12 @@ services:
       # MQ 不可用时写路径同步降级落库，故 broker 不是硬依赖（见下方 depends_on required:false）
       ROCKETMQ_NAME_SERVER: ${ROCKETMQ_NAME_SERVER:-rocketmq-namesrv:9876}
       APP_INTERACTION_ASYNC_ENABLED: ${APP_INTERACTION_ASYNC_ENABLED:-true}
+      # 全文检索（切片 #14 se-02）：ES 连接地址用 compose 服务名 elasticsearch（非 localhost）。
+      # ES 软依赖：客户端懒连接 + ES 健康指示器已关（见 application.properties），ES 未就绪不阻断 backend 启动/健康。
+      ES_URIS: ${ES_URIS:-http://elasticsearch:9200}
+      # CDC 增量索引（切片 #14 se-05）：开启后 backend 装配 RocketMQ CDC 消费者，订阅 canal 投递的 kuros-post-cdc topic
+      # → 帖子/标签变更经 PostCdcHandler 回源重组写入 ES。消费者连的是 broker（已 depends_on），canal 独立生产、无需 backend 等它。
+      APP_SEARCH_CDC_ENABLED: ${APP_SEARCH_CDC_ENABLED:-true}
     # 宿主映射挪至 8090（Q1/Q5 决策）：8080 正门让给 gateway，8090 保留调试直连通道；
     # 容器内仍是 8080，compose 内部服务间通信不受影响
     ports:
@@ -162,6 +174,11 @@ services:
       # RocketMQ 是软依赖（切片 #11）：broker 就绪时优先异步落库；未就绪/不可用时
       # 写路径同步降级（不丢互动），故用 required:false —— 编排层等待但不因它失败
       rocketmq-broker:
+        condition: service_healthy
+        required: false
+      # Elasticsearch 软依赖（切片 #14 se-02）：就绪时优先用，未就绪/冷启中不阻断 backend 启动。
+      # 搜索读路径（se-04）在 ES 不可用时显式降级返回"搜索服务暂不可用"，故用 required:false。
+      elasticsearch:
         condition: service_healthy
         required: false
     healthcheck:
@@ -315,6 +332,115 @@ services:
       retries: 30
       start_period: 30s
 
+  # Elasticsearch 9.4.5 + ik 中文分词（切片 #14 se-02）：全文检索引擎，替代 MySQL LIKE 全表扫。
+  # 自建镜像（docker/elasticsearch/Dockerfile）：官方 ES 不含 ik，ik 必须与 ES 严格等版本（9.4.5↔9.4.5）。
+  # build 同时 tag 为 kuros-es-ik:9.4.5——与 se-01 spike 的 Testcontainer 镜像名一致（同一镜像两处复用）。
+  # 单机模式（跳过生产引导检查）+ 关 x-pack 安全（dev/演示无需 TLS+账号，简化客户端连接）
+  # + 堆收敛 512m 防 OOM（本地 Docker ~7.5GiB，与 mysql/nacos/backend/rocketmq 共存）。
+  # 基础镜像与 ik 源可用 build.args 覆盖为国内镜像源（见 Dockerfile 的 ARG，se-02 验收②兜底）。
+  elasticsearch:
+    build:
+      context: ./docker/elasticsearch
+      args:
+        ES_BASE_IMAGE: ${ES_BASE_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch:9.4.5}
+        IK_PLUGIN_URL: ${IK_PLUGIN_URL:-https://get.infini.cloud/elasticsearch/analysis-ik/9.4.5}
+    image: kuros-es-ik:9.4.5
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "${ES_PORT:-9200}:9200"
+      - "${ES_TRANSPORT_PORT:-9300}:9300"
+    volumes:
+      - kuros_es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      # 镜像内含 curl（实测）；_cluster/health 单机返回 200（无副本为 yellow，不影响就绪判定）
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+
+  # Kibana（切片 #14 se-02）：ES 观测面（查索引/文档/DSL 调试），仅排障用，不参与业务链路。
+  # 用 compose profile "observability" 隔离：默认 docker compose up 不启动（省内存），CI deployment job
+  # 也不启（避免额外内存压力 + 端口占用）；需要时 docker compose --profile observability up -d。
+  # 宿主 5601（Kibana 默认端口，与现有 8080/8081/8082/9200 等不冲突）。拒 canal-admin（单机不需可视化运维）。
+  kibana:
+    image: ${KIBANA_IMAGE:-docker.elastic.co/kibana/kibana:9.4.5}
+    restart: unless-stopped
+    profiles: ["observability"]
+    environment:
+      ELASTICSEARCH_HOSTS: ${ES_URIS:-http://elasticsearch:9200}
+    ports:
+      - "${KIBANA_PORT:-5601}:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:5601/api/status >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  # Canal Server v1.1.8（切片 #14 se-02）：伪装成 MySQL slave 订阅 binlog，解析行变更投递到 RocketMQ（CDC 源头）。
+  # 配置全走 env 覆盖：官方 wiki 明确 canal-server 启动优先读 env 变量，可覆盖 canal.properties/instance.properties
+  # 的所有 key（含全局 canal.serverMode）；已实测验证 destination=kuros / address=mysql:3306 / serverMode=rocketMQ 均生效，
+  # 故无需挂载 100+ 键的配置文件（区别于 broker.conf：canal 官方镜像原生支持 env 覆盖）。
+  canal-server:
+    image: canal/canal-server:v1.1.8
+    restart: unless-stopped
+    environment:
+      # serverMode=rocketMQ：解析出的行变更投递到 RocketMQ（而非默认 tcp 直连客户端模式）
+      canal.serverMode: rocketMQ
+      # RocketMQ namesrv（compose 服务名）：canal 作为 producer 把 FlatMessage 发到 broker
+      rocketmq.namesrv.addr: ${ROCKETMQ_NAME_SERVER:-rocketmq-namesrv:9876}
+      rocketmq.producer.group: canal-kuros-producer
+      # 单 destination（官方镜像单实例只跑一个 destination），名为 kuros
+      canal.destinations: kuros
+      # 订阅源：compose 网络内 mysql:3306，用 se-02 建的 canal 复制账号（mysql_native_password，免公钥握手）
+      canal.instance.master.address: mysql:3306
+      canal.instance.dbUsername: canal
+      canal.instance.dbPassword: canal_dev_password
+      canal.instance.connectionCharset: UTF-8
+      # 只订阅 posts + post_tags 两表（CDC 增量索引的数据源）；\. 是正则转义点号（YAML 平量中反斜杠为字面量）
+      canal.instance.filter.regex: kuros\.posts,kuros\.post_tags
+      # FlatMessage=true：投递扁平化 JSON（消费端 se-05 用 Jackson 直接解析，见 ADR 0007）
+      canal.mq.flatMessage: "true"
+      # 目标 topic；se-05 backend 消费者绑定同一 topic
+      canal.mq.topic: kuros-post-cdc
+      # partitionHash 按主键 hash 选队列 → 同一 postId 的变更落同一队列，配合 RocketMQ orderly 保序（ADR 0007 决策⑥）
+      canal.mq.partitionHash: kuros\.posts:id,kuros\.post_tags:post_id
+      # 【S3 端到端冒烟实测踩坑·必需项】flatMessage=true + partitionHash 非空时，canal 走 CanalRocketMQProducer.send
+      # 的“分区合并”分支（canal-1.1.8 第 234-258 行）：其中 `for (i < partitionNum)` 的 partitionNum 是装箱 Integer，
+      # 经三级回退取值（dynamicTopicPartition → dynamicQueueSize(需 enableDynamicQueuePartition) → partitionsNum）。
+      # 三者都未配时 partitionNum=null，循环条件自动拆箱即 NullPointerException——每条 binlog 事件发送都崩、
+      # topic 永不创建、CDC 全程静默不通（本项目实测 kuros.log 刷了 1503 次 NPE 才定位到）。故必须显式声明分区数。
+      # 取 4 对齐 broker.conf 的 defaultTopicQueueNums=4：partitionHash 把同一 postId 稳定哈希到 4 个队列之一（保序），
+      # 且分区数 ≤ topic 队列数才不会发到不存在的队列。
+      canal.mq.partitionsNum: "4"
+      # 收敛 canal JVM 堆：镜像默认 -Xms2g -Xmx3g，本地/CI 与 mysql+nacos+backend+ES+rocketmq 共存会 OOM；
+      # startup.sh 将 env JAVA_OPTS 后置，JVM 对重复 -Xmx 取最后值 → 覆盖为 512m
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+    ports:
+      - "${CANAL_PORT:-11111}:11111"
+    depends_on:
+      # canal 必须在 MySQL 就绪后才能握手订阅 binlog（否则反复 UnknownHost/连不上重试）
+      mysql:
+        condition: service_healthy
+      # serverMode=rocketMQ 时需 broker 就绪才能投递（否则 producer 初始化报 namesrv 不可达）
+      rocketmq-broker:
+        condition: service_healthy
+    healthcheck:
+      # canal 无 HTTP 端点；探 metrics 端口 11112（canal.metrics.pull.port 默认）的 TCP，与 app.sh 自己的 checkStart 同款
+      test: ["CMD-SHELL", "nc 127.0.0.1 11112 -w 1 -zv 2>&1 | grep Connected || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+
   frontend:
     build:
       context: ./front
@@ -342,3 +468,4 @@ volumes:
   kuros_redis_data:
   kuros_minio_data:
   kuros_rocketmq_broker_data:
+  kuros_es_data:

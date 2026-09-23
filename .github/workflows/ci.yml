@@ -121,6 +121,14 @@ jobs:
           node-version: 22
       - name: Verify business data and file persistence
         run: node scripts/compose-smoke.mjs
+      # 切片 #14 se-07 · S3：搜索 + CDC 端到端冒烟（发帖→Canal 订阅 binlog→RocketMQ→backend 消费者→ES→可搜）。
+      # 依赖 ES(ik)+canal-server+rocketmq 三容器（均随 compose up 启动，Kibana 在 observability profile 不启，堆已收敛 512m）；
+      # 脚本内轮询至多 90s 吸收 canal/MQ 冷启动，并 [PERF] 打印真实端到端延迟（禁止编造）。runner OOM 时可注释本步降级本地跑。
+      - name: Verify search CDC end-to-end (ES + Canal + RocketMQ)
+        run: |
+          # 显式探 ES 集群就绪（backend healthy 已隐含 ES up，这里便于失败时定位到 ES 而非 CDC 链路）
+          curl --fail --retry 30 --retry-all-errors --retry-delay 2 http://localhost:9200/_cluster/health
+          node scripts/search-cdc-smoke.mjs
       - name: Restart application services and verify again
         run: |
           docker compose restart mysql

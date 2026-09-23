@@ -56,6 +56,7 @@ public class SaTokenConfigure implements WebMvcConfigurer {
             // 若只按路径豁免，游客 POST（如发评论）也会跳过登录检查
             SaRouter.match(SaHttpMethod.GET).match(
                     "/api/v1/posts/**",        // 帖子列表、详情、评论列表、互动状态
+                    "/api/v1/search",          // 全文检索（切片 #14）：与帖子列表同为公开只读，游客可搜
                     "/api/v1/users/*",         // 公开用户资料（单段通配，/users/me/profile 两段不在内，仍需登录）
                     "/api/v1/users/*/posts",   // 用户发布的帖子
                     "/api/v1/characters/**",   // 角色图鉴预留（PR #57 待合并，当前分支尚无此路由）

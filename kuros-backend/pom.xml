@@ -170,6 +170,20 @@
             <artifactId>spring-cloud-starter-stream-rocketmq</artifactId>
         </dependency>
 
+        <!-- Spring Data Elasticsearch（切片 #14）：帖子全文检索的客户端与 mapping 抽象。
+             为什么用 Spring Data ES 而非裸 elasticsearch-java client？
+             1. @Document/@Field 声明式 mapping（ik_max_word 建索引 / ik_smart 搜索）比手写 JSON 直观
+             2. ElasticsearchOperations 提供 index/save/search 高层 API，BOM 托管版本（Boot 4.1.1 → 6.1.x）
+             3. 与项目 Spring Data 家族（JPA/Redis）同源，自动装配一致
+             版本兼容赌注（se-01 spike 验证）：Boot 4.1.1 的 ES 客户端默认 JsonpMapper 走 Jackson，
+             项目已有 Jackson 2（sa-token）与 Boot 4 默认 Jackson 3 共存；spike 跑通中文 index+search 即 go，
+             踩坑则回退裸 ES Java Client 手动装配 Rest5Client（ADR 0007 决策 8）。
+             高亮/聚合等 Spring Data 未直接覆盖的高级 API，用传递进来的 elasticsearch-java 原生客户端补充 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-elasticsearch</artifactId>
+        </dependency>
+
         <!-- SpringDoc OpenAPI：自动生成 Swagger UI 交互式 API 文档。
              springdoc 2.x 基于 Jakarta EE，兼容 Spring Boot 4.x。
              为什么不用 springfox？springfox 已停止维护，不支持 Jakarta EE -->

@@ -31,3 +31,4 @@
 | #11 | [11-interaction-async-rocketmq.md](./11-interaction-async-rocketmq.md) | 互动写路径异步化：Redis 计数前置 + RocketMQ 顺序消息落库（消除热点行竞争） |
 | #12 | [12-feed-timeline.md](./12-feed-timeline.md) | Feed 流：Redis ZSet Timeline + Push-on-publish 关注流（Pipeline 批量扇出） |
 | #13 | [13-read-path-hardening.md](./13-read-path-hardening.md) | 读路径加固：两级缓存（L1 Caffeine + L2 Redis）+ 互斥锁防击穿 + 空值哨兵 + pub/sub 跨节点失效 + keyset 游标分页（计数与缓存解耦） |
+| #14 | [14-fulltext-search-cdc.md](./14-fulltext-search-cdc.md) | 全文检索 + CDC：Elasticsearch ik 中文分词替代 MySQL LIKE + Canal 订阅 binlog 经 RocketMQ 做增量索引（回源组装/幂等 upsert/逻辑删可逆/index alias 零停机重建/ES 软依赖降级） |
