@@ -13,9 +13,10 @@ import com.kuros.kurosbackend.shared.exception.ForbiddenException;
 import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.comment.repository.CommunityCommentRepository;
 import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
+import com.kuros.kurosbackend.shared.cache.CacheNames;
+import com.kuros.kurosbackend.shared.cache.TwoLevelCache;
 import com.kuros.kurosbackend.user.client.UserBriefDto;
 import com.kuros.kurosbackend.user.client.UserDirectoryFacade;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -36,15 +37,18 @@ public class CommunityCommentService {
     private final CommunityCommentRepository commentRepository;
     private final CommunityPostRepository postRepository;
     private final UserDirectoryFacade userDirectory;
+    private final TwoLevelCache twoLevelCache;
 
     public CommunityCommentService(
             CommunityCommentRepository commentRepository,
             CommunityPostRepository postRepository,
-            UserDirectoryFacade userDirectory
+            UserDirectoryFacade userDirectory,
+            TwoLevelCache twoLevelCache
     ) {
         this.commentRepository = commentRepository;
         this.postRepository = postRepository;
         this.userDirectory = userDirectory;
+        this.twoLevelCache = twoLevelCache;
     }
 
     @Transactional(readOnly = true)
@@ -63,8 +67,8 @@ public class CommunityCommentService {
         return new PageResult<>(items, new PageMeta(normalizedPage, normalizedPageSize, comments.getTotalElements(), comments.getTotalPages()));
     }
 
-    // 评论创建后驱逐帖子详情缓存，确保下次查询获取最新评论数
-    @CacheEvict(cacheNames = "postDetail", key = "#postId")
+    // 评论创建后驱逐帖子详情两级缓存（commentCount 是缓存内容字段），确保下次查询获取最新评论数。
+    // 切片 #13：从 @CacheEvict 迁为 twoLevelCache.evict——注解只清 L1 Caffeine，清不掉 L2 Redis，会留下陈旧内容。
     @Transactional
     public CommentResponse create(String postId, String authorId, CreateCommentRequest request) {
         ensurePublishedPost(postId);
@@ -86,11 +90,11 @@ public class CommunityCommentService {
         CommunityComment comment = commentRepository.save(new CommunityComment(
                 UUID.randomUUID().toString(), postId, authorId, parentId, content, now
         ));
+        twoLevelCache.evict(CacheNames.POST_DETAIL, postId);
         return toResponse(comment, userDirectory.findAuthors(List.of(authorId)));
     }
 
-    // 评论删除后驱逐帖子详情缓存
-    @CacheEvict(cacheNames = "postDetail", key = "#postId")
+    // 评论删除后驱逐帖子详情两级缓存（切片 #13：同 create，从 @CacheEvict 迁为 twoLevelCache.evict 以覆盖 L2）
     @Transactional
     public void delete(String postId, String commentId, String authorId) {
         CommunityComment comment = commentRepository.findById(commentId)
@@ -104,6 +108,7 @@ public class CommunityCommentService {
         if (comment.getStatus() == CommentStatus.NORMAL) {
             comment.delete(LocalDateTime.now());
         }
+        twoLevelCache.evict(CacheNames.POST_DETAIL, postId);
     }
 
     private CommunityPost ensurePublishedPost(String postId) {

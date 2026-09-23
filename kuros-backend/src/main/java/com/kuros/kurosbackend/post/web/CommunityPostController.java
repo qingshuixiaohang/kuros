@@ -3,6 +3,7 @@ package com.kuros.kurosbackend.post.web;
 import cn.dev33.satoken.stp.StpUtil;
 import com.kuros.kurosbackend.shared.api.ApiResponse;
 import com.kuros.kurosbackend.post.api.CreatePostRequest;
+import com.kuros.kurosbackend.shared.api.CursorPageResult;
 import com.kuros.kurosbackend.shared.api.PageResult;
 import com.kuros.kurosbackend.post.api.PostDetailResponse;
 import com.kuros.kurosbackend.post.api.PostSummaryResponse;
@@ -21,8 +22,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/api/v1/posts")
 public class CommunityPostController {
@@ -36,14 +35,23 @@ public class CommunityPostController {
     }
 
     @GetMapping
-    public ApiResponse<List<PostSummaryResponse>> list(
+    public ApiResponse<?> list(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize,
             @RequestParam(defaultValue = "latest") String sort,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String tag,
-            @RequestParam(required = false) String keyword
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(required = false) Integer limit
     ) {
+        // 以是否传 limit 区分模式（spec D9）：传了 limit → keyset 游标分页（cursor 空表示第一页，返回 CursorPageResult）；
+        // 否则走旧 offset 分页（返回 items + meta），两套契约并存不破坏现有页码 UI 调用方
+        if (limit != null) {
+            CursorPageResult<PostSummaryResponse> result =
+                    postService.findPublishedByCursor(sort, category, tag, keyword, cursor, limit);
+            return new ApiResponse<>(result, null);
+        }
         PageResult<PostSummaryResponse> result = postService.findPublished(page, pageSize, sort, category, tag, keyword);
         return new ApiResponse<>(result.items(), result.meta());
     }

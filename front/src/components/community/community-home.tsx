@@ -8,7 +8,7 @@ import { CommunityFollowButton } from "@/components/community/community-follow-b
 import { CommunityHeroCarousel, CommunityImageCarousel } from "@/components/community/community-carousel";
 import { CommunityDemoProvider, useCommunityDemo } from "@/components/community/community-interactions";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
-import { favoritePost, fetchFollowingFeed, fetchPostInteractions, fetchPosts, likePost, unfavoritePost, unlikePost, type PostInteraction } from "@/lib/api";
+import { favoritePost, fetchFollowingFeedByCursor, fetchPostInteractions, fetchPosts, likePost, unfavoritePost, unlikePost, type PostInteraction } from "@/lib/api";
 import { guides, newsItems } from "@/lib/mock";
 import { toGuide } from "@/lib/post-view";
 import type { Guide } from "@/types/community";
@@ -115,7 +115,59 @@ function guideFromListItem(post: Parameters<typeof toGuide>[0]) {
   const demoMedia = guides.find((item) => item.id === guide.id || item.apiId === guide.id)?.mediaUrls;
   return guide.mediaUrls?.length ? guide : { ...guide, mediaUrls: demoMedia };
 }
-function Feed({ query }: { query: string }) { const params = useSearchParams(); const router = useRouter(); const { followed } = useCommunityDemo(); const tab = params.get("tab") === "following" ? "following" : params.get("tab") === "latest" ? "latest" : "recommend"; const [items, setItems] = useState<Guide[]>(guides); const [loadedKey, setLoadedKey] = useState(""); const [apiUnavailable, setApiUnavailable] = useState(false); const requestKey = tab + "::" + query; const sort = tab === "recommend" ? "hot" : "latest"; useEffect(() => { let active = true; /* slice-12: following tab → /api/v1/feed/following (Redis ZSet timeline); recommend/latest → GET /api/v1/posts */ const request = tab === "following" ? fetchFollowingFeed({ pageSize: 20 }).then((result) => result.items) : fetchPosts({ keyword: query, sort, pageSize: 20 }); request.then((posts) => { if (!active) return; setItems(posts.map(guideFromListItem)); setApiUnavailable(false); setLoadedKey(requestKey); }).catch(() => { if (!active) return; /* following tab: show empty (not logged in or backend down); recommend/latest: local demo fallback */ if (tab === "following") { setItems([]); } else { const keyword = query.trim().toLowerCase(); const fallback = guides.filter((guide) => (guide.title + guide.excerpt + guide.category + guide.tags.join("")).toLowerCase().includes(keyword)); setItems(tab === "latest" ? [...fallback].reverse() : fallback); } setApiUnavailable(true); setLoadedKey(requestKey); }); return () => { active = false; }; }, [query, requestKey, sort, tab]); const loading = loadedKey !== requestKey; const visible = items; const tabs = [{ key: "recommend", label: "推荐", href: "/" }, { key: "latest", label: "最新", href: "/?tab=latest" }, { key: "following", label: "关注", href: "/?tab=following" }]; return <section className="feed" id="feed" aria-label="社区内容流"><Banner /><div className="feed-tabs">{tabs.map((item) => <button className={tab === item.key ? "is-active" : ""} key={item.key} onClick={() => router.push(item.href)} type="button">{item.label}</button>)}</div>{loading ? <div className="feed-status">正在整理漂泊者的最新内容…</div> : visible.length ? visible.map((guide) => <PostCard guide={guide} key={guide.id} />) : <div className="empty-state"><p>{tab === "following" ? "还没有关注的创作者。去推荐页看看吧。" : "没有找到相关帖子，换个关键词试试。"}</p>{tab === "following" && <Link className="secondary-button" href="/">返回推荐页</Link>}</div>}{apiUnavailable && tab !== "following" && <p className="api-fallback-note">后端暂不可用，当前显示本地 Demo 数据。</p>}</section>; }
+function Feed({ query }: { query: string }) {
+  const params = useSearchParams();
+  const router = useRouter();
+  const tab = params.get("tab") === "following" ? "following" : params.get("tab") === "latest" ? "latest" : "recommend";
+  const [items, setItems] = useState<Guide[]>(guides);
+  const [loadedKey, setLoadedKey] = useState("");
+  const [apiUnavailable, setApiUnavailable] = useState(false);
+  /* slice-13/rp-06: following tab → cursor pagination ("加载更多" appends, no total count) */
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const requestKey = tab + "::" + query;
+  const sort = tab === "recommend" ? "hot" : "latest";
+  useEffect(() => {
+    let active = true;
+    /* slice-12: following tab → /api/v1/feed/following (Redis ZSet timeline); recommend/latest → GET /api/v1/posts */
+    /* slice-13: following tab switches to cursor mode (limit triggers cursor), first page cursor=null */
+    const request = tab === "following"
+      ? fetchFollowingFeedByCursor({ limit: 20 }).then((result) => { if (active) { setNextCursor(result.nextCursor); setHasMore(result.hasMore); } return result.items; })
+      : fetchPosts({ keyword: query, sort, pageSize: 20 });
+    request.then((posts) => {
+      if (!active) return;
+      setItems(posts.map(guideFromListItem));
+      setApiUnavailable(false);
+      setLoadedKey(requestKey);
+    }).catch(() => {
+      if (!active) return;
+      /* following tab: show empty (not logged in or backend down); recommend/latest: local demo fallback */
+      if (tab === "following") { setItems([]); setHasMore(false); setNextCursor(null); } else { const keyword = query.trim().toLowerCase(); const fallback = guides.filter((guide) => (guide.title + guide.excerpt + guide.category + guide.tags.join("")).toLowerCase().includes(keyword)); setItems(tab === "latest" ? [...fallback].reverse() : fallback); }
+      setApiUnavailable(true);
+      setLoadedKey(requestKey);
+    });
+    return () => { active = false; };
+  }, [query, requestKey, sort, tab]);
+  /* "加载更多"：透传上一页 nextCursor 拉下一页，追加到现有列表（按 id 去重），hasMore=false 后隐藏按钮 */
+  function loadMore() {
+    if (tab !== "following" || !hasMore || !nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    fetchFollowingFeedByCursor({ cursor: nextCursor, limit: 20 }).then((result) => {
+      setItems((current) => {
+        const seen = new Set(current.map((guide) => guide.id));
+        const appended = result.items.map(guideFromListItem).filter((guide) => !seen.has(guide.id));
+        return [...current, ...appended];
+      });
+      setNextCursor(result.nextCursor);
+      setHasMore(result.hasMore);
+    }).catch(() => { setHasMore(false); }).finally(() => setLoadingMore(false));
+  }
+  const loading = loadedKey !== requestKey;
+  const visible = items;
+  const tabs = [{ key: "recommend", label: "推荐", href: "/" }, { key: "latest", label: "最新", href: "/?tab=latest" }, { key: "following", label: "关注", href: "/?tab=following" }];
+  return <section className="feed" id="feed" aria-label="社区内容流"><Banner /><div className="feed-tabs">{tabs.map((item) => <button className={tab === item.key ? "is-active" : ""} key={item.key} onClick={() => router.push(item.href)} type="button">{item.label}</button>)}</div>{loading ? <div className="feed-status">正在整理漂泊者的最新内容…</div> : visible.length ? <>{visible.map((guide) => <PostCard guide={guide} key={guide.id} />)}{tab === "following" && (hasMore ? <button className="feed-load-more" disabled={loadingMore} onClick={loadMore} type="button">{loadingMore ? "正在加载更多…" : "加载更多"}</button> : <p className="feed-end-note">已经到底啦，关注的动态都看完了。</p>)}</> : <div className="empty-state"><p>{tab === "following" ? "还没有关注的创作者。去推荐页看看吧。" : "没有找到相关帖子，换个关键词试试。"}</p>{tab === "following" && <Link className="secondary-button" href="/">返回推荐页</Link>}</div>}{apiUnavailable && tab !== "following" && <p className="api-fallback-note">后端暂不可用，当前显示本地 Demo 数据。</p>}</section>;
+}
 export function RightRail() {
   const [tab, setTab] = useState<"recommend" | "news">("recommend");
   const items = tab === "recommend" ? newsItems.slice(0, 5) : newsItems.filter((item) => item.category === "官方公告" || item.category === "版本前瞻").slice(0, 5);

@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface CommunityPostRepository extends JpaRepository<CommunityPost, String> {
@@ -27,6 +29,74 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, St
             @Param("category") String category,
             @Param("tag") String tag,
             @Param("keyword") String keyword,
+            Pageable pageable
+    );
+
+    /**
+     * keyset 游标翻页——最新流（切片 #13 / rp-05）。排序键 (published_at, id) 均 DESC。
+     *
+     * 为什么不用 offset？offset 翻页要扫弃前 offset 行（O(offset+n)）且要 COUNT(*) 算总页；
+     * keyset 用「排序键严格小于游标」的谓词直接定位起点，翻到多深都是 O(log n + limit)、不查总数。
+     *
+     * 谓词 (published_at &lt; :ts) OR (published_at = :ts AND id &lt; :id)：同发布时间时用 id 字典序兜底全序，
+     * 保证不丢不重。:hasCursor=false 时首个析取项恒真 → 退化为「取最新 limit 条」（第一页）。
+     * 返回 List（非 Page）避开 COUNT(*)；limit 由 Pageable 施加（调用方传 limit+1 探测 hasMore）。
+     */
+    @Query("""
+            select distinct p from CommunityPost p
+            left join p.tags tag
+            where p.status = :status
+              and (:category is null or p.category = :category)
+              and (:tag is null or tag.name = :tag)
+              and (:keyword is null or lower(p.title) like lower(concat('%', :keyword, '%'))
+                   or lower(p.excerpt) like lower(concat('%', :keyword, '%')))
+              and (:hasCursor = false
+                   or p.publishedAt < :cursorPublishedAt
+                   or (p.publishedAt = :cursorPublishedAt and p.id < :cursorId))
+            order by p.publishedAt desc, p.id desc
+            """)
+    List<CommunityPost> findLatestByCursor(
+            @Param("status") PostStatus status,
+            @Param("category") String category,
+            @Param("tag") String tag,
+            @Param("keyword") String keyword,
+            @Param("hasCursor") boolean hasCursor,
+            @Param("cursorPublishedAt") LocalDateTime cursorPublishedAt,
+            @Param("cursorId") String cursorId,
+            Pageable pageable
+    );
+
+    /**
+     * keyset 游标翻页——热门流（切片 #13 / rp-05）。排序键 (like_count, comment_count, published_at, id) 均 DESC。
+     *
+     * 四元组比较展开为 OR 链（JPQL 无 row-value 语法）：逐级相等才比下一级，任一级严格小于即命中下一页。
+     * 同热度（like+comment 相等）时用 published_at、再用 id 兜底全序，保证不丢不重。
+     */
+    @Query("""
+            select distinct p from CommunityPost p
+            left join p.tags tag
+            where p.status = :status
+              and (:category is null or p.category = :category)
+              and (:tag is null or tag.name = :tag)
+              and (:keyword is null or lower(p.title) like lower(concat('%', :keyword, '%'))
+                   or lower(p.excerpt) like lower(concat('%', :keyword, '%')))
+              and (:hasCursor = false
+                   or p.likeCount < :cursorLike
+                   or (p.likeCount = :cursorLike and p.commentCount < :cursorComment)
+                   or (p.likeCount = :cursorLike and p.commentCount = :cursorComment and p.publishedAt < :cursorPublishedAt)
+                   or (p.likeCount = :cursorLike and p.commentCount = :cursorComment and p.publishedAt = :cursorPublishedAt and p.id < :cursorId))
+            order by p.likeCount desc, p.commentCount desc, p.publishedAt desc, p.id desc
+            """)
+    List<CommunityPost> findHotByCursor(
+            @Param("status") PostStatus status,
+            @Param("category") String category,
+            @Param("tag") String tag,
+            @Param("keyword") String keyword,
+            @Param("hasCursor") boolean hasCursor,
+            @Param("cursorLike") long cursorLike,
+            @Param("cursorComment") long cursorComment,
+            @Param("cursorPublishedAt") LocalDateTime cursorPublishedAt,
+            @Param("cursorId") String cursorId,
             Pageable pageable
     );
 

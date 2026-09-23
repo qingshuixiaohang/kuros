@@ -30,3 +30,4 @@
 | #10 | [10-service-split.md](./10-service-split.md) | 服务拆分：用户域独立微服务 kuros-user（两阶段渐进拆 + OpenFeign + 跨库一致性降级） |
 | #11 | [11-interaction-async-rocketmq.md](./11-interaction-async-rocketmq.md) | 互动写路径异步化：Redis 计数前置 + RocketMQ 顺序消息落库（消除热点行竞争） |
 | #12 | [12-feed-timeline.md](./12-feed-timeline.md) | Feed 流：Redis ZSet Timeline + Push-on-publish 关注流（Pipeline 批量扇出） |
+| #13 | [13-read-path-hardening.md](./13-read-path-hardening.md) | 读路径加固：两级缓存（L1 Caffeine + L2 Redis）+ 互斥锁防击穿 + 空值哨兵 + pub/sub 跨节点失效 + keyset 游标分页（计数与缓存解耦） |
