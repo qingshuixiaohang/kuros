@@ -102,6 +102,23 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, St
 
     Optional<CommunityPost> findByIdAndStatus(String id, PostStatus status);
 
+    /**
+     * 按 id 连同 tags 一次性抓取（切片 #14 se-03 回源组装用）。
+     *
+     * 为什么不用 findById：tags 是 LAZY ManyToMany，而 {@code PostIndexService.index} 组装文档时
+     * 会在读 DB 之后接着做 ES 写入（跨 I/O）——若靠 LAZY 代理，脱离事务后访问 tags 会抛 LazyInitializationException。
+     * fetch join 在同一条 SQL 内把 tags 拉齐，无需让 ES 写入被裹在 DB 事务里（长事务占连接）。
+     */
+    @Query("select p from CommunityPost p left join fetch p.tags where p.id = :id")
+    Optional<CommunityPost> findByIdWithTags(@Param("id") String id);
+
+    /**
+     * 全量抓取（含 tags）供零停机重建遍历（切片 #14 se-03）。distinct 去重 collection fetch join 因 tags 笛卡尔积产生的重复行。
+     * 注：本项目帖子量级小，一次性全量可接受；生产海量数据应改为分页/流式（按 id 游标批次），避免一次载入全部实体。
+     */
+    @Query("select distinct p from CommunityPost p left join fetch p.tags")
+    List<CommunityPost> findAllWithTags();
+
     Page<CommunityPost> findByAuthorIdAndStatus(String authorId, PostStatus status, Pageable pageable);
 
     long countByAuthorIdAndStatus(String authorId, PostStatus status);
