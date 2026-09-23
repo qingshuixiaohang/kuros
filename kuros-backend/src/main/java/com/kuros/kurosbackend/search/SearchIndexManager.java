@@ -21,8 +21,14 @@ import java.util.function.Function;
  * 读写走别名 → 全量重建时先把新数据 bulk 写进 {@code v{n+1}}，写完再「原子切别名 + 删旧索引」，
  * 全程搜索不中断（zero-downtime reindex，ADR 0007）。若直接对真实索引 delete+recreate，重建窗口内搜索会命中空索引。
  *
- * <p>为什么懒建而非启动即建：ES 对 backend 是「软依赖」（se-02）——启动即连 ES 建索引会让 ES 不可用时拖垮应用启动。
- * 故 {@link #ensureAlias()} 由首次写入（{@link PostIndexService#index}）幂等触发；ES 不可用时索引失败只影响搜索，不阻断主链路。
+ * <p>别名创建有两条幂等触发路径（都软失败：ES 不可用只影响搜索，绝不阻断主链路或应用启动）：
+ * <ol>
+ *   <li><b>启动引导</b>（切片 #14 code-review 修复）：{@link SearchIndexBootstrap} 在 {@code ApplicationReadyEvent}
+ *       （应用已就绪、readiness 探针已过）后调 {@link #ensureAliasIfAvailable()}——ES 在线则全新栈一启动就有别名，
+ *       搜索直接返回空结果而非 503；ES 不可用则仅记 warn 不上抛，故不会拖垮启动（保留 se-02「ES 是软依赖」的承诺）。</li>
+ *   <li><b>首次写入兜底</b>：{@link PostIndexService#index} 调 {@link #ensureAlias()}——覆盖「启动时 ES 恰好不可用、
+ *       之后才恢复」的窗口，届时首条 CDC 写入即补建别名。</li>
+ * </ol>
  */
 @Component
 public class SearchIndexManager {
@@ -51,6 +57,21 @@ public class SearchIndexManager {
         createVersionedIndex(first);
         switchAlias(null, first);
         log.info("搜索索引别名初始化完成：{} -> {}", ALIAS, first);
+    }
+
+    /**
+     * 启动期软失败确保别名就绪（供 {@link SearchIndexBootstrap} 在 {@code ApplicationReadyEvent} 后调用）。
+     *
+     * <p>与 {@link #ensureAlias()} 的唯一区别：把 ES 不可用（连接拒绝/超时）吞成一条 warn 而非上抛——
+     * ES 宕机时应用启动不受影响（保留 se-02「ES 是软依赖」的承诺），ES 在线时全新栈搜索即刻返回空结果而非 503。
+     * 放在应用就绪之后跑：即使 ES 慢到超时，也只是延后这条日志，不阻塞启动完成。
+     */
+    void ensureAliasIfAvailable() {
+        try {
+            ensureAlias();
+        } catch (RuntimeException e) {
+            log.warn("启动期初始化搜索索引别名失败（ES 可能不可用），降级为懒建——搜索将在 ES 恢复后经首次写入/全量重建可用：{}", e.toString());
+        }
     }
 
     /**

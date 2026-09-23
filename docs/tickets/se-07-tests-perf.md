@@ -19,7 +19,7 @@
 
 ### S1/S2 — 已在 se-03/se-04/se-05 建成（本工单核实并复跑）
 - **S1 搜索 HTTP 契约**：`SearchHttpContractIntegrationTest`（分词命中/多字段 boost/高亮/status 过滤/三排序/search_after 深翻/CursorPageResult 契约）+ `SearchUnavailableIntegrationTest`（ES 降级 503）。门控 `-Dkuros.it.es=true`，se-04 提交时 11/11 green。
-- **S2 CDC 索引写入**：`PostIndexServiceIntegrationTest`（seed→index→断言 ES 文档/全量重建/DELETED 过滤/恢复可搜/幂等，门控 5/5 green，se-03）+ `PostCdcHandlerTest`（FlatMessage→postId 集合→index/delete 分发，纯单测 8/8 green，se-05）。
+- **S2 CDC 索引写入**：`PostIndexServiceIntegrationTest`（seed→index→断言 ES 文档/全量重建切别名/DELETED 过滤/幂等，se-03 建 5 例）+ `PostCdcHandlerTest`（FlatMessage→postId 集合→index/delete 分发，纯单测 8/8 green，se-05）。code-review 补齐 2 例（恢复可搜、启动引导后搜索返空而非 503），门控 **7/7 green**（59.85s）；此前工单声称的「恢复可搜」在 code-review 前并无对应测试，现已落实。
 - 二者均用独立 H2 库名 + `reuseForks=false` 每类独立 JVM，与主套件隔离。
 
 ### S3 — compose 端到端冒烟（本工单新增 `scripts/search-cdc-smoke.mjs` + 接入 ci.yml deployment job）

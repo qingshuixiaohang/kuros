@@ -8,6 +8,7 @@ import com.kuros.kurosbackend.post.domain.PostStatus;
 import com.kuros.kurosbackend.post.domain.PostType;
 import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.post.repository.ContentTagRepository;
+import com.kuros.kurosbackend.shared.api.CursorPageResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -47,7 +48,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>逻辑删（status→DELETED）保留文档，status 字段随之更新（不物理删）；</li>
  *   <li>幂等：重复 index 同一 postId 不产生副本（_id=postId 覆盖写）；</li>
  *   <li>零停机全量重建：reindexAll 切到新版本索引、旧索引删除、文档仍可经别名读到；</li>
- *   <li>物理删/回源查不到：兜底 delete by _id，ES 不留孤儿文档。</li>
+ *   <li>物理删/回源查不到：兜底 delete by _id，ES 不留孤儿文档；</li>
+ *   <li>恢复可搜（spec S2）：逻辑删后 status 恢复 PUBLISHED → 再索引 → 搜索重新命中（DELETED 期间被 status 过滤排除）；</li>
+ *   <li>启动引导（code-review 修复）：全新 ES 无别名时经 {@code ensureAliasIfAvailable} 引导后，搜索返回空结果而非 index_not_found→503。</li>
  * </ol>
  *
  * <p>⚠️ 默认跳过（gated）：需真实 ES 容器（自建 ik 镜像），用 {@code -Dkuros.it.es=true} 显式开启，
@@ -99,6 +102,7 @@ class PostIndexServiceIntegrationTest {
     @Autowired CommunityPostRepository postRepository;
     @Autowired ContentTagRepository tagRepository;
     @Autowired JdbcTemplate jdbcTemplate;
+    @Autowired SearchQueryService searchQueryService;
 
     @BeforeEach
     void setUp() {
@@ -213,7 +217,61 @@ class PostIndexServiceIntegrationTest {
         assertThat(countAll()).isZero();
     }
 
+    @Test
+    void 逻辑删后恢复PUBLISHED重新可搜() {
+        // 唯一数字 token：ik 把连续阿拉伯数字切成单一 token，搜该 token 精确命中本帖，规避中文分词不确定性
+        String token = String.valueOf(System.nanoTime());
+        String postId = seedPost("鸣潮攻略" + token, "正文", List.of("恢复"), 0, 0);
+
+        // PUBLISHED → 索引后经真实搜索可命中
+        postIndexService.index(postId);
+        postIndexService.refresh();
+        assertThat(searchIds(token)).contains(postId);
+
+        // 逻辑删（status→DELETED）→ 再索引 → 文档保留，但被搜索期 filter status=PUBLISHED 排除
+        CommunityPost post = postRepository.findById(postId).orElseThrow();
+        post.delete(LocalDateTime.now());
+        postRepository.save(post);
+        postIndexService.index(postId);
+        postIndexService.refresh();
+        assertThat(postIndexService.findById(postId)).as("逻辑删不物理删文档").isPresent();
+        assertThat(postIndexService.findById(postId).orElseThrow().getStatus()).isEqualTo(PostStatus.DELETED.name());
+        assertThat(searchIds(token)).as("DELETED 期间被搜索过滤排除").doesNotContain(postId);
+
+        // 恢复：status 翻回 PUBLISHED（模拟运维恢复 / CDC 拾取该 UPDATE）→ 再索引 → 重新可搜。
+        // 领域暂无 restore()，直接改 DB status 模拟外部恢复；索引层「已删帖可恢复」正是逻辑删不物理删的设计目的。
+        jdbcTemplate.update("UPDATE posts SET status = ? WHERE id = ?", PostStatus.PUBLISHED.name(), postId);
+        postIndexService.index(postId);
+        postIndexService.refresh();
+        assertThat(postIndexService.findById(postId).orElseThrow().getStatus()).isEqualTo(PostStatus.PUBLISHED.name());
+        assertThat(searchIds(token)).as("恢复 PUBLISHED 后重新可搜").contains(postId);
+    }
+
+    @Test
+    void 全新ES经启动引导后搜索返回空而非降级503() {
+        // @BeforeEach 已 wipe 索引 → 别名不存在，模拟「全新部署、尚未发帖也未跑全量重建」的冷态
+        assertThat(indexManager.resolveCurrentIndex()).isEmpty();
+
+        // 启动引导（SearchIndexBootstrap 在 ApplicationReadyEvent 后调此）：ES 在线 → 建别名 post_search→v1
+        indexManager.ensureAliasIfAvailable();
+        assertThat(indexManager.resolveCurrentIndex()).as("引导后别名就绪").isPresent();
+
+        // 别名就绪 → 搜空索引返回空结果，而非 index_not_found 被 SearchQueryService catch 成 503——
+        // 这正是 code-review 修复的可观测证据（修复前全新栈搜索恒 503「暂不可用」，误导为 ES 挂了）
+        CursorPageResult<PostSearchItem> result =
+                searchQueryService.search("任意关键词", null, null, null, "relevance", null, 20);
+        assertThat(result.items()).isEmpty();
+        assertThat(result.hasMore()).isFalse();
+        assertThat(result.nextCursor()).isNull();
+    }
+
     // ---- helpers ----
+
+    /** 经 SearchQueryService 搜 keyword，返回命中的 postId 列表（走真实 ES 查询 + status=PUBLISHED 过滤）。 */
+    private List<String> searchIds(String keyword) {
+        return searchQueryService.search(keyword, null, null, null, "relevance", null, 50)
+                .items().stream().map(PostSearchItem::id).toList();
+    }
 
     private String seedPost(String title, String content, List<String> tagNames, long like, long comment) {
         CommunityPost post = CommunityPost.publish(
