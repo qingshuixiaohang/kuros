@@ -413,6 +413,14 @@ services:
       canal.mq.topic: kuros-post-cdc
       # partitionHash 按主键 hash 选队列 → 同一 postId 的变更落同一队列，配合 RocketMQ orderly 保序（ADR 0007 决策⑥）
       canal.mq.partitionHash: kuros\.posts:id,kuros\.post_tags:post_id
+      # 【S3 端到端冒烟实测踩坑·必需项】flatMessage=true + partitionHash 非空时，canal 走 CanalRocketMQProducer.send
+      # 的“分区合并”分支（canal-1.1.8 第 234-258 行）：其中 `for (i < partitionNum)` 的 partitionNum 是装箱 Integer，
+      # 经三级回退取值（dynamicTopicPartition → dynamicQueueSize(需 enableDynamicQueuePartition) → partitionsNum）。
+      # 三者都未配时 partitionNum=null，循环条件自动拆箱即 NullPointerException——每条 binlog 事件发送都崩、
+      # topic 永不创建、CDC 全程静默不通（本项目实测 kuros.log 刷了 1503 次 NPE 才定位到）。故必须显式声明分区数。
+      # 取 4 对齐 broker.conf 的 defaultTopicQueueNums=4：partitionHash 把同一 postId 稳定哈希到 4 个队列之一（保序），
+      # 且分区数 ≤ topic 队列数才不会发到不存在的队列。
+      canal.mq.partitionsNum: "4"
       # 收敛 canal JVM 堆：镜像默认 -Xms2g -Xmx3g，本地/CI 与 mysql+nacos+backend+ES+rocketmq 共存会 OOM；
       # startup.sh 将 env JAVA_OPTS 后置，JVM 对重复 -Xmx 取最后值 → 覆盖为 512m
       JAVA_OPTS: "-Xms256m -Xmx512m"
