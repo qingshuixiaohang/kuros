@@ -223,3 +223,42 @@ _避免_：空缓存、null 缓存（"哨兵"强调它是占位标记而非真�
 
 **内容字段**：帖子中不随互动实时变化的部分（标题、正文、作者、媒体、分类、标签、发布时间），可安全进两级缓存；与"实时计数"（点赞/收藏数，走 #11 实时 Redis 源、不进缓存）相对。
 _避免_：帖子数据（过宽，未区分可缓存内容与易变计数）
+
+## 2026-09-23 搜索 + CDC 决策（切片 #14）
+
+- 搜索从 MySQL `LIKE '%x%'` 升级为 **Elasticsearch（ik 中文分词）全文检索**，解决前导通配符全表扫、无分词、无相关性排序三重退化；只索引帖子（CommunityPost，含攻略帖+普通帖），不索引评论。
+- MySQL→ES 异构同步用 **Canal 订阅 binlog 的 CDC**（Canal → RocketMQ → 消费者 → ES），以 binlog 为唯一事实源捕获任意来源变更、对业务零侵入；拒应用层双写/业务事件（漏捕获非应用写入）。
+- 消费端 **回源组装**：binlog 只有 posts 单表行，回查 DB（posts+tags）+ Feign（authorName）组装完整文档再按 `_id=postId` upsert；Canal 订阅 posts + post_tags 两表。
+- 删除语义：逻辑删（status→DELETED）经 CDC 同步后**搜索时 filter status=PUBLISHED**，不物理删 ES 文档（可逆，合内容处置语义）。
+- 索引演进用 **索引别名 + 全量重建**（mapping 变更零停机）；搜索深翻用 **search_after** 游标（复用 #13 CursorPageResult 契约）；ES 为 backend 软依赖，不可用时搜索优雅降级、主链路零影响。
+- 技术栈基线：Spring Data Elasticsearch 6.1.x + ES 9.4.5 + analysis-ik 9.4.5 + Canal 1.1.8（Spring Boot 4.1.1）。
+- 架构决策记录：`docs/adr/0007-fulltext-search-cdc.md`。
+
+### 术语补充
+
+**全文检索**：对文本按词切分建索引、以词为单位匹配并按相关性排序的搜索方式；区别于 MySQL `LIKE '%x%'` 的子串模糊匹配（无分词、无相关性、前导通配符致全表扫）。
+_避免_：模糊查询、LIKE 搜索（那是被替代的旧方案）
+
+**倒排索引**：从“词”映射到“包含该词的文档列表”的索引结构，是全文检索按词命中与相关性打分的基础；区别于 MySQL B+ 树的按行/按列值正排索引。
+_避免_：正排索引、B+ 树索引（那是另一类结构）
+
+**变更数据捕获（CDC）**：以数据库变更日志（binlog）为事实源，捕获行级增删改并同步到异构数据源（本项目为 ES 索引）的机制；区别于应用层双写（漏捕获非应用来源的变更）。
+_避免_：双写、数据同步（过宽，未点明“以 binlog 为源”）
+
+**binlog**：MySQL 记录所有行变更的二进制日志，CDC 的订阅源；本项目要求 ROW 格式（记录整行变更而非 SQL 语句）。
+_避免_：日志、redo log（binlog 是归档/复制日志，与 InnoDB redo log 不同）
+
+**分词**：把连续文本切成词元的过程，中文用 ik 分词器；建索引用 `ik_max_word`（细粒度切全）、搜索用 `ik_smart`（粗粒度）。
+_避免_：切词、全文拆分（统一用“分词”）
+
+**search_after**：ES 深分页方式，以上一页最后一条的排序值作游标续查，翻页成本与深度无关；区别于 from-size（深翻需重排前 from 条再丢弃，O(from) 退化）。是 #13 游标分页在 ES 侧的对应实现。
+_避免_：from-size 分页、深分页（from-size 才叫深分页退化）
+
+**索引别名**：指向真实索引的可切换逻辑名（如 `post_search` → `post_search_v1`），重建时原子切换别名实现零停机；区别于直接读写具体索引名。
+_避免_：索引名（别名是逻辑指向，非物理索引本身）
+
+**FlatMessage**：Canal 投递到 MQ 的扁平化 JSON 消息格式（含 type/database/table/pkNames/data[]/old[]，值均为 String）；本项目消费端据其 postId 回源组装，不直接用其 data 拼文档。
+_避免_：Canal 消息（过宽，FlatMessage 特指扁平 JSON 格式，区别于 protobuf 格式）
+
+**回源组装**：CDC 消费端拿到变更主键后，回查权威库（含 join 表）与跨服务数据补齐完整文档再写索引的模式；区别于直接用 binlog 单表行拼文档（拼不出 join/跨库字段）。
+_避免_：数据拼接、直接映射（未点明“回查权威源”）
