@@ -3,10 +3,12 @@ package com.kuros.kurosbackend.feed.redis;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -89,6 +91,65 @@ public class FeedTimelineStore {
     public long size(String userId) {
         Long count = redisTemplate.opsForZSet().size(timelineKey(userId));
         return count == null ? 0 : count;
+    }
+
+    /**
+     * 游标翻页读 timeline（切片 #13 / rp-04）：返回严格排在游标 (cursorScore, cursorPostId) 之后、
+     * 按时间倒序（score DESC，同分 postId DESC）的最多 limit 个 postId。
+     *
+     * 为什么用游标而不是 offset？offset 翻页（{@link #readTimeline}）要 ZREVRANGE 跳过前 offset 个成员，
+     * 深度越大跳得越多；游标用 ZREVRANGEBYSCORE 直接定位到「分数低于游标」的位置起取 limit 个，翻到多深都是 O(log N + limit)。
+     *
+     * 同分（同一发布毫秒）怎么去重不丢不重？
+     * Redis 对同分成员按「字典序倒序」排列，故全序是 (score DESC, postId DESC)。以游标项为界：
+     * 同分且 postId &gt;= cursorPostId 的成员属于「上一页已返回」（含游标项本身），跳过；
+     * 同分且 postId &lt; cursorPostId 的才是下一页。为覆盖这段同分边界，多取一个 limit 作缓冲再过滤。
+     * 前提假设：同一毫秒的帖子数远小于 limit（score 是发布 epoch millis，单用户关注流内同毫秒暴量不现实）。
+     *
+     * postId 用 String.compareTo 比较与 Redis 的二进制字典序一致：UUID 均为 ASCII，UTF-16 码元序 == 字节序。
+     *
+     * @param cursorScore 游标分数（上一页最后一条的 score）；null 表示第一页（从最新起）
+     * @param cursorPostId 游标 postId（同分兜底）；null 表示第一页
+     * @param limit       本页最多返回条数
+     */
+    public List<String> readTimelineByCursor(String userId, Long cursorScore, String cursorPostId, int limit) {
+        if (limit <= 0) {
+            return List.of();
+        }
+        String key = timelineKey(userId);
+        boolean firstPage = cursorScore == null || cursorPostId == null;
+        // max 用闭区间（含游标分数）以便捕获同分边界的下一页成员，随后按 postId 过滤掉已返回的
+        double max = firstPage ? Double.POSITIVE_INFINITY : cursorScore.doubleValue();
+        // 多取一个 limit 作同分边界缓冲：最坏情况上一页整页都与游标同分，需跳过至多 limit 个已返回成员
+        long fetchCount = firstPage ? limit : (long) limit + limit;
+        Set<ZSetOperations.TypedTuple<String>> tuples = redisTemplate.opsForZSet()
+                .reverseRangeByScoreWithScores(key, Double.NEGATIVE_INFINITY, max, 0, fetchCount);
+        if (tuples == null || tuples.isEmpty()) {
+            return List.of();
+        }
+        List<String> page = new ArrayList<>(limit);
+        for (ZSetOperations.TypedTuple<String> tuple : tuples) {
+            String id = tuple.getValue();
+            Double score = tuple.getScore();
+            if (id == null || score == null) {
+                continue;
+            }
+            // 跳过游标项本身及同分块中「已返回」（postId >= cursorPostId）的边界成员
+            if (!firstPage && score == max && id.compareTo(cursorPostId) >= 0) {
+                continue;
+            }
+            page.add(id);
+            if (page.size() == limit) {
+                break;
+            }
+        }
+        return page;
+    }
+
+    /** 取某帖子在 timeline 中的 score（epoch millis）；不存在返回 0。供构造下一页游标使用。 */
+    public long scoreOf(String userId, String postId) {
+        Double score = redisTemplate.opsForZSet().score(timelineKey(userId), postId);
+        return score == null ? 0L : score.longValue();
     }
 
     /**

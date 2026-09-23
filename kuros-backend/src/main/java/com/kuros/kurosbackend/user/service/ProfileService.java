@@ -11,12 +11,13 @@ import com.kuros.kurosbackend.post.service.CommunityPostService;
 import com.kuros.kurosbackend.interaction.repository.PostFavoriteRepository;
 import com.kuros.kurosbackend.shared.api.PageMeta;
 import com.kuros.kurosbackend.shared.api.PageResult;
+import com.kuros.kurosbackend.shared.cache.CacheNames;
+import com.kuros.kurosbackend.shared.cache.TwoLevelCache;
 import com.kuros.kurosbackend.user.api.ProfileCommentResponse;
 import com.kuros.kurosbackend.user.api.ProfileOverviewResponse;
 import com.kuros.kurosbackend.user.api.PublicProfileResponse;
 import com.kuros.kurosbackend.user.client.UserBriefDto;
 import com.kuros.kurosbackend.user.client.UserDirectoryFacade;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -51,32 +52,36 @@ public class ProfileService {
     private final CommunityPostService postService;
     private final PostFavoriteRepository favoriteRepository;
     private final UserDirectoryFacade userDirectory;
+    private final TwoLevelCache twoLevelCache;
 
     public ProfileService(
             CommunityPostRepository postRepository,
             CommunityCommentRepository commentRepository,
             CommunityPostService postService,
             PostFavoriteRepository favoriteRepository,
-            UserDirectoryFacade userDirectory
+            UserDirectoryFacade userDirectory,
+            TwoLevelCache twoLevelCache
     ) {
         this.postRepository = postRepository;
         this.commentRepository = commentRepository;
         this.postService = postService;
         this.favoriteRepository = favoriteRepository;
         this.userDirectory = userDirectory;
+        this.twoLevelCache = twoLevelCache;
     }
 
     /**
      * 公开资料：GET /api/v1/users/{userId}（资料页头部）。
      * 用户字段经 Feign 读 kuros-user，postCount / likeCount 本地聚合。
      *
-     * @Cacheable：资料页是高频读路径，60s TTL（见 CacheConfig）兜住热点。
-     * 生产化提醒：TTL 只是"最终一致"的兜底，用户改昵称后最长 60s 才刷新——
-     * 真正的事件驱动失效（改资料即驱逐缓存）留待 RocketMQ 切片接入消息后实现。
+     * 切片 #13：publicProfile 纳入两级缓存——L2 Redis 省一次 Feign 往返、且跨重启共享（冷启动不反复打 kuros-user）。
+     * 失效策略：昵称/头像来自 kuros-user，本服务无跨服务事件通道（用户在彼端改资料本端无从感知），
+     * 故靠 L1 10s + L2 60s TTL 兜底最终一致（最长 60s 收敛）；生产化需「改资料即失效」的强一致时，
+     * 须接入事件驱动失效（留待 RocketMQ 切片：kuros-user 发用户变更事件 → backend 消费后驱逐对应键）。
      */
-    @Cacheable(cacheNames = "publicProfile", key = "#userId")
     public PublicProfileResponse findPublic(String userId) {
-        return toPublic(userDirectory.requireUser(userId));
+        return twoLevelCache.get(CacheNames.PUBLIC_PROFILE, userId, PublicProfileResponse.class,
+                () -> toPublic(userDirectory.requireUser(userId)));
     }
 
     /**

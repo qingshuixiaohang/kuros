@@ -53,6 +53,8 @@ button, input { font: inherit; } button { border: 0; cursor: pointer; } a { colo
 
 .api-fallback-note { margin: 14px 0 0; color: var(--muted); font-size: 13px; text-align: center; }
 .feed-status { min-height: 120px; display: grid; place-items: center; border-radius: 8px; background: var(--white); color: var(--muted); font-size: 13px; }
+.feed-load-more { justify-self: center; height: 40px; padding: 0 28px; border-radius: 20px; background: var(--cyan-soft); color: #0dbec8; font-size: 14px; font-weight: 600; }.feed-load-more:hover:not(:disabled) { background: #d6f6f8; }.feed-load-more:disabled { opacity: .6; cursor: default; }
+.feed-end-note { margin: 4px 0 0; color: var(--muted); font-size: 12px; text-align: center; }
 .drawer-backdrop { display: none; }
 @media (max-width: 1100px) { .page-grid { grid-template-columns: 190px minmax(0, 1fr) 190px; }.top-nav-inner { gap: 18px; }.game-switcher { gap: 14px; }.main-nav { gap: 14px; }.sidebar .channel-item { padding-right: 25px; padding-left: 30px; }.sidebar .channel-item.is-active { padding-left: 26px; } }
 @media (max-width: 820px) { .page-grid { grid-template-columns: 190px minmax(0, 1fr); }.right-rail { display: none; }.top-logo { width: 92px; }.game-switcher span:first-child { display: none; }.main-nav { gap: 12px; }.top-search { min-width: 150px; } }

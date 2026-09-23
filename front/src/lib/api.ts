@@ -27,6 +27,13 @@ export type ApiPost = {
 export type ApiPageMeta = { page: number; pageSize: number; totalItems: number; totalPages: number };
 type ApiEnvelope<T> = { data: T; meta?: ApiPageMeta };
 
+/**
+ * 游标分页结果（切片 #13 / rp-06）。与后端 CursorPageResult 对齐：
+ * items 为当页数据，nextCursor 为下一页游标（hasMore=false 时为 null），
+ * hasMore 表示是否还有更多——不含 COUNT(*)，深翻页代价恒定。
+ */
+export type CursorPageResult<T> = { items: T[]; nextCursor: string | null; hasMore: boolean };
+
 export type AuthUser = { id: string; phone: string; nickname: string; avatarUrl: string | null; bio: string | null; role: "USER" | "ADMIN" };
 export type VerificationCode = { expiresIn: number; retryAfter: number; devCode?: string | null };
 
@@ -117,7 +124,22 @@ export async function fetchPosts(options: { category?: string; keyword?: string;
 }
 
 /**
- * 关注流：GET /api/v1/feed/following?page&pageSize
+ * 关注流（游标分页）：GET /api/v1/feed/following?cursor&limit
+ * 后端以是否传 limit 区分游标/offset 模式；cursor 为空表示第一页。
+ * 返回 CursorPageResult<ApiPost>：调用方用 nextCursor 透传请求下一页并追加，
+ * 不依赖 totalItems，深翻不变慢。未登录时后端返回 401，调用方应引导登录。
+ */
+export async function fetchFollowingFeedByCursor(options: { cursor?: string | null; limit?: number } = {}): Promise<CursorPageResult<ApiPost>> {
+  const params = new URLSearchParams();
+  params.set("limit", String(options.limit ?? 20));
+  if (options.cursor) params.set("cursor", options.cursor);
+  const envelope = await requestEnvelope<CursorPageResult<ApiPost>>("/api/v1/feed/following?" + params.toString());
+  const data = envelope?.data;
+  return { items: data?.items ?? [], nextCursor: data?.nextCursor ?? null, hasMore: data?.hasMore ?? false };
+}
+
+/**
+ * 关注流（offset 分页，保留兼容）：GET /api/v1/feed/following?page&pageSize
  * 返回当前登录用户关注的人发布的帖子（按时间倒序，来自后端 Redis ZSet timeline）。
  * 未登录时后端返回 401，调用方应引导登录。
  */

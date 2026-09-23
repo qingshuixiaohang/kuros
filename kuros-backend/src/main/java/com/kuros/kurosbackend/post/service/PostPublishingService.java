@@ -17,9 +17,10 @@ import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.post.repository.ContentTagRepository;
 import com.kuros.kurosbackend.media.repository.MediaAssetRepository;
 import com.kuros.kurosbackend.post.repository.PostMediaRepository;
+import com.kuros.kurosbackend.shared.cache.CacheNames;
+import com.kuros.kurosbackend.shared.cache.TwoLevelCache;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +40,7 @@ public class PostPublishingService {
     private final CommunityPostService postService;
     private final MediaAssetRepository mediaAssetRepository;
     private final PostMediaRepository postMediaRepository;
+    private final TwoLevelCache twoLevelCache;
     private final Counter postsPublishedCounter;
     private final Timer postsPublishTimer;
     private final ApplicationEventPublisher eventPublisher;
@@ -49,6 +51,7 @@ public class PostPublishingService {
             CommunityPostService postService,
             MediaAssetRepository mediaAssetRepository,
             PostMediaRepository postMediaRepository,
+            TwoLevelCache twoLevelCache,
             Counter postsPublishedCounter,
             Timer postsPublishTimer,
             ApplicationEventPublisher eventPublisher
@@ -58,6 +61,7 @@ public class PostPublishingService {
         this.postService = postService;
         this.mediaAssetRepository = mediaAssetRepository;
         this.postMediaRepository = postMediaRepository;
+        this.twoLevelCache = twoLevelCache;
         this.postsPublishedCounter = postsPublishedCounter;
         this.postsPublishTimer = postsPublishTimer;
         this.eventPublisher = eventPublisher;
@@ -85,9 +89,11 @@ public class PostPublishingService {
         });
     }
 
-    // @CacheEvict(beforeInvocation=true)：驱逐必须在方法体之前执行，
-    // 否则内部调用的 findPublishedById() 会命中旧缓存返回过期数据
-    @CacheEvict(cacheNames = "postDetail", key = "#postId", beforeInvocation = true)
+    // 切片 #13：内容变更 → 显式驱逐两级缓存（L1+L2），替代原 @CacheEvict（注解只清 L1 Caffeine，清不掉 L2 Redis）。
+    // 驱逐时机：放在所有鉴权/校验/写入之后、末尾 findPublishedById 之前——
+    // ① ownedPost/validate/normalizeTags/mediaAssets 任一抛异常时事务回滚，不触发无谓的跨节点失效广播
+    //    （两级缓存后 evict 成本 = Redis DEL + pub/sub 广播，远贵于旧 L1-only，鉴权失败不该白花）；
+    // ② 仍先于 findPublishedById，避免它命中 L2 旧内容返回过期数据。
     @Transactional
     public PostDetailResponse update(String postId, String authorId, CreatePostRequest request) {
         CommunityPost post = ownedPost(postId, authorId);
@@ -97,10 +103,10 @@ public class PostPublishingService {
         post.replaceTags(tagNames.stream().map(name -> tagRepository.findByName(name).orElseGet(() -> tagRepository.save(new ContentTag(name)))).toList());
         postRepository.save(post);
         replaceMedia(post.getId(), postMediaRepository.findByPostIdOrderBySortOrderAsc(post.getId()), mediaAssets(request.mediaAssetIds(), authorId, post.getId()));
+        twoLevelCache.evict(CacheNames.POST_DETAIL, postId);
         return postService.findPublishedById(post.getId());
     }
 
-    @CacheEvict(cacheNames = "postDetail", key = "#postId", beforeInvocation = true)
     @Transactional
     public void delete(String postId, String authorId) {
         CommunityPost post = postRepository.findById(postId)
@@ -108,6 +114,9 @@ public class PostPublishingService {
         if (!authorId.equals(post.getAuthorId())) {
             throw new ForbiddenException("只能管理自己的帖子");
         }
+        // 内容删除 → 驱逐两级缓存（L1+L2），替代原 @CacheEvict（注解清不掉 L2 Redis）。
+        // 放在鉴权之后：不存在/未授权的请求直接抛异常回滚，不触发无谓的跨节点失效广播。
+        twoLevelCache.evict(CacheNames.POST_DETAIL, postId);
         if (post.getStatus() != PostStatus.DELETED) {
             post.delete(LocalDateTime.now());
         }

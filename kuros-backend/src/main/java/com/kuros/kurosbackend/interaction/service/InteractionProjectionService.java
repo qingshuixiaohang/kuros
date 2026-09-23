@@ -8,7 +8,6 @@ import com.kuros.kurosbackend.interaction.event.InteractionEvent;
 import com.kuros.kurosbackend.interaction.repository.PostFavoriteRepository;
 import com.kuros.kurosbackend.interaction.repository.PostLikeRepository;
 import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -30,9 +29,11 @@ import java.time.LocalDateTime;
  * apply 用 TransactionTemplate 自开自提交，而非类级 @Transactional。这样在同步降级路径中，
  * 落库事务在「锁内」就已 commit 完成，随后才 unlock——杜绝「先 unlock 后 commit」的竞态窗口。
  *
- * 为什么 apply 上挂 @CacheEvict(postDetail)？
- * DB 计数列变更会使帖子详情缓存（含 likeCount/favoriteCount）过期，必须在真正写 DB 的这一刻驱逐；
- * 挂在投影服务（而非写路径入口）能保证异步消费落库后同样驱逐，缓存与 DB 不脱节。
+ * 为什么 apply 不再驱逐 postDetail 缓存（切片 #13 计数解耦）？
+ * #13 之前详情缓存内嵌 likeCount/favoriteCount，互动落库改了 DB 计数列就必须驱逐详情缓存。
+ * 计数解耦后（ADR 0006 D3），详情两级缓存只存内容字段，计数在读取时从 #11 实时 Redis 源叠加——
+ * 互动投影只改计数列、不动任何内容字段，故不再使详情缓存过期。移除驱逐反而是解耦的收益：
+ * 热帖每次互动落库不再击穿内容缓存（否则越热的帖子被点赞越频繁、缓存被清得越勤，命中率崩塌）。
  */
 @Service
 public class InteractionProjectionService {
@@ -52,7 +53,6 @@ public class InteractionProjectionService {
         this.transactionTemplate = transactionTemplate;
     }
 
-    @CacheEvict(cacheNames = "postDetail", key = "#event.postId()")
     public void apply(InteractionEvent event) {
         transactionTemplate.executeWithoutResult(status -> persist(event));
     }
