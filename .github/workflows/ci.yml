@@ -1,9 +1,16 @@
 name: CI
 
+# 2026-10-03 起 CI 暂停自动触发，改为仅手动（Actions 页面点 "Run workflow"）。
+# 背景：单人开发阶段，日常验证由 AI 按 docs/agents/issue-tracker.md「本地验证分级」
+# 在本地完成；全栈冒烟不再每次 push 自动起 12 个容器跑两遍。
+# 恢复全自动：把 on: 段还原为
+#   on:
+#     push:
+#       branches: [main]
+#     pull_request:
+# 建议在大节点（切片收口、部署上线前）手动跑一轮当"出门前体检"。
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
