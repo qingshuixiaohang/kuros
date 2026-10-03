@@ -1,3 +1,13 @@
+# 两种用法（2026-10-03 起）：
+#
+# 1) 开发模式（默认）：docker compose up -d
+#    只启动中间件（mysql/redis/minio/nacos/rocketmq/elasticsearch/canal）。
+#    后端三个服务由 IDEA 裸跑（仓库已带 .run/ 一键启动配置，端口 8090/8091/8080），
+#    前端 cd front && npm run dev。三个服务的 application.properties 默认值
+#    全部指向 localhost + 宿主映射端口，IDEA 裸跑零环境变量。
+#
+# 2) 全栈打包模式：docker compose --profile full up -d --build
+#    连 backend/gateway/user/frontend 容器一起起（原行为），CI 冒烟与"出门前体检"用。
 services:
   mysql:
     image: mysql:8.0
@@ -119,6 +129,8 @@ services:
   backend:
     build:
       context: ./kuros-backend
+    # 开发模式默认不起本服务（IDEA 裸跑代替，端口 8090）；全栈打包模式用 --profile full
+    profiles: ["full"]
     restart: unless-stopped
     environment:
       DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-kuros}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8
@@ -195,6 +207,8 @@ services:
   gateway:
     build:
       context: ./kuros-gateway
+    # 开发模式默认不起本服务（IDEA 裸跑代替，端口 8080）；全栈打包模式用 --profile full
+    profiles: ["full"]
     restart: unless-stopped
     environment:
       NACOS_SERVER_ADDR: ${NACOS_SERVER_ADDR:-nacos:8848}
@@ -223,6 +237,8 @@ services:
   user:
     build:
       context: ./kuros-user
+    # 开发模式默认不起本服务（IDEA 裸跑代替，端口 8091）；全栈打包模式用 --profile full
+    profiles: ["full"]
     restart: unless-stopped
     environment:
       DB_URL: jdbc:mysql://mysql:3306/kuros_user?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8
@@ -446,6 +462,8 @@ services:
       context: ./front
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+    # 开发模式默认不起本服务（npm run dev 代替，端口 3000）；全栈打包模式用 --profile full
+    profiles: ["full"]
     restart: unless-stopped
     environment:
       HOSTNAME: 0.0.0.0

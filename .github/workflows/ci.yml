@@ -108,7 +108,8 @@ jobs:
       - name: Validate Docker Compose configuration
         run: docker compose config --quiet
       - name: Build and start the Compose stack
-        run: APP_AUTH_DEV_CODE=123456 APP_AUTH_DEV_CODE_EXPOSED=true docker compose up -d --build
+        # compose 默认（开发模式）只起中间件；CI 冒烟验证的是完整打包栈，必须 --profile full
+        run: APP_AUTH_DEV_CODE=123456 APP_AUTH_DEV_CODE_EXPOSED=true docker compose --profile full up -d --build
       - name: Verify service health
         run: |
           # 切片 #9 起 8080 正门归 gateway，8090 是 backend 调试直连口：
@@ -140,7 +141,7 @@ jobs:
         run: |
           docker compose restart mysql
           sleep 10
-          docker compose restart backend user frontend
+          docker compose --profile full restart backend user frontend
           sleep 5
           # 8080 已是 gateway 正门（探到的是网关自身 health，恒绿），
           # 不能再作为 backend 就绪门控；先用 8090/8091 直连门控 backend 与 user，
@@ -153,9 +154,9 @@ jobs:
       - name: Collect service logs for diagnostics
         if: always()
         # 两个业务服务一并收集，便于对照排查（拆分后的排障常态）
-        run: docker compose logs --no-color backend user mysql
+        run: docker compose --profile full logs --no-color backend user mysql
       - name: Stop the Compose stack
         if: always()
         run: |
-          docker compose down -v
+          docker compose --profile full down -v
           rm -f .compose-smoke-state.json

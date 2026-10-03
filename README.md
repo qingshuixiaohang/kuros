@@ -21,14 +21,40 @@ npm run dev
 
 访问 http://localhost:3000。
 
-## Docker Compose 启动
+## 本地启动：两种模式（2026-10-03 起）
 
-要求安装 Docker Desktop。首次启动前可复制环境变量模板：
+### 开发模式（日常推荐）：Docker 只跑中间件，应用从 IDEA / npm 裸跑
 
 ```powershell
-Copy-Item .env.example .env
-docker compose up --build
+# 1) 只启动中间件（mysql/redis/minio/nacos/rocketmq/elasticsearch/canal）
+docker compose up -d
+docker compose ps        # 等它们全部 healthy
+
+# 2) 后端三个服务：用 IDEA 打开仓库，运行配置已随仓库提供（.run/）：
+#    backend :8090 → user :8091 → gateway :8080（按此顺序启动，gateway 靠 Nacos 发现前两者）
+#    等价命令行（不想用 IDEA 时）：
+cd .\kuros-backend;  $env:SERVER_PORT=8090; .\mvnw.cmd spring-boot:run
+cd .\kuros-user;     $env:SERVER_PORT=8091; .\mvnw.cmd spring-boot:run
+cd .\kuros-gateway;  .\mvnw.cmd spring-boot:run
+
+# 3) 前端（不打包，dev server）
+cd .\front
+npm run dev
 ```
+
+服务配置的默认值全部指向 `localhost` + 宿主映射端口（MySQL 3307、Redis 6379、Nacos 8848、
+RocketMQ 9876、ES 9200、MinIO 9000），裸跑**不需要任何环境变量**；Docker 容器模式才用
+环境变量把它们覆盖成容器网络地址。登录用固定验证码 `123456`（user 服务 dev 默认值，见
+`kuros-user/src/main/resources/application.properties`）。
+
+### 全栈打包模式（演示/冒烟/出门前体检）：连应用容器一起起
+
+```powershell
+docker compose --profile full up -d --build
+```
+
+即原 14 服务全家桶行为（CI 冒烟即此模式）。两种模式共用同一组数据卷与端口，**不要同时启动**——
+先用 `docker compose --profile full down`（保留卷）再切换。
 
 本地演示登录如果需要固定验证码，请在 `.env` 中填写 `APP_AUTH_DEV_CODE=123456` 并设置 `APP_AUTH_DEV_CODE_EXPOSED=true`；生产或共享环境不要开启验证码回显。
 
