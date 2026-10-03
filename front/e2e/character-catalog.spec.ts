@@ -9,7 +9,7 @@ const character = {
   attribute: "衍射",
   weaponType: "音感仪",
   version: "1.3",
-  imageUrl: "/art/修-守岸人 唤取动画.png",
+  imageUrl: "/art/修-守岸人 唤取动画.webp",
   description: "稳定队伍循环并提供持续支援。",
 };
 
