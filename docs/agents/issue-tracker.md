@@ -26,6 +26,19 @@
 
 如果上下文接近上限，必须先在阶段边界执行 `compact` 或 `handoff`，保留当前规格、Issue、测试和未完成项；恢复后从最近的阶段继续，不得凭记忆跳过 `to-spec`、`to-tickets`、TDD 或 Review。已有历史代码可以保持原状，但从下一项功能开始执行本流程。
 
+## 本地验证分级（AI 快验约定，2026-10-03 起）
+
+CI 是权威验证。AI 在推送前的本地验证按改动类型**分级**执行，目的只有一个：用最少的本地时间换"CI 第一轮就绿"，避免推送后等 20+ 分钟才暴露低级错误。任何分级都**不要求** AI 跑全量 `mvnw test`、Playwright 全套或 compose 冒烟（既定分工不变：这些由 CI deployment job / 用户执行）。
+
+| 改动类型 | AI 推送前的本地验证 | 原因 |
+|---|---|---|
+| 纯文档（docs/、README、CONTEXT、ADR、Issue 回写） | 不跑构建，通读 diff 即可 | 文档错误不影响运行，CI 全绿照常 |
+| 前端代码（front/，未动依赖） | `npm run lint` + `npm run build`；若改动组件的 e2e spec 也有增改，顺带跑对应 spec | 本地 2~3 分钟能挡住绝大多数前端错误 |
+| 后端代码（kuros-*，未动依赖与配置） | `mvnw test-compile` + 只跑改动域的定向测试（`-Dtest=改动的测试类`） | 定向测试把反馈从 CI 的 20+ 分钟压到几分钟；全量留给 CI |
+| 后端高危面：Flyway 新迁移、shared/ 公共类、鉴权/拦截器配置 | 上行之外必须实际跑受影响的测试类（H2+Testcontainers，需 Docker Desktop 开着） | 这类错误影响所有调用方，是 CI 红灯的最大来源 |
+| 依赖/构建配置（pom.xml、package.json、compose.yml、ci.yml、Dockerfile） | `mvnw test-compile` 或前端 build，加 `docker compose config --quiet`；compose.yml 大改尽量本地起一次栈 | 配置错误最贵（构建跑到一半才炸），值得多花几分钟 |
+| 极小改动（单文件几行、无逻辑分支） | 可以什么都不跑，直接推送信任 CI | 本地验证的价值是省"CI 红一轮"的往返，改动越小越不值得本地跑 |
+
 ## 常用命令
 
 ```powershell
