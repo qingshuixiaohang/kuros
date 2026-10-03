@@ -91,7 +91,7 @@ test("首页内容流在有配图时展示可访问的帖子媒体", async ({ pa
           category: "配队攻略",
           title: "含图片的真实列表数据",
           excerpt: "列表摘要",
-          coverImageUrl: "/art/guide-sword.png",
+          coverImageUrl: "/art/guide-sword.webp",
           author: { id: "author-1", nickname: "潮声档案员", avatarUrl: null, bio: null },
           publishedAt: "2026-09-16T10:00:00",
           viewCount: 10,

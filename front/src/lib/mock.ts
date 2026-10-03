@@ -15,7 +15,7 @@ export const guides: Guide[] = [
     replies: 46,
     likes: "3.7k",
     tags: ["长离", "配队", "实战思路", "2.4"],
-    mediaUrls: ["/art/修-奥古斯都  唤取动画.png", "/art/修-守岸人 唤取动画.png", "/art/修-爱弥斯 唤取动画.png"],
+    mediaUrls: ["/art/修-奥古斯都  唤取动画.webp", "/art/修-守岸人 唤取动画.webp", "/art/修-爱弥斯 唤取动画.webp"],
   },
   {
     id: "tower-24",
@@ -31,7 +31,7 @@ export const guides: Guide[] = [
     replies: 89,
     likes: "5.1k",
     tags: ["深塔", "低配", "手法"],
-    mediaUrls: ["/art/修-仇远  唤取动画.png", "/art/修-弗洛洛 唤取动画.png", "/art/修-绯雪 唤取动画2.png"],
+    mediaUrls: ["/art/修-仇远  唤取动画.webp", "/art/修-弗洛洛 唤取动画.webp", "/art/修-绯雪 唤取动画2.webp"],
   },
   {
     id: "camellya-echo",
@@ -47,7 +47,7 @@ export const guides: Guide[] = [
     replies: 63,
     likes: "3.2k",
     tags: ["椿", "声骸", "培养建议"],
-    mediaUrls: ["/art/修-嘉贝莉娜  唤取动画.png", "/art/修-琳奈 唤取动画.png", "/art/修-露帕  唤取动画.png"],
+    mediaUrls: ["/art/修-嘉贝莉娜  唤取动画.webp", "/art/修-琳奈 唤取动画.webp", "/art/修-露帕  唤取动画.webp"],
   },
   {
     id: "new-player-route",
@@ -63,7 +63,7 @@ export const guides: Guide[] = [
     replies: 112,
     likes: "8.6k",
     tags: ["新手", "开荒", "资源规划"],
-    mediaUrls: ["/art/修-心灵海 男漂地图.png", "/art/修-优诺 唤取动画.png", "/art/修-千咲  唤取动画.png"],
+    mediaUrls: ["/art/修-心灵海 男漂地图.webp", "/art/修-优诺 唤取动画.webp", "/art/修-千咲  唤取动画.webp"],
   },
 ];
 
@@ -79,15 +79,15 @@ export const newsItems: NewsItem[] = [
 ];
 
 export const toolItems: ToolItem[] = [
-  { slug: "calculator", title: "养成计算器", description: "角色 / 武器 / 声骸培养规划", icon: "calculator", iconSrc: "/icons/upgrade-calculator.png" },
-  { slug: "echo", title: "声骸图鉴", description: "声骸数据查询与搭配参考", icon: "echo", iconSrc: "/icons/echo-archive.png" },
-  { slug: "team-builder", title: "配队模拟", description: "角色协同与队伍思路", icon: "team", iconSrc: "/icons/team-builder.png" },
+  { slug: "calculator", title: "养成计算器", description: "角色 / 武器 / 声骸培养规划", icon: "calculator", iconSrc: "/icons/upgrade-calculator.webp" },
+  { slug: "echo", title: "声骸图鉴", description: "声骸数据查询与搭配参考", icon: "echo", iconSrc: "/icons/echo-archive.webp" },
+  { slug: "team-builder", title: "配队模拟", description: "角色协同与队伍思路", icon: "team", iconSrc: "/icons/team-builder.webp" },
 ];
 
 export const characters: Character[] = [
   {
     id: "shorekeeper", name: "守岸人", role: "辅助", title: "角色档案",
-    image: "/art/修-守岸人 唤取动画.png",
+    image: "/art/修-守岸人 唤取动画.webp",
     description: "记录角色定位、培养方向与队伍协同思路。", guideId: "changli-team",
     element: "衍射", weapon: "音感仪", rarity: 5, version: "1.0",
     attributes: { hp: 3648, atk: 303, def: 104, critRate: "5.0%", critDmg: "150.0%" },
@@ -99,7 +99,7 @@ export const characters: Character[] = [
   },
   {
     id: "augustus", name: "奥古斯都", role: "输出", title: "角色档案",
-    image: "/art/修-奥古斯都  唤取动画.png",
+    image: "/art/修-奥古斯都  唤取动画.webp",
     description: "围绕技能循环、资源规划与实战手法整理资料。", guideId: "tower-24",
     element: "热熔", weapon: "长刃", rarity: 5, version: "2.4",
     attributes: { hp: 2879, atk: 412, def: 89, critRate: "8.0%", critDmg: "160.0%" },
@@ -111,7 +111,7 @@ export const characters: Character[] = [
   },
   {
     id: "aemeath", name: "爱弥斯", role: "协同", title: "角色档案",
-    image: "/art/修-爱弥斯 唤取动画.png",
+    image: "/art/修-爱弥斯 唤取动画.webp",
     description: "从队伍位置、轮切节奏和养成优先级快速了解角色。", guideId: "camellya-echo",
     element: "导电", weapon: "臂铠", rarity: 4, version: "2.0",
     attributes: { hp: 3102, atk: 345, def: 95, critRate: "5.0%", critDmg: "150.0%" },

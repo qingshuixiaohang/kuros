@@ -10,12 +10,12 @@ import { CommunityFollowButton } from "@/components/community/community-follow-b
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { deletePost, fetchMyProfile, fetchPublicProfile, fetchPublicProfilePosts, type ApiPost, type ProfileComment, type ProfileOverview, type PublicProfile } from "@/lib/api";
 
-const fallbackAvatar = "/art/修-守岸人 唤取动画.png";
+const fallbackAvatar = "/art/修-守岸人 唤取动画.webp";
 const coverByGuide: Record<string, string> = {
-  "changli-team": "/art/修-奥古斯都  唤取动画.png",
-  "tower-24": "/art/修-仇远  唤取动画.png",
-  "camellya-echo": "/art/修-嘉贝莉娜  唤取动画.png",
-  "new-player-route": "/art/修-心灵海 男漂地图.png",
+  "changli-team": "/art/修-奥古斯都  唤取动画.webp",
+  "tower-24": "/art/修-仇远  唤取动画.webp",
+  "camellya-echo": "/art/修-嘉贝莉娜  唤取动画.webp",
+  "new-player-route": "/art/修-心灵海 男漂地图.webp",
 };
 const slugByPostId: Record<string, string> = {
   "10000000-0000-0000-0000-000000000001": "changli-team",
@@ -70,7 +70,7 @@ function ProfilePostRow({ post, manageable = false, onDeleted }: { post: ApiPost
     }
   }
 
-  return <div className="profile-post-row"><Link className="profile-post-row-main" href={`/guides/${slug}`} rel="noopener noreferrer" target="_blank"><div className="author-avatar author-avatar--dark">{post.author.nickname.slice(0, 1)}</div><div className="profile-post-row-copy"><div className="profile-post-row-meta"><strong>{post.author.nickname}</strong><time>{formatDate(post.publishedAt)} · 鸣潮</time></div><h3>{post.title}</h3><p>{post.excerpt}</p><div className="profile-post-row-stats"><span>{post.category}</span><span>{post.viewCount} 阅读</span><span>{post.commentCount} 评论</span></div></div><div className="profile-post-thumbnail"><Image alt="" fill sizes="140px" src={post.coverImageUrl ?? coverByGuide[slug] ?? "/art/guide-coast.png"} /></div><ChevronRight className="profile-row-arrow" size={17} /></Link>{manageable && <div className="profile-post-actions"><Link aria-label={`编辑《${post.title}》`} href={`/publish?edit=${encodeURIComponent(post.id)}`}><Pencil size={14} />编辑</Link><button aria-label={`删除《${post.title}》`} disabled={deleting} onClick={() => { void removePost(); }} type="button"><Trash2 size={14} />{deleting ? "删除中" : "删除"}</button></div>}</div>;
+  return <div className="profile-post-row"><Link className="profile-post-row-main" href={`/guides/${slug}`} rel="noopener noreferrer" target="_blank"><div className="author-avatar author-avatar--dark">{post.author.nickname.slice(0, 1)}</div><div className="profile-post-row-copy"><div className="profile-post-row-meta"><strong>{post.author.nickname}</strong><time>{formatDate(post.publishedAt)} · 鸣潮</time></div><h3>{post.title}</h3><p>{post.excerpt}</p><div className="profile-post-row-stats"><span>{post.category}</span><span>{post.viewCount} 阅读</span><span>{post.commentCount} 评论</span></div></div><div className="profile-post-thumbnail"><Image alt="" fill sizes="140px" src={post.coverImageUrl ?? coverByGuide[slug] ?? "/art/guide-coast.webp"} /></div><ChevronRight className="profile-row-arrow" size={17} /></Link>{manageable && <div className="profile-post-actions"><Link aria-label={`编辑《${post.title}》`} href={`/publish?edit=${encodeURIComponent(post.id)}`}><Pencil size={14} />编辑</Link><button aria-label={`删除《${post.title}》`} disabled={deleting} onClick={() => { void removePost(); }} type="button"><Trash2 size={14} />{deleting ? "删除中" : "删除"}</button></div>}</div>;
 }
 
 function ProfileEmpty({ icon: Icon, title, description }: { icon: LucideIcon; title: string; description: string }) {

@@ -15,7 +15,7 @@ const post = {
   category: "配队攻略",
   title: "长离焚火队：从零到毕业的配队思路",
   excerpt: "围绕共鸣效率、轮切节奏与副 C 选择，整理一套能直接照着练的实战框架。",
-  coverImageUrl: "/art/guide-tower.png",
+  coverImageUrl: "/art/guide-tower.webp",
   author: { id: user.id, nickname: user.nickname, avatarUrl: null, bio: user.bio },
   publishedAt: "2026-09-15T10:24:00",
   viewCount: 18000,
