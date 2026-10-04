@@ -28,9 +28,11 @@
 .DS_Store
 *.pem
 
-# IDE metadata
-.idea/
+# IDE metadata（.idea/* 默认忽略，但共享 maven.xml 让 IDEA 打开仓库即自动
+# 识别三个 Maven 工程——JetBrains 官方支持的"共享项目结构"做法）
+.idea/*
 *.iml
+!.idea/maven.xml
 
 # backend build output
 /kuros-backend/target/
