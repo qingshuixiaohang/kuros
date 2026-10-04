@@ -6,7 +6,7 @@ import { BadgeCheck, Bell, Bookmark, ChevronDown, ChevronRight, Eye, FileText, H
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
 import { CommunityHeroCarousel, CommunityImageCarousel } from "@/components/community/community-carousel";
-import { CommunityDemoProvider, useCommunityDemo } from "@/components/community/community-interactions";
+import { useCommunityDemo } from "@/components/community/community-interactions";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
 import { favoritePost, fetchFollowingFeedByCursor, fetchPostInteractions, fetchPosts, likePost, unfavoritePost, unlikePost, type PostInteraction } from "@/lib/api";
 import { guides, newsItems } from "@/lib/mock";
@@ -219,4 +219,7 @@ export function useCommunityDrawer(open: boolean, setOpen: (value: boolean) => v
   return { drawerCloseRef, drawerRef };
 }
 function HomeContent() { const [drawerOpen, setDrawerOpen] = useState(false); const [query, setQuery] = useState(""); const { drawerCloseRef, drawerRef } = useCommunityDrawer(drawerOpen, setDrawerOpen); return <main className="app-shell"><TopNavigation query={query} onQueryChange={setQuery} onMenu={() => setDrawerOpen(true)} />{drawerOpen && <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)}><div aria-label="社区频道" aria-modal="true" className="mobile-drawer" onClick={(event) => event.stopPropagation()} ref={drawerRef} role="dialog"><div className="drawer-header"><span>频道</span><button onClick={() => setDrawerOpen(false)} ref={drawerCloseRef} type="button" aria-label="关闭导航"><X size={20} /></button></div><Sidebar drawer /></div></div>}<div className="page-grid"><Sidebar /><div className="main-column"><Feed query={query} /></div><RightRail /></div></main>; }
-export function CommunityHome() { return <CommunityDemoProvider><HomeContent /></CommunityDemoProvider>; }
+// 登录态 Provider 只在 layout 层挂载一份（与 CommunityPageFrame 同理）：
+// 首页再嵌套一份会让"首页登录"不为主持栏之外的其他页面感知，且双实例共写
+// 同一 localStorage 键互相覆盖——会话恢复也会重复请求 /auth/me。
+export function CommunityHome() { return <HomeContent />; }

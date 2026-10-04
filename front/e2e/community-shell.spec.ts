@@ -49,12 +49,12 @@ test("首页快捷工具使用鸣潮主题图标素材", async ({ page }) => {
 
   const tools = page.getByRole("region", { name: "快捷工具" });
   const expectedIcons = [
-    ["养成计算器", "upgrade-calculator.png"],
-    ["声骸图鉴", "echo-archive.png"],
-    ["配队模拟", "team-builder.png"],
-    ["角色图鉴", "character-archive.png"],
-    ["版本资讯", "version-news.png"],
-    ["新手指南", "exploration-map.png"],
+    ["养成计算器", "upgrade-calculator.webp"],
+    ["声骸图鉴", "echo-archive.webp"],
+    ["配队模拟", "team-builder.webp"],
+    ["角色图鉴", "character-archive.webp"],
+    ["版本资讯", "version-news.webp"],
+    ["新手指南", "exploration-map.webp"],
   ] as const;
 
   for (const [title, fileName] of expectedIcons) {
@@ -68,9 +68,9 @@ test("工具箱页面使用对应的主题图标素材", async ({ page }) => {
   await page.goto("/tools");
 
   const expectedIcons = [
-    ["养成计算器", "upgrade-calculator.png"],
-    ["声骸图鉴", "echo-archive.png"],
-    ["配队模拟", "team-builder.png"],
+    ["养成计算器", "upgrade-calculator.webp"],
+    ["声骸图鉴", "echo-archive.webp"],
+    ["配队模拟", "team-builder.webp"],
   ] as const;
 
   for (const [title, fileName] of expectedIcons) {
