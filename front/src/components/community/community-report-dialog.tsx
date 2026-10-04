@@ -1,8 +1,9 @@
 "use client";
 
 import { Flag, X } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { ApiError, createReport, type ReportReason, type ReportTargetType } from "@/lib/api";
+import { useOverlay } from "@/hooks/use-overlay";
 import { useCommunityDemo } from "@/components/community/community-interactions";
 
 const reasons: Array<{ value: ReportReason; label: string }> = [
@@ -19,9 +20,13 @@ export function CommunityReportDialog({ targetType, targetId, onClose, onSuccess
   onSuccess: () => void;
 }) {
   const { notify } = useCommunityDemo();
+  const closeRef = useRef<HTMLButtonElement>(null);
   const [reason, setReason] = useState<ReportReason>("SPAM");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // 浮层行为与登录框同源（useOverlay）：Esc 可关但提交中守卫、焦点陷阱、初始聚焦；
+  // 遮罩不绑定点击关闭——与登录框同一防误触策略，避免丢掉已选理由
+  useOverlay({ open: true, onClose, surfaceSelector: ".report-dialog", initialFocusRef: closeRef, blocked: submitting });
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -41,9 +46,9 @@ export function CommunityReportDialog({ targetType, targetId, onClose, onSuccess
     }
   }
 
-  return <div className="dialog-backdrop report-backdrop" onClick={onClose} role="presentation">
-    <section className="report-dialog" role="dialog" aria-modal="true" aria-labelledby="report-title" onClick={(event) => event.stopPropagation()}>
-      <header><div><span><Flag size={15} />社区反馈</span><h2 id="report-title">举报{targetType === "POST" ? "帖子" : "评论"}</h2></div><button type="button" onClick={onClose} aria-label="关闭举报弹窗"><X size={19} /></button></header>
+  return <div className="dialog-backdrop report-backdrop" role="presentation">
+    <section className="report-dialog" role="dialog" aria-modal="true" aria-labelledby="report-title">
+      <header><div><span><Flag size={15} />社区反馈</span><h2 id="report-title">举报{targetType === "POST" ? "帖子" : "评论"}</h2></div><button type="button" ref={closeRef} onClick={onClose} aria-label="关闭举报弹窗"><X size={19} /></button></header>
       <p className="report-dialog-hint">请选择最符合当前情况的理由，管理员会尽快查看。</p>
       <form onSubmit={submit}>
         <div className="report-reason-grid">{reasons.map((item) => <label className={reason === item.value ? "is-selected" : ""} key={item.value}><input checked={reason === item.value} name="report-reason" onChange={() => setReason(item.value)} type="radio" value={item.value} /><span>{item.label}</span></label>)}</div>

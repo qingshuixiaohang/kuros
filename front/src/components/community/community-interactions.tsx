@@ -4,19 +4,20 @@ import Image from "next/image";
 import { Check, X } from "lucide-react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 
+import { useOverlay } from "@/hooks/use-overlay";
 import { fetchCurrentUser, loginWithPhone, logoutFromApi, requestVerificationCode, type AuthUser } from "@/lib/api";
 
 type DemoState = { loggedIn: boolean; user: AuthUser | null; followed: string[]; liked: string[]; bookmarked: string[] };
-type CommunityContextValue = DemoState & { requestLogin: (afterLogin?: () => void) => void; logout: () => void; toggleFollow: (id: string) => void; toggleLike: (id: string) => void; toggleBookmark: (id: string) => void; notify: (message: string) => void };
+type CommunityContextValue = DemoState & { sessionRestoring: boolean; requestLogin: (afterLogin?: () => void) => void; logout: () => void; toggleFollow: (id: string) => void; toggleLike: (id: string) => void; toggleBookmark: (id: string) => void; notify: (message: string) => void };
 const initialState: DemoState = { loggedIn: false, user: null, followed: [], liked: [], bookmarked: [] };
 const storageKey = "wuthering-demo-community-v1";
 const CommunityContext = createContext<CommunityContextValue | null>(null);
 function toggle(items: string[], id: string) { return items.includes(id) ? items.filter((item) => item !== id) : [...items, id]; }
 
 export function CommunityDemoProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<DemoState>(initialState); const [hydrated, setHydrated] = useState(false); const [loginOpen, setLoginOpen] = useState(false); const [pendingAction, setPendingAction] = useState<(() => void) | null>(null); const [toast, setToast] = useState("");
+  const [state, setState] = useState<DemoState>(initialState); const [hydrated, setHydrated] = useState(false); const [sessionRestoring, setSessionRestoring] = useState(true); const [loginOpen, setLoginOpen] = useState(false); const [pendingAction, setPendingAction] = useState<(() => void) | null>(null); const [toast, setToast] = useState("");
   const [phone, setPhone] = useState(""); const [verification, setVerification] = useState(""); const [agreement, setAgreement] = useState(false); const [codeSent, setCodeSent] = useState(false); const [formError, setFormError] = useState(""); const [sendingCode, setSendingCode] = useState(false); const [loggingIn, setLoggingIn] = useState(false);
-  const previousFocusRef = useRef<HTMLElement | null>(null); const loginCloseRef = useRef<HTMLButtonElement>(null); const loginWasOpenRef = useRef(false);
+  const loginCloseRef = useRef<HTMLButtonElement>(null);
   const closeLogin = useCallback(() => { if (!loggingIn && !sendingCode) { setLoginOpen(false); setFormError(""); } }, [loggingIn, sendingCode]);
 
   useEffect(() => {
@@ -27,49 +28,30 @@ export function CommunityDemoProvider({ children }: { children: ReactNode }) {
       void (async () => {
         // 恢复登录态：401 = 确实未登录，安静返回；其余失败（user 服务重启、网关抖动等
         // 瞬时故障）有限重试——否则顶栏会整个会话停留在"登录"按钮，而页面内容经 Cookie
-        // 仍能拿到本人数据，造成"页面显示已登录、顶栏显示登录按钮"的状态分裂
-        for (let attempt = 1; active && attempt <= 3; attempt++) {
-          try { const user = await fetchCurrentUser(); if (active && user) setState((current) => ({ ...current, loggedIn: true, user })); return; }
-          catch { if (attempt === 3 || !active) return; await new Promise((resolve) => setTimeout(resolve, 1500)); }
-        }
+        // 仍能拿到本人数据，造成"页面显示已登录、顶栏显示登录按钮"的状态分裂。
+        // sessionRestoring 让"登录态未定"成为可观察状态：依赖登录的页面（如编辑跳转）
+        // 在恢复完成前先渲染加载态，而不是闪现"请先登录"
+        setSessionRestoring(true);
+        try {
+          for (let attempt = 1; active && attempt <= 3; attempt++) {
+            try { const user = await fetchCurrentUser(); if (active && user) setState((current) => ({ ...current, loggedIn: true, user })); return; }
+            catch { if (attempt === 3 || !active) return; await new Promise((resolve) => setTimeout(resolve, 1500)); }
+          }
+        } finally { if (active) setSessionRestoring(false); }
       })();
     }, 0);
     return () => { active = false; window.clearTimeout(timer); };
   }, []);
   useEffect(() => { if (hydrated) window.localStorage.setItem(storageKey, JSON.stringify({ followed: state.followed, liked: state.liked, bookmarked: state.bookmarked })); }, [hydrated, state.followed, state.liked, state.bookmarked]);
   useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => setToast(""), 2600); return () => window.clearTimeout(timer); }, [toast]);
-  useEffect(() => {
-    if (!loginOpen) {
-      const previous = previousFocusRef.current;
-      if (previous) window.requestAnimationFrame(() => previous.focus());
-      previousFocusRef.current = null;
-      loginWasOpenRef.current = false;
-      return;
-    }
-    const justOpened = !loginWasOpenRef.current;
-    if (justOpened) previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    loginWasOpenRef.current = true;
-    const focusFrame = justOpened ? window.requestAnimationFrame(() => loginCloseRef.current?.focus()) : undefined;
-    function getFocusableElements() {
-      return Array.from(document.querySelectorAll<HTMLElement>(".login-dialog button:not([disabled]), .login-dialog input:not([disabled]), .login-dialog a[href], .login-dialog select, .login-dialog textarea"));
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") { event.preventDefault(); closeLogin(); return; }
-      if (event.key !== "Tab") return;
-      const focusable = getFocusableElements();
-      const first = focusable[0]; const last = focusable.at(-1);
-      if (!first || !last) return;
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => { if (focusFrame !== undefined) window.cancelAnimationFrame(focusFrame); document.removeEventListener("keydown", handleKeyDown); };
-  }, [closeLogin, loginOpen]);
+  // 登录浮层的键盘与焦点行为统一交给 useOverlay（Esc 关闭带提交守卫、Tab 陷阱、
+  // 初始聚焦关闭按钮、关闭后焦点归还）；遮罩不绑定点击关闭，防误触丢表单
+  useOverlay({ open: loginOpen, onClose: closeLogin, surfaceSelector: ".login-dialog", initialFocusRef: loginCloseRef, blocked: loggingIn || sendingCode });
 
   const notify = useCallback((message: string) => setToast(message), []);
   const requireLogin = useCallback((action?: () => void) => { if (state.loggedIn) { action?.(); return; } setPendingAction(() => action ?? null); setFormError(""); setLoginOpen(true); }, [state.loggedIn]);
   const handleLogout = useCallback(async () => { try { await logoutFromApi(); setState(() => ({ ...initialState })); notify("已退出鸣潮社区"); } catch { notify("退出失败，请稍后重试"); } }, [notify]);
-  const value = useMemo<CommunityContextValue>(() => ({ ...state, requestLogin: requireLogin, logout: () => { void handleLogout(); }, toggleFollow: (id) => requireLogin(() => setState((current) => ({ ...current, followed: toggle(current.followed, id) }))), toggleLike: (id) => requireLogin(() => setState((current) => ({ ...current, liked: toggle(current.liked, id) }))), toggleBookmark: (id) => requireLogin(() => setState((current) => ({ ...current, bookmarked: toggle(current.bookmarked, id) }))), notify }), [handleLogout, notify, requireLogin, state]);
+  const value = useMemo<CommunityContextValue>(() => ({ ...state, sessionRestoring, requestLogin: requireLogin, logout: () => { void handleLogout(); }, toggleFollow: (id) => requireLogin(() => setState((current) => ({ ...current, followed: toggle(current.followed, id) }))), toggleLike: (id) => requireLogin(() => setState((current) => ({ ...current, liked: toggle(current.liked, id) }))), toggleBookmark: (id) => requireLogin(() => setState((current) => ({ ...current, bookmarked: toggle(current.bookmarked, id) }))), notify }), [handleLogout, notify, requireLogin, sessionRestoring, state]);
 
   async function sendCode() { if (!/^1\d{10}$/.test(phone)) { setFormError("请输入正确的 11 位手机号"); return; } setSendingCode(true); setFormError(""); try { const result = await requestVerificationCode(phone); setCodeSent(true); if (result.devCode) setVerification(result.devCode); notify(result.devCode ? "开发验证码已填入：" + result.devCode : "验证码已发送至 " + phone.slice(0, 3) + "****" + phone.slice(-4)); } catch (error) { setFormError(error instanceof Error ? error.message : "验证码发送失败，请稍后重试"); } finally { setSendingCode(false); } }
   async function login(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!/^1\d{10}$/.test(phone)) { setFormError("请输入正确的 11 位手机号"); return; } if (!/^\d{6}$/.test(verification)) { setFormError("请输入 6 位验证码"); return; } if (!agreement) { setFormError("请先阅读并同意用户协议与隐私政策"); return; } setLoggingIn(true); setFormError(""); try { const user = await loginWithPhone(phone, verification); setState((current) => ({ ...current, loggedIn: true, user })); setLoginOpen(false); notify("已登录鸣潮社区"); pendingAction?.(); setPendingAction(null); } catch (error) { setFormError(error instanceof Error ? error.message : "登录失败，请稍后重试"); } finally { setLoggingIn(false); } }
