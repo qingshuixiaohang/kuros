@@ -12,5 +12,8 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="zh-CN" className={`${geistSans.variable} ${geistMono.variable}`}><body><CommunityProvider>{children}</CommunityProvider></body></html>;
+  // suppressHydrationWarning：浏览器扩展（深色模式/主题类）会在 React 水合前
+  // 给 <html> 注入 data-theme/color-scheme 等属性，触发属性级 hydration 警告。
+  // 该标记只豁免本标签的属性比对，不影响子元素的真实水合校验。
+  return <html lang="zh-CN" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable}`}><body><CommunityProvider>{children}</CommunityProvider></body></html>;
 }
