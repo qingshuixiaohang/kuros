@@ -39,7 +39,7 @@ test("帖子详情桌面端保留两侧 sticky 阅读辅助栏与帖子目录", 
   await page.goto(postUrl);
 
   await expect(page.getByRole("heading", { name: "长离焚火队：从零到毕业的配队思路" })).toBeVisible();
-  await expect(page.locator(".post-cover img")).toHaveAttribute("src", /guide-tower\.png/);
+  await expect(page.locator(".post-cover img")).toHaveAttribute("src", /guide-tower.webp/);
   await expect(page.getByRole("complementary", { name: "帖子互动" })).toHaveCSS("position", "sticky");
   await expect(page.getByRole("complementary", { name: "帖子上下文" })).toHaveCSS("position", "sticky");
 

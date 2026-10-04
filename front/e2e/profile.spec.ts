@@ -67,7 +67,7 @@ test("个人中心桌面端展示资料概览、五个导航和帖子管理入�
   const profileHomeLink = page.getByRole("region", { name: "个人资料概览" }).getByRole("link", { name: "个人中心", exact: true });
   await expect(profileHomeLink).toHaveAttribute("href", "/profile");
   await expect(profileHomeLink).toHaveCSS("display", "inline-flex");
-  await expect(page.locator(".profile-post-thumbnail img").first()).toHaveAttribute("src", /guide-tower\.png/);
+  await expect(page.locator(".profile-post-thumbnail img").first()).toHaveAttribute("src", /guide-tower.webp/);
 
   const profileBox = await page.locator(".profile-page").boundingBox();
   expect(profileBox?.width).toBeGreaterThanOrEqual(1200);
