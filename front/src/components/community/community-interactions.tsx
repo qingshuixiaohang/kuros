@@ -19,7 +19,23 @@ export function CommunityDemoProvider({ children }: { children: ReactNode }) {
   const previousFocusRef = useRef<HTMLElement | null>(null); const loginCloseRef = useRef<HTMLButtonElement>(null); const loginWasOpenRef = useRef(false);
   const closeLogin = useCallback(() => { if (!loggingIn && !sendingCode) { setLoginOpen(false); setFormError(""); } }, [loggingIn, sendingCode]);
 
-  useEffect(() => { let active = true; const timer = window.setTimeout(() => { try { const saved = window.localStorage.getItem(storageKey); if (saved) { const parsed = JSON.parse(saved) as Partial<DemoState>; setState((current) => ({ ...current, followed: parsed.followed ?? [], liked: parsed.liked ?? [], bookmarked: parsed.bookmarked ?? [] })); } } catch { /* Keep the community usable when storage is unavailable. */ } setHydrated(true); void fetchCurrentUser().then((user) => { if (active && user) setState((current) => ({ ...current, loggedIn: true, user })); }).catch(() => { /* The mock shell remains usable when the backend is offline. */ }); }, 0); return () => { active = false; window.clearTimeout(timer); }; }, []);
+  useEffect(() => {
+    let active = true;
+    const timer = window.setTimeout(() => {
+      try { const saved = window.localStorage.getItem(storageKey); if (saved) { const parsed = JSON.parse(saved) as Partial<DemoState>; setState((current) => ({ ...current, followed: parsed.followed ?? [], liked: parsed.liked ?? [], bookmarked: parsed.bookmarked ?? [] })); } } catch { /* Keep the community usable when storage is unavailable. */ }
+      setHydrated(true);
+      void (async () => {
+        // 恢复登录态：401 = 确实未登录，安静返回；其余失败（user 服务重启、网关抖动等
+        // 瞬时故障）有限重试——否则顶栏会整个会话停留在"登录"按钮，而页面内容经 Cookie
+        // 仍能拿到本人数据，造成"页面显示已登录、顶栏显示登录按钮"的状态分裂
+        for (let attempt = 1; active && attempt <= 3; attempt++) {
+          try { const user = await fetchCurrentUser(); if (active && user) setState((current) => ({ ...current, loggedIn: true, user })); return; }
+          catch { if (attempt === 3 || !active) return; await new Promise((resolve) => setTimeout(resolve, 1500)); }
+        }
+      })();
+    }, 0);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, []);
   useEffect(() => { if (hydrated) window.localStorage.setItem(storageKey, JSON.stringify({ followed: state.followed, liked: state.liked, bookmarked: state.bookmarked })); }, [hydrated, state.followed, state.liked, state.bookmarked]);
   useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => setToast(""), 2600); return () => window.clearTimeout(timer); }, [toast]);
   useEffect(() => {
@@ -52,7 +68,7 @@ export function CommunityDemoProvider({ children }: { children: ReactNode }) {
 
   const notify = useCallback((message: string) => setToast(message), []);
   const requireLogin = useCallback((action?: () => void) => { if (state.loggedIn) { action?.(); return; } setPendingAction(() => action ?? null); setFormError(""); setLoginOpen(true); }, [state.loggedIn]);
-  const handleLogout = useCallback(async () => { try { await logoutFromApi(); setState((current) => ({ ...current, loggedIn: false, user: null })); notify("已退出鸣潮社区"); } catch { notify("退出失败，请稍后重试"); } }, [notify]);
+  const handleLogout = useCallback(async () => { try { await logoutFromApi(); setState(() => ({ ...initialState })); notify("已退出鸣潮社区"); } catch { notify("退出失败，请稍后重试"); } }, [notify]);
   const value = useMemo<CommunityContextValue>(() => ({ ...state, requestLogin: requireLogin, logout: () => { void handleLogout(); }, toggleFollow: (id) => requireLogin(() => setState((current) => ({ ...current, followed: toggle(current.followed, id) }))), toggleLike: (id) => requireLogin(() => setState((current) => ({ ...current, liked: toggle(current.liked, id) }))), toggleBookmark: (id) => requireLogin(() => setState((current) => ({ ...current, bookmarked: toggle(current.bookmarked, id) }))), notify }), [handleLogout, notify, requireLogin, state]);
 
   async function sendCode() { if (!/^1\d{10}$/.test(phone)) { setFormError("请输入正确的 11 位手机号"); return; } setSendingCode(true); setFormError(""); try { const result = await requestVerificationCode(phone); setCodeSent(true); if (result.devCode) setVerification(result.devCode); notify(result.devCode ? "开发验证码已填入：" + result.devCode : "验证码已发送至 " + phone.slice(0, 3) + "****" + phone.slice(-4)); } catch (error) { setFormError(error instanceof Error ? error.message : "验证码发送失败，请稍后重试"); } finally { setSendingCode(false); } }
