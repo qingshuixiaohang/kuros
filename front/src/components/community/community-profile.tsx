@@ -9,20 +9,9 @@ import { CommunityPageFrame } from "@/components/community/community-pages";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { deletePost, fetchMyProfile, fetchPublicProfile, fetchPublicProfilePosts, type ApiPost, type ProfileComment, type ProfileOverview, type PublicProfile } from "@/lib/api";
+import { DEMO_COVER_BY_SLUG, DEMO_SLUG_BY_POST_ID } from "@/lib/post-view";
 
 const fallbackAvatar = "/art/修-守岸人 唤取动画.webp";
-const coverByGuide: Record<string, string> = {
-  "changli-team": "/art/修-奥古斯都  唤取动画.webp",
-  "tower-24": "/art/修-仇远  唤取动画.webp",
-  "camellya-echo": "/art/修-嘉贝莉娜  唤取动画.webp",
-  "new-player-route": "/art/修-心灵海 男漂地图.webp",
-};
-const slugByPostId: Record<string, string> = {
-  "10000000-0000-0000-0000-000000000001": "changli-team",
-  "10000000-0000-0000-0000-000000000002": "tower-24",
-  "10000000-0000-0000-0000-000000000003": "camellya-echo",
-  "10000000-0000-0000-0000-000000000004": "new-player-route",
-};
 
 const profileTabs = [
   { key: "posts", label: "帖子", icon: FileText },
@@ -34,7 +23,7 @@ const profileTabs = [
 
 type ProfileTab = (typeof profileTabs)[number]["key"];
 
-function postSlug(postId: string) { return slugByPostId[postId] ?? postId; }
+function postSlug(postId: string) { return DEMO_SLUG_BY_POST_ID[postId] ?? postId; }
 function formatDate(value: string) { return value.length >= 10 ? value.slice(5, 10).replace("-", "/") : value; }
 function safeAvatar(avatarUrl: string | null) { return avatarUrl?.startsWith("/") ? avatarUrl : fallbackAvatar; }
 
@@ -70,7 +59,7 @@ function ProfilePostRow({ post, manageable = false, onDeleted }: { post: ApiPost
     }
   }
 
-  return <div className="profile-post-row"><Link className="profile-post-row-main" href={`/guides/${slug}`} rel="noopener noreferrer" target="_blank"><div className="author-avatar author-avatar--dark">{post.author.nickname.slice(0, 1)}</div><div className="profile-post-row-copy"><div className="profile-post-row-meta"><strong>{post.author.nickname}</strong><time>{formatDate(post.publishedAt)} · 鸣潮</time></div><h3>{post.title}</h3><p>{post.excerpt}</p><div className="profile-post-row-stats"><span>{post.category}</span><span>{post.viewCount} 阅读</span><span>{post.commentCount} 评论</span></div></div><div className="profile-post-thumbnail"><Image alt="" fill sizes="140px" src={post.coverImageUrl ?? coverByGuide[slug] ?? "/art/guide-coast.webp"} /></div><ChevronRight className="profile-row-arrow" size={17} /></Link>{manageable && <div className="profile-post-actions"><Link aria-label={`编辑《${post.title}》`} href={`/publish?edit=${encodeURIComponent(post.id)}`}><Pencil size={14} />编辑</Link><button aria-label={`删除《${post.title}》`} disabled={deleting} onClick={() => { void removePost(); }} type="button"><Trash2 size={14} />{deleting ? "删除中" : "删除"}</button></div>}</div>;
+  return <div className="profile-post-row"><Link className="profile-post-row-main" href={`/guides/${slug}`} rel="noopener noreferrer" target="_blank"><div className="author-avatar author-avatar--dark">{post.author.nickname.slice(0, 1)}</div><div className="profile-post-row-copy"><div className="profile-post-row-meta"><strong>{post.author.nickname}</strong><time>{formatDate(post.publishedAt)} · 鸣潮</time></div><h3>{post.title}</h3><p>{post.excerpt}</p><div className="profile-post-row-stats"><span>{post.category}</span><span>{post.viewCount} 阅读</span><span>{post.commentCount} 评论</span></div></div><div className="profile-post-thumbnail"><Image alt="" fill sizes="140px" src={post.coverImageUrl ?? DEMO_COVER_BY_SLUG[slug] ?? "/art/guide-coast.webp"} /></div><ChevronRight className="profile-row-arrow" size={17} /></Link>{manageable && <div className="profile-post-actions"><Link aria-label={`编辑《${post.title}》`} href={`/publish?edit=${encodeURIComponent(post.id)}`}><Pencil size={14} />编辑</Link><button aria-label={`删除《${post.title}》`} disabled={deleting} onClick={() => { void removePost(); }} type="button"><Trash2 size={14} />{deleting ? "删除中" : "删除"}</button></div>}</div>;
 }
 
 function ProfileEmpty({ icon: Icon, title, description }: { icon: LucideIcon; title: string; description: string }) {
@@ -86,12 +75,13 @@ function CommentRow({ comment }: { comment: ProfileComment }) {
 }
 
 function ProfilePanel({ activeTab, overview, onPostDeleted }: { activeTab: ProfileTab; overview: ProfileOverview; onPostDeleted?: () => void }) {
+  const { user } = useCommunityDemo();
   const title = profileTabs.find((item) => item.key === activeTab)?.label ?? "个人中心";
   if (activeTab === "comments") return <section className="profile-panel"><header className="profile-panel-heading"><div><h2>评论</h2><p>你在社区留下的讨论足迹。</p></div><span>{overview.comments.meta?.totalItems ?? overview.comments.items.length} 条记录</span></header>{overview.comments.items.length > 0 ? <div className="profile-comment-list">{overview.comments.items.map((comment) => <CommentRow comment={comment} key={comment.id} />)}</div> : <ProfileEmpty icon={MessageCircle} title="还没有评论记录" description="参与一次讨论，你的想法会留在这里。" />}</section>;
   if (activeTab === "favorites") return <section className="profile-panel"><header className="profile-panel-heading"><div><h2>收藏</h2><p>收藏的攻略与帖子会集中保存在这里。</p></div><span>{overview.favorites.meta?.totalItems ?? overview.favorites.items.length} 条记录</span></header>{overview.favorites.items.length > 0 ? <div className="profile-post-list">{overview.favorites.items.map((post) => <ProfilePostRow key={post.id} post={post} />)}</div> : <ProfileEmpty icon={Bookmark} title="还没有收藏内容" description="看到值得反复查看的配队和声骸思路，可以收藏起来。" />}</section>;
   if (activeTab === "following") return <section className="profile-panel"><header className="profile-panel-heading"><div><h2>关注</h2><p>你关注的创作者和他们最近的内容。</p></div><span>{overview.following.meta?.totalItems ?? overview.following.items.length} 位创作者</span></header>{overview.following.items.length > 0 ? <div className="profile-following-list">{overview.following.items.map((profile) => <FollowingRow key={profile.id} profile={profile} />)}</div> : <ProfileEmpty icon={UserRound} title="还没有关注创作者" description="关注你喜欢的攻略作者，方便回来查看更新。" />}</section>;
   if (activeTab === "fans") return <section className="profile-panel"><header className="profile-panel-heading"><div><h2>粉丝</h2><p>关注你内容的漂泊者会出现在这里。</p></div><span>{overview.fans.meta?.totalItems ?? overview.fans.items.length} 位漂泊者</span></header>{overview.fans.items.length > 0 ? <div className="profile-following-list">{overview.fans.items.map((profile) => <FollowingRow key={profile.id} profile={profile} />)}</div> : <ProfileEmpty icon={UsersRound} title="还没有新的粉丝记录" description="持续分享你的配队和探索心得吧。" />}</section>;
-  return <section className="profile-panel"><header className="profile-panel-heading"><div><h2>{title}</h2><p>你发布过的内容与最近的更新。</p></div><span>{overview.posts.meta?.totalItems ?? overview.posts.items.length} 条记录</span></header>{overview.posts.items.length > 0 ? <div className="profile-post-list">{overview.posts.items.map((post) => <ProfilePostRow key={post.id} manageable onDeleted={onPostDeleted} post={post} />)}</div> : <ProfileEmpty icon={FileText} title="还没有公开帖子" description="把你的鸣潮配队、声骸和探索心得分享出来吧。" />}</section>;
+  return <section className="profile-panel"><header className="profile-panel-heading"><div><h2>{title}</h2><p>你发布过的内容与最近的更新。</p></div><span>{overview.posts.meta?.totalItems ?? overview.posts.items.length} 条记录</span></header>{overview.posts.items.length > 0 ? <div className="profile-post-list">{overview.posts.items.map((post) => <ProfilePostRow key={post.id} manageable={post.author.id === user?.id} onDeleted={onPostDeleted} post={post} />)}</div> : <ProfileEmpty icon={FileText} title="还没有公开帖子" description="把你的鸣潮配队、声骸和探索心得分享出来吧。" />}</section>;
 }
 
 function ProfileState({ kind, onRetry, onLogin }: { kind: "loading" | "error" | "login"; onRetry?: () => void; onLogin?: () => void }) {

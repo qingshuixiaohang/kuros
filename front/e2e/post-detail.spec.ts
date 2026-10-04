@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const postUrl = "/guides/10000000-0000-0000-0000-000000000001";
+const postUrl = "/guides/changli-team";
 
 test("帖子详情可以轮播查看本地演示中的全部配图", async ({ page }) => {
   await page.route("http://localhost:8080/api/v1/posts/10000000-0000-0000-0000-000000000001", (route) => route.abort());

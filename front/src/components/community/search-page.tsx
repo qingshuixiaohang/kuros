@@ -2,6 +2,7 @@
 import { Search } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { ApiFallbackNote } from "@/components/community/api-fallback-note";
 import { CommunityPageFrame, PageHeader, GuideListItem } from "@/components/community/community-pages";
 import { guides } from "@/lib/mock";
 import { useCommunityPostQuery, useSearchPostsQuery } from "@/lib/community-queries";
@@ -62,6 +63,7 @@ function EsSearchResults({ keyword }: { keyword: string }) {
         <div className="empty-state">
           <Search size={20} />
           <p>搜索暂不可用，请稍后重试。</p>
+          <button className="secondary-button" onClick={() => query.refetch()} type="button">重新加载</button>
         </div>
       ) : items.length ? (
         <>
@@ -80,7 +82,7 @@ function EsSearchResults({ keyword }: { keyword: string }) {
           <p>没有找到匹配内容，试试角色名、声骸或攻略标签。</p>
         </div>
       )}
-      {demoFallbackActive && <p className="api-fallback-note">后端暂不可用，当前显示本地 Demo 数据。</p>}
+      {demoFallbackActive && <ApiFallbackNote onRetry={() => query.refetch()} />}
     </section>
   );
 }

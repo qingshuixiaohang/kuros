@@ -9,24 +9,10 @@ import { CommunityImageCarousel } from "@/components/community/community-carouse
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
 import { useCommunityDemo } from "@/components/community/community-interactions";
-import { createComment, deleteComment, favoritePost, fetchComments, fetchPost, fetchPostInteractions, likePost, unfavoritePost, unlikePost, type ApiComment, type PostInteraction, type ReportTargetType } from "@/lib/api";
+import { ApiError, createComment, deleteComment, favoritePost, fetchComments, fetchPost, fetchPostInteractions, likePost, unfavoritePost, unlikePost, type ApiComment, type PostInteraction, type ReportTargetType } from "@/lib/api";
 import { guides } from "@/lib/mock";
-import { extractMarkdownImages } from "@/lib/post-view";
+import { DEMO_COVER_BY_SLUG, DEMO_POST_ID_BY_SLUG, extractMarkdownImages } from "@/lib/post-view";
 import type { Guide } from "@/types/community";
-
-const coverByGuide: Record<string, string> = {
-  "changli-team": "/art/修-奥古斯都  唤取动画.webp",
-  "tower-24": "/art/修-仇远  唤取动画.webp",
-  "camellya-echo": "/art/修-嘉贝莉娜  唤取动画.webp",
-  "new-player-route": "/art/修-心灵海 男漂地图.webp",
-};
-
-const apiPostIdBySlug: Record<string, string> = {
-  "changli-team": "10000000-0000-0000-0000-000000000001",
-  "tower-24": "10000000-0000-0000-0000-000000000002",
-  "camellya-echo": "10000000-0000-0000-0000-000000000003",
-  "new-player-route": "10000000-0000-0000-0000-000000000004",
-};
 
 type CommentItem = {
   id: string;
@@ -51,11 +37,6 @@ type ArticleSection = {
 
 const commentEmojis = ["🙂", "👍", "✨", "😭", "🎉", "❤️"];
 
-const seedComments: CommentItem[] = [
-  { id: "30000000-0000-0000-0000-000000000001", parentId: null, author: "无音区夜行者", mark: "无", tone: "dark", date: "09-13 14:20", floor: "1楼", content: "轮切顺序写得很清楚，尤其是先把声骸触发安排进循环这一点，实战里确实舒服很多。", likes: 61, pinned: true },
-  { id: "30000000-0000-0000-0000-000000000002", parentId: "30000000-0000-0000-0000-000000000001", author: "潮声档案员", mark: "潮", tone: "blue", date: "09-13 15:06", floor: "楼主", content: "谢谢反馈！低配队伍可以先保证循环完整，再慢慢补面板，不用一开始就追求毕业词条。", likes: 55, authorComment: true },
-  { id: "30000000-0000-0000-0000-000000000003", parentId: null, author: "今汐的留声机", mark: "今", tone: "lavender", date: "09-14 09:12", floor: "3楼", content: "已收藏，等下一次深塔刷新后按这个思路试一遍。", likes: 18 },
-];
 
 function commentFromApi(comment: ApiComment, authorName: string, index: number): CommentItem {
   return {
@@ -201,8 +182,10 @@ function CommentComposer({ onComment, replyTo, replyLabel, onCancel }: { onComme
 }
 
 function PostComments({ postId, authorName, onReport }: { postId: string; authorName: string; onReport: (commentId: string) => void }) {
-  const [comments, setComments] = useState(seedComments);
-  const [totalItems, setTotalItems] = useState(seedComments.length);
+  // 评论不再预置假种子（架构巡检 #9）：加载中显示状态行、失败显示错误，
+  // 绝不拿 3 条假评论冒充真实讨论
+  const [comments, setComments] = useState<CommentItem[]>([]);
+  const [totalItems, setTotalItems] = useState(0);
   const [onlyAuthor, setOnlyAuthor] = useState(false);
   const [sortNewest, setSortNewest] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -218,7 +201,7 @@ function PostComments({ postId, authorName, onReport }: { postId: string; author
       setTotalItems(result.meta?.totalItems ?? result.items.length);
       setApiError("");
     }).catch(() => {
-      if (active) setApiError("后端暂不可用，当前显示本地评论示例。");
+      if (active) setApiError("评论加载失败，请稍后重试。");
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [authorName, postId, sortNewest]);
@@ -344,14 +327,20 @@ function GuideArticle({ content }: { content?: string }) {
 }
 
 export function GuidePostDetailPage({ slug }: { slug: string }) {
-  const fallbackGuide = guides.find((item) => item.id === slug) ?? guides[0];
-  const apiPostId = apiPostIdBySlug[slug] ?? slug;
-  const [guide, setGuide] = useState(fallbackGuide);
+  // 演示 slug（changli-team 等）：本地 demo 文章本身就是该 slug 的内容，后端可用时被真实数据替换、
+  // 不可用时降级展示并明确标注；UUID slug：只认后端数据——404 显示"不存在或已删除"，
+  // 网络错误显示重试，绝不渲染其他文章冒充（架构巡检 #2/#12）
+  const demoGuide = guides.find((item) => item.id === slug);
+  const apiPostId = DEMO_POST_ID_BY_SLUG[slug] ?? slug;
+  const [guide, setGuide] = useState<Guide | null>(demoGuide ?? null);
+  const [usingDemo, setUsingDemo] = useState(demoGuide != null);
   const [authorId, setAuthorId] = useState<string>();
-  const [apiUnavailable, setApiUnavailable] = useState(false);
+  // 演示 slug 初始即可渲染 demo 内容（后端可用后被真实数据替换）；UUID slug 从 loading 开始
+  const [status, setStatus] = useState<"loading" | "ready" | "notFound" | "error">(() => (demoGuide ? "ready" : "loading"));
+  const [reloadKey, setReloadKey] = useState(0);
   const [reportTarget, setReportTarget] = useState<{ type: ReportTargetType; id: string } | null>(null);
   const { notify, requestLogin } = useCommunityDemo();
-  const sections = useMemo(() => getArticleSections(guide.content), [guide.content]);
+  const sections = useMemo(() => (guide ? getArticleSections(guide.content) : []), [guide]);
   async function sharePost() {
     try {
       if (!navigator.clipboard) throw new Error("clipboard unavailable");
@@ -364,25 +353,36 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
   useEffect(() => {
     let cancelled = false;
     fetchPost(apiPostId).then((post) => {
-      if (!cancelled) {
-        const apiMediaUrls = post.media?.length ? post.media.slice().sort((left, right) => left.sortOrder - right.sortOrder).map((item) => item.url) : undefined;
-        setGuide({ ...fallbackGuide, id: post.id, category: post.category, title: post.title, excerpt: post.excerpt, content: post.content, coverImageUrl: post.coverImageUrl, mediaUrls: apiMediaUrls ?? (post.mediaUrls?.length ? post.mediaUrls : post.coverImageUrl ? [post.coverImageUrl] : extractMarkdownImages(post.content)), author: post.author.nickname, authorMark: post.author.nickname.slice(0, 1), publishedAt: post.publishedAt, views: formatCount(post.viewCount), replies: post.commentCount, likes: formatCount(post.likeCount), tags: post.tags });
-        setAuthorId(post.author.id);
-        setApiUnavailable(false);
-      }
-    }).catch(() => { if (!cancelled) setApiUnavailable(true); });
+      if (cancelled) return;
+      const apiMediaUrls = post.media?.length ? post.media.slice().sort((left, right) => left.sortOrder - right.sortOrder).map((item) => item.url) : undefined;
+      setGuide({ id: post.id, category: post.category, title: post.title, excerpt: post.excerpt, content: post.content, coverImageUrl: post.coverImageUrl, mediaUrls: apiMediaUrls ?? (post.mediaUrls?.length ? post.mediaUrls : post.coverImageUrl ? [post.coverImageUrl] : extractMarkdownImages(post.content)), author: post.author.nickname, authorMark: post.author.nickname.slice(0, 1), avatarTone: "dark", publishedAt: post.publishedAt, views: formatCount(post.viewCount), replies: post.commentCount, likes: formatCount(post.likeCount), tags: post.tags });
+      setAuthorId(post.author.id);
+      setUsingDemo(false);
+      setStatus("ready");
+    }).catch((error) => {
+      if (cancelled) return;
+      if (error instanceof ApiError && error.status === 404) { setStatus("notFound"); return; }
+      if (demoGuide) { setUsingDemo(true); setStatus("ready"); return; }
+      setStatus("error");
+    });
     return () => { cancelled = true; };
-  }, [apiPostId, fallbackGuide, slug]);
+  }, [apiPostId, demoGuide, reloadKey, slug]);
+
+  if (status === "notFound") return <CommunityPageFrame activeNav="guides" hideRail hideSidebar><article className="post-detail-page"><Link className="back-link" href="/guides"><ArrowLeft size={15} />返回攻略列表</Link><div className="empty-state"><p>帖子不存在或已删除。</p><Link className="secondary-button" href="/guides">回到攻略列表逛逛</Link></div></article></CommunityPageFrame>;
+  if (status === "error" || !guide) {
+    const pending = status === "loading";
+    return <CommunityPageFrame activeNav="guides" hideRail hideSidebar><article className="post-detail-page"><Link className="back-link" href="/guides"><ArrowLeft size={15} />返回攻略列表</Link><div className="empty-state">{pending ? <p>正在加载帖子…</p> : <><p>帖子暂时无法加载，请检查后端服务。</p><button className="secondary-button" onClick={() => setReloadKey((key) => key + 1)} type="button">重新加载</button></>}</div></article></CommunityPageFrame>;
+  }
   return <CommunityPageFrame activeNav="guides" hideRail hideSidebar><div className="post-detail-layout">
     <PostReactionRail guide={guide} postId={apiPostId} />
     <article className="post-detail-page">
       <Link className="back-link" href="/guides"><ArrowLeft size={15} />返回攻略列表</Link>
       <header className="post-detail-heading"><div className="post-detail-kicker"><span className="guide-type">{guide.category}</span><span>原创</span><time>{guide.publishedAt}</time></div><h1>{guide.title}</h1><p>{guide.excerpt}</p><div className="detail-author"><div className={"author-avatar author-avatar--" + guide.avatarTone}>{guide.authorMark}</div><div><strong>{guide.author}</strong><small>攻略作者 · {guide.views} 阅读</small></div><CommunityFollowButton className="follow-button" fallbackKey={guide.author} targetUserId={authorId} /></div></header>
-      <CommunityImageCarousel className="post-cover" images={(guide.mediaUrls?.length ? guide.mediaUrls : [guide.coverImageUrl ?? coverByGuide[guide.id] ?? coverByGuide[slug] ?? "/art/guide-sword.webp"]).map((src) => ({ alt: guide.title + "配图", src }))} label={`${guide.title}帖子配图轮播`} priority />
+      <CommunityImageCarousel className="post-cover" images={(guide.mediaUrls?.length ? guide.mediaUrls : [guide.coverImageUrl ?? DEMO_COVER_BY_SLUG[guide.id] ?? DEMO_COVER_BY_SLUG[slug] ?? "/art/guide-sword.webp"]).map((src) => ({ alt: guide.title + "配图", src }))} label={`${guide.title}帖子配图轮播`} priority />
       <GuideArticle content={guide.content} />
       <div className="post-detail-footer"><span>阅读 {guide.views}</span><button type="button" onClick={() => requestLogin(() => setReportTarget({ type: "POST", id: apiPostId }))}><Flag size={14} />举报</button><button type="button" onClick={() => void sharePost()}><Share2 size={14} />分享</button></div>
       <PostComments authorName={guide.author} onReport={(commentId) => requestLogin(() => setReportTarget({ type: "COMMENT", id: commentId }))} postId={apiPostId} />
-      {apiUnavailable && <p className="api-fallback-note">后端暂不可用，当前显示本地 Demo 数据。</p>}
+      {usingDemo && <p className="api-fallback-note">{status === "loading" ? "正在从后端加载最新内容…" : "后端暂不可用，当前显示本地 Demo 数据。"}</p>}
     </article>
     <PostAuthorCard authorId={authorId} guide={guide} sections={sections} />
     {reportTarget && <CommunityReportDialog onClose={() => setReportTarget(null)} onSuccess={() => setReportTarget(null)} targetId={reportTarget.id} targetType={reportTarget.type} />}

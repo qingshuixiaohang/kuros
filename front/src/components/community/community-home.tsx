@@ -4,13 +4,14 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { BadgeCheck, Bell, Bookmark, ChevronDown, ChevronRight, Eye, FileText, Heart, Home, LayoutGrid, LibraryBig, Menu, MessageSquare, MoreHorizontal, Newspaper, PenSquare, Search, Share2, Sparkles, Telescope, UsersRound, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ApiFallbackNote } from "@/components/community/api-fallback-note";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
 import { CommunityHeroCarousel, CommunityImageCarousel } from "@/components/community/community-carousel";
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
-import { favoritePost, fetchFollowingFeedByCursor, fetchPostInteractions, fetchPosts, likePost, unfavoritePost, unlikePost, type PostInteraction } from "@/lib/api";
+import { ApiError, favoritePost, fetchFollowingFeedByCursor, fetchPostInteractions, fetchPosts, likePost, unfavoritePost, unlikePost, type PostInteraction } from "@/lib/api";
 import { guides, newsItems } from "@/lib/mock";
-import { toGuide } from "@/lib/post-view";
+import { DEMO_AUTHOR_ID_BY_NAME, toGuide } from "@/lib/post-view";
 import type { Guide } from "@/types/community";
 
 const channels = [{ label: "推荐", icon: Home, href: "/" }, { label: "关注", icon: Heart, href: "/?tab=following" }, { label: "攻略", icon: FileText, href: "/guides" }, { label: "新手", icon: Sparkles, href: "/guides?category=新手攻略" }, { label: "官方", icon: Bell, href: "/news?category=官方公告" }, { label: "同人", icon: UsersRound, href: "/creations" }, { label: "资讯", icon: Newspaper, href: "/news" }];
@@ -34,7 +35,6 @@ const bannerSlides = [
 ];
 function Banner() { return <CommunityHeroCarousel label="社区头图轮播" slides={bannerSlides} />; }
 const postIdBySlug: Record<string, string> = { "changli-team": "10000000-0000-0000-0000-000000000001", "tower-24": "10000000-0000-0000-0000-000000000002", "camellya-echo": "10000000-0000-0000-0000-000000000003", "new-player-route": "10000000-0000-0000-0000-000000000004" };
-const authorIdByName: Record<string, string> = { "潮声档案员": "10000000-0000-0000-0000-000000000001", "无音区夜行者": "10000000-0000-0000-0000-000000000002", "今汐的留声机": "10000000-0000-0000-0000-000000000003", "漂泊者手册": "10000000-0000-0000-0000-000000000004" };
 function feedCount(value: number) { return value >= 10000 ? (value / 10000).toFixed(1).replace(/\.0$/, "") + "w" : value >= 1000 ? (value / 1000).toFixed(1).replace(/\.0$/, "") + "k" : String(value); }
 async function copyPostLink(postId: string) {
   const url = new URL(`/guides/${postId}`, window.location.origin).href;
@@ -87,7 +87,7 @@ function PostCard({ guide }: { guide: Guide }) {
     <div className="post-header">
       <div className={`author-avatar author-avatar--${guide.avatarTone}`}>{guide.authorMark}</div>
       <div className="author-info"><strong>{guide.author}<BadgeCheck size={13} />{authorRole && <span className="author-role-badge">{authorRole}</span>}</strong><time>{guide.publishedAt}</time></div>
-      <CommunityFollowButton className="follow-button" fallbackKey={guide.author} targetUserId={authorIdByName[guide.author]} />
+      <CommunityFollowButton className="follow-button" fallbackKey={guide.author} targetUserId={DEMO_AUTHOR_ID_BY_NAME[guide.author]} />
       <div className="more-wrap">
         <button aria-expanded={menuOpen} aria-label="更多操作" className="more-button" onClick={() => setMenuOpen(!menuOpen)} type="button"><MoreHorizontal size={20} /></button>
         {menuOpen && <div className="post-menu">
@@ -118,15 +118,19 @@ function guideFromListItem(post: Parameters<typeof toGuide>[0]) {
 function Feed({ query }: { query: string }) {
   const params = useSearchParams();
   const router = useRouter();
+  const { requestLogin } = useCommunityDemo();
   const tab = params.get("tab") === "following" ? "following" : params.get("tab") === "latest" ? "latest" : "recommend";
   const [items, setItems] = useState<Guide[]>(guides);
   const [loadedKey, setLoadedKey] = useState("");
   const [apiUnavailable, setApiUnavailable] = useState(false);
+  /* 关注流的失败要如实呈现：401 是未登录，其余是后端故障——都不能伪装成"没关注人"的空态。 */
+  const [feedIssue, setFeedIssue] = useState<null | { kind: "unauthorized" | "error" }>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   /* slice-13/rp-06: following tab → cursor pagination ("加载更多" appends, no total count) */
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const requestKey = tab + "::" + query;
+  const requestKey = tab + "::" + query + "::" + reloadKey;
   const sort = tab === "recommend" ? "hot" : "latest";
   useEffect(() => {
     let active = true;
@@ -139,16 +143,27 @@ function Feed({ query }: { query: string }) {
       if (!active) return;
       setItems(posts.map(guideFromListItem));
       setApiUnavailable(false);
+      setFeedIssue(null);
       setLoadedKey(requestKey);
-    }).catch(() => {
+    }).catch((error) => {
       if (!active) return;
-      /* following tab: show empty (not logged in or backend down); recommend/latest: local demo fallback */
-      if (tab === "following") { setItems([]); setHasMore(false); setNextCursor(null); } else { const keyword = query.trim().toLowerCase(); const fallback = guides.filter((guide) => (guide.title + guide.excerpt + guide.category + guide.tags.join("")).toLowerCase().includes(keyword)); setItems(tab === "latest" ? [...fallback].reverse() : fallback); }
-      setApiUnavailable(true);
+      if (tab === "following") {
+        setFeedIssue({ kind: error instanceof ApiError && error.status === 401 ? "unauthorized" : "error" });
+        setItems([]);
+        setHasMore(false);
+        setNextCursor(null);
+        setApiUnavailable(false);
+      } else {
+        const keyword = query.trim().toLowerCase();
+        const fallback = guides.filter((guide) => (guide.title + guide.excerpt + guide.category + guide.tags.join("")).toLowerCase().includes(keyword));
+        setItems(tab === "latest" ? [...fallback].reverse() : fallback);
+        setApiUnavailable(true);
+        setFeedIssue(null);
+      }
       setLoadedKey(requestKey);
     });
     return () => { active = false; };
-  }, [query, requestKey, sort, tab]);
+  }, [query, reloadKey, requestKey, sort, tab]);
   /* "加载更多"：透传上一页 nextCursor 拉下一页，追加到现有列表（按 id 去重），hasMore=false 后隐藏按钮 */
   function loadMore() {
     if (tab !== "following" || !hasMore || !nextCursor || loadingMore) return;
@@ -166,7 +181,12 @@ function Feed({ query }: { query: string }) {
   const loading = loadedKey !== requestKey;
   const visible = items;
   const tabs = [{ key: "recommend", label: "推荐", href: "/" }, { key: "latest", label: "最新", href: "/?tab=latest" }, { key: "following", label: "关注", href: "/?tab=following" }];
-  return <section className="feed" id="feed" aria-label="社区内容流"><Banner /><div className="feed-tabs">{tabs.map((item) => <button className={tab === item.key ? "is-active" : ""} key={item.key} onClick={() => router.push(item.href)} type="button">{item.label}</button>)}</div>{loading ? <div className="feed-status">正在整理漂泊者的最新内容…</div> : visible.length ? <>{visible.map((guide) => <PostCard guide={guide} key={guide.id} />)}{tab === "following" && (hasMore ? <button className="feed-load-more" disabled={loadingMore} onClick={loadMore} type="button">{loadingMore ? "正在加载更多…" : "加载更多"}</button> : <p className="feed-end-note">已经到底啦，关注的动态都看完了。</p>)}</> : <div className="empty-state"><p>{tab === "following" ? "还没有关注的创作者。去推荐页看看吧。" : "没有找到相关帖子，换个关键词试试。"}</p>{tab === "following" && <Link className="secondary-button" href="/">返回推荐页</Link>}</div>}{apiUnavailable && tab !== "following" && <p className="api-fallback-note">后端暂不可用，当前显示本地 Demo 数据。</p>}</section>;
+  const emptyState = feedIssue
+    ? <div className="empty-state">{feedIssue.kind === "unauthorized"
+      ? <><p>登录后查看关注的创作者动态</p><button className="secondary-button" onClick={() => requestLogin()} type="button">去登录</button></>
+      : <><p>关注流加载失败，请稍后重试。</p><button className="secondary-button" onClick={() => setReloadKey((key) => key + 1)} type="button">重新加载</button></>}</div>
+    : <div className="empty-state"><p>{tab === "following" ? "还没有关注的创作者。去推荐页看看吧。" : "没有找到相关帖子，换个关键词试试。"}</p>{tab === "following" && <Link className="secondary-button" href="/">返回推荐页</Link>}</div>;
+  return <section className="feed" id="feed" aria-label="社区内容流"><Banner /><div className="feed-tabs">{tabs.map((item) => <button className={tab === item.key ? "is-active" : ""} key={item.key} onClick={() => router.push(item.href)} type="button">{item.label}</button>)}</div>{loading ? <div className="feed-status">正在整理漂泊者的最新内容…</div> : visible.length ? <>{visible.map((guide) => <PostCard guide={guide} key={guide.id} />)}{tab === "following" && (hasMore ? <button className="feed-load-more" disabled={loadingMore} onClick={loadMore} type="button">{loadingMore ? "正在加载更多…" : "加载更多"}</button> : <p className="feed-end-note">已经到底啦，关注的动态都看完了。</p>)}</> : emptyState}{apiUnavailable && tab !== "following" && <ApiFallbackNote onRetry={() => setReloadKey((key) => key + 1)} />}</section>;
 }
 export function RightRail() {
   const [tab, setTab] = useState<"recommend" | "news">("recommend");

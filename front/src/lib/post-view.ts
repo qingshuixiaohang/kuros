@@ -64,3 +64,35 @@ export function searchItemToGuide(item: PostSearchItem): Guide {
     highlight: item.highlight,
   };
 }
+
+/**
+ * 演示 slug ↔ 后端种子 UUID 的唯一映射（架构巡检 #3：此前散落在
+ * post-detail / profile / home 三处 + authorIdByName，新增演示帖漏同步
+ * 一处就静默降级。收敛到这一个接缝：新增演示帖只改这里）。
+ */
+export const DEMO_POST_ID_BY_SLUG: Record<string, string> = {
+  "changli-team": "10000000-0000-0000-0000-000000000001",
+  "tower-24": "10000000-0000-0000-0000-000000000002",
+  "camellya-echo": "10000000-0000-0000-0000-000000000003",
+  "new-player-route": "10000000-0000-0000-0000-000000000004",
+};
+
+export const DEMO_SLUG_BY_POST_ID: Record<string, string> = Object.fromEntries(
+  Object.entries(DEMO_POST_ID_BY_SLUG).map(([slug, id]) => [id, slug])
+);
+
+/** 演示作者昵称 → 种子用户 UUID（未登录 demo 场景的作者归属换算）。 */
+export const DEMO_AUTHOR_ID_BY_NAME: Record<string, string> = {
+  "潮声档案员": "10000000-0000-0000-0000-000000000001",
+  "无音区夜行者": "10000000-0000-0000-0000-000000000002",
+  "今汐的留声机": "10000000-0000-0000-0000-000000000003",
+  "漂泊者手册": "10000000-0000-0000-0000-000000000004",
+};
+
+/** 演示帖 slug → 封面素材（WebP）。 */
+export const DEMO_COVER_BY_SLUG: Record<string, string> = {
+  "changli-team": "/art/修-奥古斯都  唤取动画.webp",
+  "tower-24": "/art/修-仇远  唤取动画.webp",
+  "camellya-echo": "/art/修-嘉贝莉娜  唤取动画.webp",
+  "new-player-route": "/art/修-心灵海 男漂地图.webp",
+};

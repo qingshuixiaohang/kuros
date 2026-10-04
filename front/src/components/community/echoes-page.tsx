@@ -21,7 +21,16 @@ export function EchoesPage() {
 }
 
 export function EchoDetailPage({ id }: { id: string }) {
-  const echo = echoSets.find((item) => item.id === id) ?? echoSets[0];
+  // 未知 id 不再回退到第一套声骸冒充（架构巡检 #2 同模式）
+  const echo = echoSets.find((item) => item.id === id);
+  if (!echo) return (
+    <CommunityPageFrame>
+      <article className="detail-page">
+        <Link className="back-link" href="/echoes"><ArrowLeft size={15} />返回声骸图鉴</Link>
+        <div className="empty-state"><p>声骸套装不存在或已下架。</p><Link className="secondary-button" href="/echoes">返回声骸图鉴</Link></div>
+      </article>
+    </CommunityPageFrame>
+  );
   return (
     <CommunityPageFrame>
       <article className="detail-page">

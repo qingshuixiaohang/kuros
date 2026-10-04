@@ -11,7 +11,7 @@ export function CommunityFollowButton({ targetUserId, fallbackKey, className = "
   useEffect(() => {
     if (!loggedIn || !targetUserId) return;
     let active = true;
-    fetchUserFollow(targetUserId).then((result) => { if (active) setFollow(result); }).catch(() => { /* Keep the local fallback when the API is unavailable. */ });
+    fetchUserFollow(targetUserId).then((result) => { if (active) setFollow(result); }).catch(() => { if (active) notify("关注状态获取失败，请稍后刷新。"); });
     return () => { active = false; };
   }, [loggedIn, targetUserId]);
 

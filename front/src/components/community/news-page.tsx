@@ -23,8 +23,17 @@ export function NewsPage() {
 }
 
 export function NewsDetailPage({ id }: { id: string }) {
-  const item = newsItems.find((entry) => entry.id === id) ?? newsItems[0];
+  // 未知 id 不再回退到第一条资讯冒充（架构巡检 #2 同模式）
+  const item = newsItems.find((entry) => entry.id === id);
   const { notify } = useCommunityDemo();
+  if (!item) return (
+    <CommunityPageFrame activeNav="news">
+      <article className="detail-page">
+        <Link className="back-link" href="/news"><ArrowLeft size={15} />返回资讯列表</Link>
+        <div className="empty-state"><p>资讯不存在或已下架。</p><Link className="secondary-button" href="/news">返回资讯列表</Link></div>
+      </article>
+    </CommunityPageFrame>
+  );
   return (
     <CommunityPageFrame activeNav="news">
       <article className="detail-page">

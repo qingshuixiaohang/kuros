@@ -19,10 +19,12 @@ export function ToolsPage() {
 }
 
 export function ToolDetailPage({ slug }: { slug: string }) {
-  const tool = toolItems.find((item) => item.slug === slug) ?? toolItems[0];
+  // 未知 slug 不再回退到第一个工具冒充（架构巡检 #2 同模式）：hooks 全部无条件调用后再早退
+  const tool = toolItems.find((item) => item.slug === slug);
   const [level, setLevel] = useState(1);
   const [weapon, setWeapon] = useState(1);
   const [members, setMembers] = useState<string[]>([]);
+  if (!tool) return <CommunityPageFrame activeNav="tools"><div className="detail-page entity-detail"><Link className="back-link" href="/tools"><ChevronRight size={15} />返回工具箱</Link><div className="empty-state"><p>工具不存在或已下架。</p><Link className="secondary-button" href="/tools">返回工具箱</Link></div></div></CommunityPageFrame>;
   const isTeam = tool.slug === "team-builder";
   const total = (level * 1200 + weapon * 780).toLocaleString();
   function toggleMember(id: string) {
