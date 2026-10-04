@@ -49,7 +49,7 @@ function PublishToolbarButton({ label, icon, disabled = false, onClick }: Toolba
 function PublishPageContent() {
   const params = useSearchParams();
   const router = useRouter();
-  const { loggedIn, requestLogin, notify } = useCommunityDemo();
+  const { loggedIn, sessionRestoring, requestLogin, notify } = useCommunityDemo();
   const editPostId = params.get("edit");
   const defaultType = params.get("type") === "guide" ? "攻略" : params.get("type") === "creation" ? "同人" : "心得";
   const { control, register, handleSubmit, reset, getValues, setValue, formState: { errors } } = useForm<PublishFormValues>({
@@ -113,6 +113,9 @@ function PublishPageContent() {
   async function publish(values: PublishFormValues) { setPublishing(true); setError(""); try { const input = { type: values.type === "攻略" ? "GUIDE" : "GENERAL", category: values.type === "攻略" ? "配队攻略" : values.type, title: values.title, content: values.content, tags: values.tags.split(/[，,\s]+/).map((tag) => tag.trim()).filter(Boolean), mediaAssetIds: postMedia.map((media) => media.assetId) } as const; const post = editPostId ? await updatePost(editPostId, input) : await createPost(input); try { window.localStorage.removeItem(publishDraftKey); } catch { /* 发布成功不应被本地存储异常阻断。 */ } notify(editPostId ? "帖子已更新" : "内容已发布"); router.push("/guides/" + post.id); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "发布失败，请稍后重试"); notify(editPostId ? "保存失败，请检查表单内容" : "发布失败，请检查表单内容"); } finally { setPublishing(false); } }
   function submit(values: PublishFormValues) { if (!loggedIn) { requestLogin(() => { void publish(values); }); return; } void publish(values); }
 
+  // 会话恢复未完成时先渲染加载态（架构巡检 #7）：否则已登录用户在恢复的
+  // 几秒内会先闪现"登录后才能编辑"再翻转，观感像 bug
+  if (editPostId && sessionRestoring) return <div className="publish-state"><strong>正在确认登录状态…</strong><span>马上就好，正在恢复你的会话。</span></div>;
   if (editPostId && !loggedIn) return <div className="publish-state"><strong>登录后才能编辑这篇帖子</strong><span>请先登录，再继续修改你的鸣潮内容。</span><button className="primary-button" onClick={() => requestLogin()} type="button">立即登录</button></div>;
   if (loadingEdit) return <div className="publish-state"><span>正在载入帖子内容…</span></div>;
   const registerTitle = register("title");
