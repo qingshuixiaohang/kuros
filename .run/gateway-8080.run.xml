@@ -1,7 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <!-- Spring Cloud Gateway 统一入口（前端与冒烟的唯一正门，8080）。
-       经 Nacos (localhost:8848) 以 lb:// 路由到上面两个服务，所以先启动它们再启动本服务。 -->
-  <configuration default="false" name="gateway :8080" type="Application" factoryName="Application">
+    <configuration default="false" name="gateway :8080" type="Application" factoryName="Application">
     <option name="MAIN_CLASS_NAME" value="com.kuros.kurosgateway.KurosGatewayApplication" />
     <module name="kuros-gateway" />
     <option name="VM_PARAMETERS" value="-Dfile.encoding=UTF-8 -Xmx384m -XX:MaxMetaspaceSize=224m" />

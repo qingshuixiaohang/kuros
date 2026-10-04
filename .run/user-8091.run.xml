@@ -1,7 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <!-- 用户域微服务（认证/会话/RBAC/关注）。开发模式从 IDEA 裸跑，
-       SERVER_PORT 用 8091 避免端口冲突；会话与 backend 共享 localhost:6379 的 Redis。 -->
-  <configuration default="false" name="user :8091" type="Application" factoryName="Application">
+    <configuration default="false" name="user :8091" type="Application" factoryName="Application">
     <option name="MAIN_CLASS_NAME" value="com.kuros.kurosuser.KurosUserApplication" />
     <module name="kuros-user" />
     <option name="VM_PARAMETERS" value="-Dfile.encoding=UTF-8 -Xmx512m -Xms256m -XX:MaxMetaspaceSize=256m" />
