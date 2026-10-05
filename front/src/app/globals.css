@@ -266,7 +266,7 @@ select:focus-visible {
 .sidebar-footer { padding-top: 64px; color: #8290a0; }
 
 .feed { gap: 10px; }
-.community-banner { height: 220px; }
+.community-banner { height: 267px; }
 .community-banner::after {
   background: linear-gradient(90deg, rgba(8, 15, 22, .58), rgba(8, 15, 22, .08) 56%, transparent 76%);
 }
@@ -276,12 +276,12 @@ select:focus-visible {
 .community-banner--carousel { isolation: isolate; overflow: hidden; background: transparent; }
 .community-banner--carousel::after { display: none; }
 .community-banner-stage { position: absolute; inset: 0; perspective: 1200px; }
-.community-banner-slide { position: absolute; top: 0; left: 50%; width: 92%; height: 100%; overflow: hidden; border-radius: 6px; background: #1b252e; box-shadow: 0 12px 24px rgba(21, 34, 46, .16); transform: translateX(-50%) scale(.78) rotateY(0); transition: transform 420ms ease, opacity 420ms ease, filter 420ms ease; }
+.community-banner-slide { position: absolute; top: 0; left: 50%; width: 94%; height: 100%; overflow: hidden; border-radius: 8px; background: #1b252e; box-shadow: 0 12px 24px rgba(21, 34, 46, .16); transform: translateX(-50%) scale(.78) rotateY(0); transition: transform 420ms ease, opacity 420ms ease, filter 420ms ease; }
 .community-banner-slide::after { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8, 15, 22, .56), rgba(8, 15, 22, .08) 56%, transparent 76%); content: ""; }
 .community-banner-slide img { object-fit: cover; object-position: center; }
 .community-banner-slide--current { z-index: 3; transform: translateX(-50%) scale(1) rotateY(0); }
-.community-banner-slide--previous { z-index: 2; opacity: .9; transform: translateX(-90%) scale(.94) rotateY(6deg); }
-.community-banner-slide--next { z-index: 2; opacity: .9; transform: translateX(-10%) scale(.94) rotateY(-6deg); }
+.community-banner-slide--previous { z-index: 2; opacity: .92; transform: translateX(-94%) scale(.96) rotateY(5deg); }
+.community-banner-slide--next { z-index: 2; opacity: .92; transform: translateX(-6%) scale(.96) rotateY(-5deg); }
 .community-banner-slide--hidden { z-index: 1; opacity: 0; pointer-events: none; transform: translateX(-50%) scale(.7); }
 .community-banner-slide--current 
 .community-banner-arrow { position: absolute; z-index: 5; top: 50%; opacity: 0; transition: opacity .2s; display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid rgba(255, 255, 255, .38); border-radius: 50%; background: rgba(16, 26, 35, .42); color: #fff; transform: translateY(-50%); }

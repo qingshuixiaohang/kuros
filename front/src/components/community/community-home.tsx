@@ -2,7 +2,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { AtSign, BadgeCheck, Bell, ChevronDown, ChevronRight, Eye, FileText, Heart, Home, LayoutGrid, LibraryBig, LogOut, Menu, MessageSquare, MoreHorizontal, Newspaper, PenSquare, Search, Shield, Sparkles, Telescope, UserRound, UsersRound, X } from "lucide-react";
+import { AtSign, BadgeCheck, Bell, Check, ChevronDown, ChevronRight, Eye, FileText, Heart, Home, LayoutGrid, LibraryBig, LogOut, Menu, MessageSquare, MoreHorizontal, Newspaper, PenSquare, Search, Shield, Sparkles, Telescope, UserRound, UsersRound, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiFallbackNote } from "@/components/community/api-fallback-note";
@@ -197,13 +197,13 @@ function Feed({ query }: { query: string }) {
   }
   const loading = loadedKey !== requestKey;
   const visible = items;
-  const tabs = [{ key: "recommend", label: "推荐", href: "/" }, { key: "latest", label: "最新", href: "/?tab=latest" }, { key: "following", label: "关注", href: "/?tab=following" }];
+  const tabs = [{ key: "recommend", label: "默认", href: "/" }, { key: "latest", label: "最新发布", href: "/?tab=latest" }, { key: "following", label: "关注", href: "/?tab=following" }];
   const emptyState = feedIssue
     ? <div className="empty-state">{feedIssue.kind === "unauthorized"
       ? <><p>登录后查看关注的创作者动态</p><button className="secondary-button" onClick={() => requestLogin()} type="button">去登录</button></>
       : <><p>关注流加载失败，请稍后重试。</p><button className="secondary-button" onClick={() => setReloadKey((key) => key + 1)} type="button">重新加载</button></>}</div>
     : <div className="empty-state"><p>{tab === "following" ? "还没有关注的创作者。去推荐页看看吧。" : "没有找到相关帖子，换个关键词试试。"}</p>{tab === "following" && <Link className="secondary-button" href="/">返回推荐页</Link>}</div>;
-  return <section className="feed" id="feed" aria-label="社区内容流"><Banner /><div className="feed-tabs">{tabs.map((item) => <button className={tab === item.key ? "is-active" : ""} key={item.key} onClick={() => router.push(item.href)} type="button">{item.label}</button>)}</div>{loading ? <div className="feed-status">正在整理漂泊者的最新内容…</div> : visible.length ? <>{visible.map((guide) => <PostCard guide={guide} key={guide.id} />)}{tab === "following" && (hasMore ? <button className="feed-load-more" disabled={loadingMore} onClick={loadMore} type="button">{loadingMore ? "正在加载更多…" : "加载更多"}</button> : <p className="feed-end-note">已经到底啦，关注的动态都看完了。</p>)}</> : emptyState}{apiUnavailable && tab !== "following" && <ApiFallbackNote onRetry={() => setReloadKey((key) => key + 1)} />}</section>;
+  return <section className="feed" id="feed" aria-label="社区内容流"><Banner /><div className="feed-tabs">{tabs.map((item) => <button className={tab === item.key ? "is-active" : ""} key={item.key} onClick={() => router.push(item.href)} type="button">{tab === item.key && <Check size={15} />}{item.label}</button>)}</div>{loading ? <div className="feed-status">正在整理漂泊者的最新内容…</div> : visible.length ? <>{visible.map((guide) => <PostCard guide={guide} key={guide.id} />)}{tab === "following" && (hasMore ? <button className="feed-load-more" disabled={loadingMore} onClick={loadMore} type="button">{loadingMore ? "正在加载更多…" : "加载更多"}</button> : <p className="feed-end-note">已经到底啦，关注的动态都看完了。</p>)}</> : emptyState}{apiUnavailable && tab !== "following" && <ApiFallbackNote onRetry={() => setReloadKey((key) => key + 1)} />}</section>;
 }
 export function RightRail() {
   const [tab, setTab] = useState<"recommend" | "news">("recommend");
