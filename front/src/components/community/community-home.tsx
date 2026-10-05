@@ -2,7 +2,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { BadgeCheck, Bell, Bookmark, ChevronDown, ChevronRight, Eye, FileText, Heart, Home, LayoutGrid, LibraryBig, LogOut, Menu, MessageSquare, MoreHorizontal, Newspaper, PenSquare, Search, Share2, Shield, Sparkles, Telescope, UserRound, UsersRound, X } from "lucide-react";
+import { BadgeCheck, Bell, ChevronDown, ChevronRight, Eye, FileText, Heart, Home, LayoutGrid, LibraryBig, LogOut, Menu, MessageSquare, MoreHorizontal, Newspaper, PenSquare, Search, Shield, Sparkles, Telescope, UserRound, UsersRound, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiFallbackNote } from "@/components/community/api-fallback-note";
@@ -52,10 +52,6 @@ const bannerSlides = [
 function Banner() { return <CommunityHeroCarousel label="社区头图轮播" slides={bannerSlides} />; }
 const postIdBySlug: Record<string, string> = { "changli-team": "10000000-0000-0000-0000-000000000001", "tower-24": "10000000-0000-0000-0000-000000000002", "camellya-echo": "10000000-0000-0000-0000-000000000003", "new-player-route": "10000000-0000-0000-0000-000000000004" };
 function feedCount(value: number) { return value >= 10000 ? (value / 10000).toFixed(1).replace(/\.0$/, "") + "w" : value >= 1000 ? (value / 1000).toFixed(1).replace(/\.0$/, "") + "k" : String(value); }
-async function copyPostLink(postId: string) {
-  const url = new URL(`/guides/${postId}`, window.location.origin).href;
-  await navigator.clipboard?.writeText(url);
-}
 function PostMedia({ guide, href }: { guide: Guide; href: string }) {
   const sources = guide.mediaUrls ?? [];
   if (!sources.length) return null;
@@ -73,6 +69,7 @@ function PostCard({ guide }: { guide: Guide }) {
     fetchPostInteractions(postId).then((result) => { if (active) setInteraction(result); }).catch(() => { /* The home feed remains usable with its seeded data. */ });
     return () => { active = false; };
   }, [postId]);
+  const isBookmarked = interaction?.favorited ?? bookmarked.includes(guide.id);
   function change(kind: "like" | "favorite") {
     requestLogin(() => {
       if (!postId || !interaction) {
@@ -87,19 +84,11 @@ function PostCard({ guide }: { guide: Guide }) {
     });
   }
   const isLiked = interaction?.liked ?? liked.includes(guide.id);
-  const isBookmarked = interaction?.favorited ?? bookmarked.includes(guide.id);
+  
   const likeLabel = interaction ? feedCount(interaction.likeCount) : guide.likes;
   const detailHref = `/guides/${guide.id}`;
   const authorRole = guide.category.includes("攻略") ? "攻略作者" : guide.category.includes("同人") ? "同人画师" : guide.category.includes("心得") ? "社区达人" : null;
-  async function share() {
-    try {
-      await copyPostLink(guide.id);
-      notify("链接已复制，可以分享给你的队友。");
-    } catch {
-      notify("复制失败，请手动复制帖子地址。");
-    }
-  }
-  return <article className="post-card">
+    return <article className="post-card">
     <div className="post-header">
       <div className={`author-avatar author-avatar--${guide.avatarTone}`}>{guide.authorMark}</div>
       <div className="author-info"><strong>{guide.author}<BadgeCheck size={13} />{authorRole && <span className="author-role-badge">{authorRole}</span>}</strong><time>{guide.publishedAt}</time></div>
@@ -120,9 +109,7 @@ function PostCard({ guide }: { guide: Guide }) {
       <span><Eye size={17} />{guide.views}</span>
       <Link href={`${detailHref}#comments`} rel="noopener noreferrer" target="_blank"><MessageSquare size={17} />{guide.replies}</Link>
       <button className={isLiked ? "is-active" : ""} onClick={() => change("like")} type="button"><Heart fill={isLiked ? "currentColor" : "none"} size={18} />{likeLabel}</button>
-      <button className={`post-action-label ${isBookmarked ? "is-bookmarked" : ""}`} onClick={() => change("favorite")} type="button"><Bookmark fill={isBookmarked ? "currentColor" : "none"} size={17} />{isBookmarked ? "已收藏" : "收藏"}</button>
-      <button className="post-action-label" onClick={() => void share()} type="button"><Share2 size={17} />分享</button>
-    </div>
+      </div>
     {reportOpen && postId && <CommunityReportDialog targetId={postId} targetType="POST" onClose={() => setReportOpen(false)} onSuccess={() => setReportOpen(false)} />}
   </article>;
 }
@@ -207,6 +194,8 @@ function Feed({ query }: { query: string }) {
 export function RightRail() {
   const [tab, setTab] = useState<"recommend" | "news">("recommend");
   const items = tab === "recommend" ? newsItems.slice(0, 5) : newsItems.filter((item) => item.category === "官方公告" || item.category === "版本前瞻").slice(0, 5);
+  // 热门话题：聚合真实帖子标签（库街区右栏话题卡同款：缩略图 + 帖子数）
+  const hotTopics = useQuery({ queryKey: ["hot-topics"], queryFn: async () => { const posts = await fetchPosts({ sort: "hot", pageSize: 40 }); const byTag = new Map<string, { count: number; cover?: string }>(); for (const post of posts) { const cover = post.coverImageUrl ?? post.mediaUrls?.[0]; for (const tag of post.tags ?? []) { const entry = byTag.get(tag) ?? { count: 0, cover: undefined }; entry.count += 1; if (!entry.cover && cover) entry.cover = cover; byTag.set(tag, entry); } } return [...byTag.entries()].sort((left, right) => right[1].count - left[1].count).slice(0, 5).map(([tag, value]) => ({ tag, ...value })); }, staleTime: 120_000, retry: false });
   return <aside className="right-rail" aria-label="推荐与工具">
     <section className="right-panel" id="news">
       <div className="panel-tabs"><button className={tab === "recommend" ? "is-active" : ""} onClick={() => setTab("recommend")} type="button">推荐</button><button className={tab === "news" ? "is-active" : ""} onClick={() => setTab("news")} type="button">资讯</button></div>
@@ -216,7 +205,7 @@ export function RightRail() {
       <div className="panel-title"><h2>实用工具</h2><Link href="/tools">更多 <ChevronRight size={14} /></Link></div>
       <ul aria-label="工具列表" className="tool-grid">{quickTools.map(({ title, href, iconSrc }) => <li key={title}><Link className="tool-grid-item" href={href}><span className="tool-icon"><Image alt="" fill sizes="36px" src={iconSrc} /></span><strong>{title}</strong></Link></li>)}</ul>
     </section>
-    <div className="right-quote"><span>“</span><p>潮水会记得每一个漂泊者的足迹。</p><small>— 鸣潮</small></div>
+    {hotTopics.data && hotTopics.data.length > 0 && <section aria-label="热门话题" className="right-panel topics-panel"><div className="panel-title"><h2>热门话题</h2></div><div className="topic-list">{hotTopics.data.map(({ tag, count, cover }) => <Link className="topic-card" href={"/search?q=" + encodeURIComponent(tag)} key={tag}><span className="topic-thumb"><Image alt="" fill sizes="44px" src={cover ?? "/art/guide-coast.webp"} /></span><span className="topic-copy"><strong>#{tag}</strong><small>{count} 篇帖子</small></span></Link>)}</div></section>}
   </aside>;
 }
 export function useCommunityDrawer(open: boolean, setOpen: (value: boolean) => void) {
