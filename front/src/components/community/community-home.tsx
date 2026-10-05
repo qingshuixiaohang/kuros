@@ -63,6 +63,12 @@ function feedCount(value: number) { return value >= 10000 ? (value / 10000).toFi
 function PostMedia({ guide, href }: { guide: Guide; href: string }) {
   const sources = guide.mediaUrls ?? [];
   if (!sources.length) return null;
+  // 多图帖子：宫格缩略图（库街区同款——单图才用大图，多图为方形小图网格，2 张两列、3 张起三列）
+  if (sources.length >= 2) {
+    return <div className="post-media-grid" style={{ gridTemplateColumns: `repeat(${Math.min(sources.length, 3)}, 1fr)` }}>
+      {sources.slice(0, 6).map((src, index) => <Link className="post-media-grid-item" href={href} key={src + index} rel="noopener noreferrer" target="_blank"><Image alt={`${guide.title}配图 ${index + 1}`} fill sizes="160px" src={src} /></Link>)}
+    </div>;
+  }
   return <CommunityImageCarousel className="post-media post-media-carousel" href={href} images={sources.slice(0, 6).map((src) => ({ alt: `${guide.title}帖子配图`, src }))} label={`${guide.title}帖子配图轮播`} />;
 }
 function PostCard({ guide }: { guide: Guide }) {

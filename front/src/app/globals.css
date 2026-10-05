@@ -137,6 +137,7 @@ button, input { font: inherit; } button { border: 0; cursor: pointer; } a { colo
   background: #e8edf1;
 }
 
+/* 信息流多图宫格（库街区同款：方形小图网格） */ .post-media-grid { display: grid; gap: 6px; width: min(72%, 520px); margin: 12px 0 12px 50px; } .post-media-grid-item { position: relative; aspect-ratio: 1 / 1; overflow: hidden; border-radius: 5px; background: #e8edf1; } .post-media-grid-item img { object-fit: cover; transition: transform .22s ease; } .post-media-grid-item:hover img { transform: scale(1.03); }
 .post-media img {
   object-fit: cover;
   transition: transform 220ms ease;
