@@ -11,7 +11,7 @@ import { CommunityReportDialog } from "@/components/community/community-report-d
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { ApiError, createComment, deleteComment, favoritePost, fetchComments, fetchPost, fetchPostInteractions, likePost, unfavoritePost, unlikePost, type ApiComment, type PostInteraction, type ReportTargetType } from "@/lib/api";
 import { guides } from "@/lib/mock";
-import { DEMO_COVER_BY_SLUG, DEMO_POST_ID_BY_SLUG, extractMarkdownImages } from "@/lib/post-view";
+import { DEMO_COVER_BY_SLUG, DEMO_POST_ID_BY_SLUG, extractMarkdownImages , formatPublishedAt } from "@/lib/post-view";
 import type { Guide } from "@/types/community";
 
 type CommentItem = {
@@ -377,7 +377,7 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
     <PostReactionRail guide={guide} postId={apiPostId} />
     <article className="post-detail-page">
       <Link className="back-link" href="/guides"><ArrowLeft size={15} />返回攻略列表</Link>
-      <header className="post-detail-heading"><div className="post-detail-kicker"><span className="guide-type">{guide.category}</span><span>原创</span><time>{guide.publishedAt}</time></div><h1>{guide.title}</h1><p>{guide.excerpt}</p><div className="detail-author"><div className={"author-avatar author-avatar--" + guide.avatarTone}>{guide.authorMark}</div><div><strong>{guide.author}</strong><small>攻略作者 · {guide.views} 阅读</small></div><CommunityFollowButton className="follow-button" fallbackKey={guide.author} targetUserId={authorId} /></div></header>
+      <header className="post-detail-heading"><div className="post-detail-kicker"><span className="guide-type">{guide.category}</span><span>原创</span><time>{formatPublishedAt(guide.publishedAt)}</time></div><h1>{guide.title}</h1><p>{guide.excerpt}</p><div className="detail-author"><div className={"author-avatar author-avatar--" + guide.avatarTone}>{guide.authorMark}</div><div><strong>{guide.author}</strong><small>攻略作者 · {guide.views} 阅读</small></div><CommunityFollowButton className="follow-button" fallbackKey={guide.author} targetUserId={authorId} /></div></header>
       <CommunityImageCarousel className="post-cover" images={(guide.mediaUrls?.length ? guide.mediaUrls : [guide.coverImageUrl ?? DEMO_COVER_BY_SLUG[guide.id] ?? DEMO_COVER_BY_SLUG[slug] ?? "/art/guide-sword.webp"]).map((src) => ({ alt: guide.title + "配图", src }))} label={`${guide.title}帖子配图轮播`} priority />
       <GuideArticle content={guide.content} />
       <div className="post-detail-footer"><span>阅读 {guide.views}</span><button type="button" onClick={() => requestLogin(() => setReportTarget({ type: "POST", id: apiPostId }))}><Flag size={14} />举报</button><button type="button" onClick={() => void sharePost()}><Share2 size={14} />分享</button></div>
