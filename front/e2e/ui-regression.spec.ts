@@ -43,17 +43,13 @@ test("窄桌面频道抽屉可以用键盘打开并关闭", async ({ page }) => 
   await expect(openButton).toBeFocused();
 });
 
-test("更多菜单可以用键盘打开、关闭并恢复焦点", async ({ page }) => {
+test("侧栏承载全部频道入口（图鉴/工具箱从顶栏并入后可达）", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/");
-
-  const moreButton = page.getByRole("button", { name: "更多", exact: true });
-  await moreButton.focus();
-  await page.keyboard.press("Enter");
-  await expect(page.getByRole("menu")).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("menu")).toBeHidden();
-  await expect(moreButton).toBeFocused();
+  const sidebar = page.getByRole("complementary", { name: "社区频道" });
+  for (const label of ["推荐", "攻略", "角色图鉴", "声骸图鉴", "同人", "资讯", "工具箱"]) {
+    await expect(sidebar.getByRole("link", { name: label })).toBeVisible();
+  }
 });
 
 test("登录弹窗打开后焦点留在弹窗内，Escape 关闭并恢复触发焦点", async ({ page }) => {

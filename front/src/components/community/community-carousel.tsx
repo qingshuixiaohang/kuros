@@ -187,9 +187,10 @@ export function CommunityHeroCarousel({ label, slides }: { label: string; slides
       const position = offset === 0 ? "current" : offset === -1 ? "previous" : offset === 1 ? "next" : "hidden";
       return <article aria-hidden={position !== "current"} className={`community-banner-slide community-banner-slide--${position}`} key={slide.src}>
         <Image alt={position === "current" ? slide.alt : ""} fill priority={position === "current"} sizes="(max-width: 720px) 100vw, 880px" src={slide.src} />
-        {position === "current" && <div className="banner-copy"><div className="banner-logo">{slide.title}<small>WUTHERING WAVES</small></div><p>{slide.description}</p></div>}
+        
       </article>;
     })}</div>
+    <div className="banner-copy"><strong>{slides[activeIndex].title}</strong><span>{slides[activeIndex].description}</span></div>
     {slides.length > 1 && <>
       <button aria-label="上一张 Banner" className="community-banner-arrow community-banner-arrow--previous" onClick={() => move(-1)} type="button"><ChevronLeft size={19} /></button>
       <button aria-label="下一张 Banner" className="community-banner-arrow community-banner-arrow--next" onClick={() => move(1)} type="button"><ChevronRight size={19} /></button>
