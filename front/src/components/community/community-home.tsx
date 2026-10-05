@@ -207,7 +207,7 @@ export function RightRail() {
   return <aside className="right-rail" aria-label="推荐与工具">
     <section className="right-panel" id="news">
       <div className="panel-tabs"><button className={tab === "recommend" ? "is-active" : ""} onClick={() => setTab("recommend")} type="button">推荐</button><button className={tab === "news" ? "is-active" : ""} onClick={() => setTab("news")} type="button">资讯</button></div>
-      <div className="ranking-list">{items.map((item) => <Link className="ranking-item" href={"/news/" + item.id} key={item.id}><span className={"rank rank-" + item.rank}>{item.rank}</span><span className="ranking-title">{item.title}</span>{item.hot ? <b>热</b> : null}</Link>)}</div>
+      <div className="ranking-list">{items.map((item) => { const chip = item.category === "官方公告" ? { kind: "official", label: "官方" } : item.category === "活动资讯" ? { kind: "activity", label: "活动" } : { kind: "info", label: "资讯" }; return <Link className="ranking-item" href={"/news/" + item.id} key={item.id}><span className={"news-chip news-chip--" + chip.kind}>{chip.label}</span><span className="ranking-title">{item.title}</span></Link>; })}</div>
     </section>
     <section aria-label="快捷工具" className="right-panel tools-panel" id="tools">
       <div className="panel-title"><h2>实用工具</h2><Link href="/tools">更多 <ChevronRight size={14} /></Link></div>
