@@ -134,7 +134,7 @@ test("首页 Banner 支持桌面端层叠轮播并在移动端收起侧卡", asy
   const banner = page.getByRole("region", { name: "社区头图轮播" });
   await expect(banner).toBeVisible();
   await expect(banner.locator(".community-banner-slide--current img")).toBeVisible();
-  await expect(banner.locator(".community-banner-slide--previous")).toHaveCSS("opacity", "0.92");
+  await expect(banner.locator(".community-banner-slide--previous")).toHaveCSS("opacity", "1");
   await banner.getByRole("button", { name: "下一张 Banner" }).click();
   await expect(banner.getByRole("tab", { name: "社区头图轮播第 2 张" })).toHaveAttribute("aria-current", "true");
 
