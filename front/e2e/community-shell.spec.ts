@@ -21,13 +21,13 @@ for (const viewport of [
   });
 }
 
-test("首页桌面端保留 320px 推荐工具栏，小屏时收起", async ({ page }) => {
+test("首页桌面端保留 300px 推荐工具栏，小屏时收起", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/");
 
   const rail = page.getByRole("complementary", { name: "推荐与工具" });
   await expect(rail).toBeVisible();
-  await expect(rail).toHaveCSS("width", "320px");
+  await expect(rail).toHaveCSS("width", "300px");
 
   await page.setViewportSize({ width: 1024, height: 900 });
   await expect(rail).toBeHidden();
