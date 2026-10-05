@@ -190,7 +190,6 @@ export function CommunityHeroCarousel({ label, slides }: { label: string; slides
         
       </article>;
     })}</div>
-    <div className="banner-copy"><strong>{slides[activeIndex].title}</strong><span>{slides[activeIndex].description}</span></div>
     {slides.length > 1 && <>
       <button aria-label="上一张 Banner" className="community-banner-arrow community-banner-arrow--previous" onClick={() => move(-1)} type="button"><ChevronLeft size={19} /></button>
       <button aria-label="下一张 Banner" className="community-banner-arrow community-banner-arrow--next" onClick={() => move(1)} type="button"><ChevronRight size={19} /></button>
