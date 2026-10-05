@@ -2,6 +2,7 @@
     <configuration default="false" name="user :8091" type="Application" factoryName="Application">
     <option name="MAIN_CLASS_NAME" value="com.kuros.kurosuser.KurosUserApplication" />
     <module name="kuros-user" />
+    <option name="SHORTEN_COMMAND_LINE" value="ARGS_FILE" />
     <option name="VM_PARAMETERS" value="-Dfile.encoding=UTF-8 -Xmx512m -Xms256m -XX:MaxMetaspaceSize=256m" />
     <env name="SERVER_PORT" value="8091" />
     <method v="2">

@@ -2,6 +2,7 @@
     <configuration default="false" name="gateway :8080" type="Application" factoryName="Application">
     <option name="MAIN_CLASS_NAME" value="com.kuros.kurosgateway.KurosGatewayApplication" />
     <module name="kuros-gateway" />
+    <option name="SHORTEN_COMMAND_LINE" value="ARGS_FILE" />
     <option name="VM_PARAMETERS" value="-Dfile.encoding=UTF-8 -Xmx384m -XX:MaxMetaspaceSize=224m" />
     <method v="2">
       <option name="Make" enabled="true" />

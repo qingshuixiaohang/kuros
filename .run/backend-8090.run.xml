@@ -2,6 +2,7 @@
     <configuration default="false" name="backend :8090" type="Application" factoryName="Application">
     <option name="MAIN_CLASS_NAME" value="com.kuros.kurosbackend.KurosBackendApplication" />
     <module name="kuros-backend" />
+    <option name="SHORTEN_COMMAND_LINE" value="ARGS_FILE" />
     <option name="VM_PARAMETERS" value="-Dfile.encoding=UTF-8 -Xmx640m -Xms256m -XX:MaxMetaspaceSize=288m" />
     <env name="SERVER_PORT" value="8090" />
     <method v="2">
