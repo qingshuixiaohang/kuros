@@ -120,7 +120,7 @@ test("桌面端已登录账户区：点头像展开账户面板，含个人中�
   await page.goto("/");
   const avatarButton = page.getByRole("button", { name: "打开账户菜单" });
   await expect(avatarButton).toBeVisible();
-  await avatarButton.click();
+  await avatarButton.hover();
   const menu = page.getByRole("menu", { name: "账户面板" });
   const profileItem = menu.getByRole("menuitem", { name: "个人中心" });
   const logoutItem = menu.getByRole("menuitem", { name: "退出登录" });
