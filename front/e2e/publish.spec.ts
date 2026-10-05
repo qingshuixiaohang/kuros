@@ -34,7 +34,9 @@ test("发布编辑器桌面端使用聚焦布局并保留核心字段", async ({
   await mockAuth(page);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/publish");
-  await expect(page.getByRole("button", { name: "退出" })).toBeVisible();
+  // 账户区改悬停下拉面板：头像悬停展开，面板内含退出登录
+  await page.getByRole("button", { name: "打开账户菜单" }).hover();
+  await expect(page.getByRole("menuitem", { name: "退出登录" })).toBeVisible();
 
   const editor = page.getByRole("form", { name: "发布编辑器" });
   await expect(editor).toBeVisible();
