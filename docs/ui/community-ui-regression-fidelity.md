@@ -150,3 +150,11 @@
 - 当前卡 92%→94%、侧卡 scale .96/translateX ∓94%/∓6%/opacity .92 —— 只露细边；圆角 6→8px
 - feed tabs 改库街区文案：推荐→“默认”、最新→“最新发布”（关注保留为本站功能），激活项加 Check 对勾图标
 - 测试：banner 侧卡透明度断言 .88→.92；全套 70/70 绿
+
+### 2026-10-05 第十二轮：轮播动画/箭头/去对勾（用户指认 + 修一个隐蔽 CSS 事故）
+
+- 幻灯片加 0.5s 平滑过渡（此前无 transition，切换是瞬移——“没轮播效果”）
+- 箭头修复：历史上半删规则留下**孤立选择器残片**（`.community-banner-slide--current ` / `.community-banner:hover ` 两行无花括号文本），把箭头规则吃成 `.community-banner-slide--current .community-banner-arrow` 后代选择器 → 箭头完全失配（19px 裸奔）。删除残片后恢复 34px 圆形常驻按钮
+- feed tab 去激活对勾（库街区激活态仅为加粗+青色下划线）
+- 验证：箭头 34px/grid/圆角、过渡 0.5s、自动轮播 6.5s 切换、71/71 绿
+- 教训：删除 CSS 规则时必须整条（含多行选择器），半删会产生吞掉下一条规则的孤立选择器——本轮排查靠浏览器 getComputedStyle + styleSheets 规则转储定位
