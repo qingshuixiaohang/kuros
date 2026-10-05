@@ -112,23 +112,23 @@ test("减少动画偏好下帖子互动滚动使用 auto", async ({ page }) => {
   await expect.poll(() => page.evaluate(() => (window as typeof window & { scrollBehaviors?: unknown[] }).scrollBehaviors?.at(-1))).toBe("auto");
 });
 
-test("桌面端已登录账户区清晰区分个人中心与退出", async ({ page }) => {
+test("桌面端已登录账户区：点头像展开账户面板，含个人中心与退出", async ({ page }) => {
   await page.route("**/api/v1/auth/me", (route) => route.fulfill({ json: { data: {
     id: "user-100", phone: "13800000001", nickname: "潮声档案员", avatarUrl: null, bio: "记录鸣潮实战", role: "USER",
   } } }));
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/");
-  const avatarLink = page.getByRole("link", { name: "打开个人中心" });
-  const profileLink = page.getByRole("link", { name: "个人中心", exact: true });
-  const logoutButton = page.getByRole("button", { name: "退出登录" });
-  await expect(profileLink).toBeVisible();
-  await expect(logoutButton).toBeVisible();
-  await expect(profileLink).toHaveAttribute("href", "/profile");
-  await avatarLink.focus();
-  await page.keyboard.press("Tab");
-  await expect(profileLink).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(logoutButton).toBeFocused();
+  const avatarButton = page.getByRole("button", { name: "打开账户菜单" });
+  await expect(avatarButton).toBeVisible();
+  await avatarButton.click();
+  const menu = page.getByRole("menu", { name: "账户面板" });
+  const profileItem = menu.getByRole("menuitem", { name: "个人中心" });
+  const logoutItem = menu.getByRole("menuitem", { name: "退出登录" });
+  await expect(profileItem).toBeVisible();
+  await expect(profileItem).toHaveAttribute("href", "/profile");
+  await expect(logoutItem).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(menu).not.toBeVisible();
 });
 
 test("评论编辑器提供表情、图片和提及工具", async ({ page }) => {
