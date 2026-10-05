@@ -112,17 +112,19 @@ test("首页内容流在有配图时展示可访问的帖子媒体", async ({ pa
   await expect(feed.getByRole("img", { name: /帖子配图/ }).first()).toBeVisible();
 });
 
-test("首页多图帖子可以通过轮播控件逐张查看", async ({ page }) => {
+test("首页多图帖子以宫格缩略图展示并新标签打开帖子", async ({ page }) => {
   await page.route("http://localhost:8080/api/v1/posts?*", (route) => route.abort());
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/");
 
-  const carousel = page.getByRole("region", { name: /长离焚火队.*帖子配图轮播/ });
-  await expect(carousel).toBeVisible();
-  await expect(carousel.getByRole("img")).toHaveAttribute("alt", /第 1 张/);
-  await carousel.getByRole("button", { name: "下一张" }).click();
-  await expect(carousel.getByRole("img")).toHaveAttribute("alt", /第 2 张/);
-  await expect(carousel.getByRole("tab", { name: "第 2 张" })).toHaveAttribute("aria-current", "true");
+  // 库街区同款：多图为方形缩略图宫格（不再是大图轮播）
+  const firstCard = page.locator(".post-card").first();
+  const grid = firstCard.locator(".post-media-grid");
+  await expect(grid).toBeVisible();
+  await expect(grid.locator(".post-media-grid-item")).toHaveCount(3);
+  const thumb = grid.locator(".post-media-grid-item").first();
+  await expect(thumb).toHaveAttribute("target", "_blank");
+  await expect(thumb).toHaveAttribute("rel", /noopener/);
 });
 
 test("首页 Banner 支持桌面端层叠轮播并在移动端收起侧卡", async ({ page }) => {
