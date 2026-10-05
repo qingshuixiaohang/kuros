@@ -133,6 +133,8 @@ services:
     profiles: ["full"]
     restart: unless-stopped
     environment:
+      # 裸跑默认端口已改为 8090/8091（开发模式拓扑），容器内恒为 8080：显式注入覆盖
+      SERVER_PORT: 8080
       DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-kuros}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8
       DB_USERNAME: ${MYSQL_USER:-kuros}
       DB_PASSWORD: ${MYSQL_PASSWORD:-kuros_dev_password}
@@ -241,6 +243,7 @@ services:
     profiles: ["full"]
     restart: unless-stopped
     environment:
+      SERVER_PORT: 8080
       DB_URL: jdbc:mysql://mysql:3306/kuros_user?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8
       DB_USERNAME: ${MYSQL_USER:-kuros}
       DB_PASSWORD: ${MYSQL_PASSWORD:-kuros_dev_password}
