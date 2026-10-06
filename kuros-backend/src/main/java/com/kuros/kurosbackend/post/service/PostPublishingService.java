@@ -30,6 +30,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -159,7 +161,18 @@ public class PostPublishingService {
     }
 
     private String summarize(String content) {
-        String plain = content.replaceAll("[#>*_`~-]", " ").replaceAll("\\s+", " ").trim();
+        // 摘要兜底前先剥 Markdown 结构语法（真实踩坑：图片帖摘要原样展示 "!![O7.jpg](http://...)"，
+        // 且 URL 里的连字符被当列表符号打成空格）：图片语法整段剔除（裸 URL 不是可读摘要）、
+        // 链接语法保留链接文字；剥完为空（纯图片帖）则回退用首图 alt 兜底，避免摘要空白。
+        Matcher image = Pattern.compile("!\\[([^\\]]*)\\]\\([^)]*\\)").matcher(content);
+        String firstImageAlt = image.find() ? image.group(1).trim() : "";
+        String plain = content
+                .replaceAll("!\\[[^\\]]*\\]\\([^)]*\\)", " ")
+                .replaceAll("\\[([^\\]]*)\\]\\([^)]*\\)", "$1")
+                .replaceAll("[#>*_`~-]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (plain.isEmpty() && !firstImageAlt.isEmpty()) plain = firstImageAlt;
         return plain.length() <= 500 ? plain : plain.substring(0, 500);
     }
 
