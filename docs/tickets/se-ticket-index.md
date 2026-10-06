@@ -33,5 +33,5 @@ se-01(spike) ─→ se-02(基建)
 - **TDD**：每个 ticket 先写失败测试再实现最小行为；se-07 做跨切面集成测试 + 性能验证收口。
 - **spike 优先**：se-01 是 tracer-bullet 第一发，跑通 Spring Data ES + ik 才铺开；踩坑则据 go/no-go 结论回退原生 ES Java Client。
 - **耗时测试纪律**：全量 `mvn test`、Testcontainers 集成、compose 冒烟、性能压测**交用户/CI**；AI 只做编译级快验（`test-compile` / `compose config` / `node --check`）。
-- **收益表述纪律**：只用可验证结构性指标 + 实测数据，不编造 TPS/RT 并发数字（CONTEXT.md 方向纠偏）。
+- **收益表述纪律**：只用可验证结构性指标 + 实测数据，不编造 TPS/RT 并发数字（GLOSSARY.md 方向纠偏）。
 - **关键正确性约束**（se-03 起全程遵守）：CDC 消费端**回源组装**（不直接用 FlatMessage data 拼文档），binlog 单表行缺 tags(join)/authorName(跨库)；ES `_id=postId` 保幂等；逻辑删靠 status 过滤保可逆。

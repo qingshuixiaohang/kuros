@@ -17,12 +17,13 @@
 
 后续新增功能必须严格遵循 `ask-matt` 主流程，不因对话变长或实现方便而跳步：
 
-1. `grill-with-docs`：澄清需求、边界和验收标准，并把关键决定写入 `CONTEXT.md` 或 ADR。
+1. `grill-with-docs`：澄清需求、边界和验收标准，并把关键决定写入 `GLOSSARY.md` 或 ADR。
 2. `to-spec`：多会话功能先形成可实现的规格；单会话小改动也要在 Issue 中写清范围。
 3. `to-tickets`：拆成可独立验收的垂直 Issue，声明依赖和阻塞边。
-4. `implement` + `TDD`：按 Issue 工作，先写失败测试，再实现最小行为，最后补边界测试。
+4. `implement` + `TDD`：按 Issue 工作，先写失败测试，再实现最小行为，最后补边界测试。多工单并行时可用 `implement-spec`：它把工单读作任务图，为就绪工单并行启动子代理（各自独立 worktree），全部合到一个集成分支后统一 `code-review`。
 5. `code-review`：提交前从规范和规格两个维度审查差异，修复发现的问题。
 6. `commit / PR / Issue`：提交、推送 PR，回写测试结果、已知限制和关联关系。
+7. `retro`：会话收尾复盘——改进的是 agent 的工作环境而非代码：机械性错误固化为确定性检查（linter 规则 / pre-commit / CI 任务），判断性错误写入编码规范；本文件与 GLOSSARY.md 是复盘结论的落点。
 
 如果上下文接近上限，必须先在阶段边界执行 `compact` 或 `handoff`，保留当前规格、Issue、测试和未完成项；恢复后从最近的阶段继续，不得凭记忆跳过 `to-spec`、`to-tickets`、TDD 或 Review。已有历史代码可以保持原状，但从下一项功能开始执行本流程。
 

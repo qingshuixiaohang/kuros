@@ -6,7 +6,7 @@
 > Canal 伪装 slave 订阅 binlog 经 RocketMQ 做 CDC 增量索引。共 8 个工单（se-01~08），本文是收口复盘。
 >
 > **纪律声明**：本文所有性能/延迟数字均来自实测——CDC 延迟来自 `scripts/search-cdc-smoke.mjs` 全栈冒烟，
-> perf 对比来自 `SearchPerfBenchmark`（前缀 `[PERF]`），**严禁编造 TPS/RT/并发数字**（CONTEXT.md 方向纠偏）。
+> perf 对比来自 `SearchPerfBenchmark`（前缀 `[PERF]`），**严禁编造 TPS/RT/并发数字**（GLOSSARY.md 方向纠偏）。
 
 ## 1. 架构迁移全景
 

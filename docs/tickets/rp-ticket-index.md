@@ -32,5 +32,5 @@
 - 每个 ticket 是一个可独立验收的垂直切片，按 frontier 顺序执行；缓存轨与游标轨可并行。
 - **TDD**：每个 ticket 先写失败测试再实现最小行为；rp-07 做跨切面集成测试 + 性能验证收口。
 - **耗时测试纪律**：全量 `mvn test`、Testcontainers 集成、compose 冒烟、性能压测**交用户/CI**；AI 只做编译级快验（`test-compile` / `compose config` / `node --check`）。
-- **收益表述纪律**：只用可验证结构性指标 + 实测数据，不编造 TPS/RT 并发数字（CONTEXT.md 方向纠偏）。
+- **收益表述纪律**：只用可验证结构性指标 + 实测数据，不编造 TPS/RT 并发数字（GLOSSARY.md 方向纠偏）。
 - **关键架构不变量**（rp-01 起全程遵守）：postDetail 缓存只存内容字段，互动计数永远从 #11 实时 Redis 源叠加，不进缓存。

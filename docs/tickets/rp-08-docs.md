@@ -11,7 +11,7 @@
 - [x] `docs/learning/README.md` 表格补 #13 行
 - [x] Issue #73 回写：测试结果（83/0/0/2skip + CI 全绿）、perf 实测数据、已知限制（pub/sub 丢消息 L1 短 TTL 10s 兜底、空值哨兵 30s 窗口、游标不支持跳页）、关联 PR #74——comment 已发（issuecomment-5787148154，核对无重复）
 - [x] 提交 PR（`feat(slice-13): 读路径加固——两级缓存 + 互斥锁防击穿 + 游标分页`），关联 Issue #73（body 含 Closes #73）——PR #74 OPEN/MERGEABLE，CI run 35801061203 全 5 job pass（Backend 6m4s、Deployment 4m28s、Frontend 45s、Gateway 1m4s、User 1m56s）
-- [x] CONTEXT.md / ADR 0006 / spec 已在 grill 阶段落库，确认无遗漏
+- [x] GLOSSARY.md / ADR 0006 / spec 已在 grill 阶段落库，确认无遗漏
 
 ## code-review 结论（s13-review）
 

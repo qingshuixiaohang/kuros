@@ -27,4 +27,4 @@ int-02 ─┴───────────┼─→ int-04 ─→ int-05 ─
 
 - 每个 ticket 是一个可独立验收的垂直切片，按 frontier 顺序执行。
 - **耗时测试纪律**：全量 `mvn test`、RocketMQ Testcontainers 端到端、compose 冒烟**交用户/CI**；AI 只做编译级快验（`test-compile` / `compose config` / `node --check`）。
-- 收益表述纪律：只用可验证结构性指标，不编造 TPS/RT 并发数字（CONTEXT.md L170）。
+- 收益表述纪律：只用可验证结构性指标，不编造 TPS/RT 并发数字（GLOSSARY.md L170）。

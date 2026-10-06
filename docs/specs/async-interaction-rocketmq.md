@@ -1,7 +1,7 @@
 # Spec: 切片 #11 —— 互动写路径异步化（Redis 计数前置 + RocketMQ 顺序消息落库）
 
-> 关联：ADR `docs/adr/0004-async-interaction-rocketmq.md`；术语见 `CONTEXT.md`（互动 / 热点内容 / 实时计数）。
-> 遵循 CONTEXT.md L169「切片定义模式（强制）」四段式：① 难点叙事 → ② 方案选型 → ③ 功能载体 → ④ 验证与叙事。
+> 关联：ADR `docs/adr/0004-async-interaction-rocketmq.md`；术语见 `GLOSSARY.md`（互动 / 热点内容 / 实时计数）。
+> 遵循 GLOSSARY.md L169「切片定义模式（强制）」四段式：① 难点叙事 → ② 方案选型 → ③ 功能载体 → ④ 验证与叙事。
 
 ---
 
@@ -40,7 +40,7 @@
 | E. RocketMQ 事务消息（half message） | ✅ | ✅ | ✅ | ✅ | 拒：本方案关系落库在消费端、请求线程无本地 DB 事务，事务消息过度设计 |
 | F. `@Async` 线程池异步替代 MQ | ✅ | ✅ | ❌ 重启丢任务、无重试/死信、不跨实例削峰 | ❌ | 拒：进程内异步不是「异步主线」正解 |
 
-**选 A 的核心理由**：只有「Redis 前置」能同时满足即时反馈 + 请求线程脱离 DB 写；只有「按 postId 顺序消息」能把同一热点内容的计数变更串行到单队列单线程**根除**跨用户 DB 行锁竞争（不同帖仍并行、不降吞吐）；RocketMQ 原生重试 / 死信 / 削峰兑现「可靠异步」叙事，且与 CONTEXT.md L171 技术栈锁定一致。
+**选 A 的核心理由**：只有「Redis 前置」能同时满足即时反馈 + 请求线程脱离 DB 写；只有「按 postId 顺序消息」能把同一热点内容的计数变更串行到单队列单线程**根除**跨用户 DB 行锁竞争（不同帖仍并行、不降吞吐）；RocketMQ 原生重试 / 死信 / 削峰兑现「可靠异步」叙事，且与 GLOSSARY.md L171 技术栈锁定一致。
 
 ### 客户端选型
 
@@ -159,7 +159,7 @@ InteractionEvent {
   7. 游客 GET 快照：未登录返回计数、`liked/favorited=false`。
 - **测试隔离**：沿用 `TestDatabases`（唯一 H2 库名工厂）+ Surefire `reuseForks=false` 每类独立 JVM + `@DirtiesContext` + Testcontainers Redis；RocketMQ 容器测试单独类，避免与 H2 上下文串味。
 
-### 4.3 叙事产出（切片 DoD 增量，CONTEXT.md L168）
+### 4.3 叙事产出（切片 DoD 增量，GLOSSARY.md L168）
 
 - **STAR 面试故事** + **≥5 条追问链回答清单**（如：为何顺序消息而非并发？Redis 与 DB 计数漂移如何对账？降级如何保证不丢？幂等如何保证？为何不用事务消息？热帖 Set 内存如何治理？）
 - **方案对比表**（含适用边界）——即本 spec ② 节。

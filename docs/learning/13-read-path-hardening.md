@@ -6,7 +6,7 @@
 > （L1 Caffeine + L2 Redis 两级 + pub/sub 跨节点失效）。共 8 个工单（rp-01~08），本文是收口复盘。
 >
 > **纪律声明**：本文性能数字全部来自 `ReadPathPerfBenchmark` 的实测输出（前缀 `[PERF]`），
-> 无压测数据处只做结构性论证，**严禁编造 TPS/RT/并发数字**（CONTEXT.md 方向纠偏）。
+> 无压测数据处只做结构性论证，**严禁编造 TPS/RT/并发数字**（GLOSSARY.md 方向纠偏）。
 
 ## 1. 架构迁移全景
 

@@ -6,7 +6,7 @@
 
 ## 背景与问题
 
-ADR 0001 和 CONTEXT.md 2026-09-16 决策确立了单体基线：Cookie 会话、Spring Security 过滤器链、Session 存 MySQL `user_sessions` 表、验证码存 ConcurrentHashMap。这在 MVP 阶段是合理的，但随着项目向微服务演进（参照犬小哈《Spring Cloud Alibaba 小哈书》），当前方案暴露出以下结构性问题：
+ADR 0001 和 GLOSSARY.md 2026-09-16 决策确立了单体基线：Cookie 会话、Spring Security 过滤器链、Session 存 MySQL `user_sessions` 表、验证码存 ConcurrentHashMap。这在 MVP 阶段是合理的，但随着项目向微服务演进（参照犬小哈《Spring Cloud Alibaba 小哈书》），当前方案暴露出以下结构性问题：
 
 1. **每次认证请求查两次 DB**：`SessionAuthenticationFilter` 对每个携带 Cookie 的请求执行 `findByTokenHash` + `findById`，高并发下数据库成为瓶颈。
 2. **会话无法跨实例共享**：虽然 Session 存在 MySQL（重启不丢），但多实例部署时每个实例的 `SecurityContextHolder` 是独立的，无法水平扩展。
