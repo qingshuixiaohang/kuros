@@ -12,6 +12,7 @@ import { useCommunityDemo } from "@/components/community/community-interactions"
 import { ApiError, createComment, deleteComment, favoritePost, fetchComments, fetchPost, fetchPostInteractions, likePost, unfavoritePost, unlikePost, type ApiComment, type PostInteraction, type ReportTargetType } from "@/lib/api";
 import { guides } from "@/lib/mock";
 import { DEMO_COVER_BY_SLUG, DEMO_POST_ID_BY_SLUG, extractMarkdownImages , formatPublishedAt } from "@/lib/post-view";
+import { parseMarkdownHeading, renderMarkdown, sectionIdForTitle } from "./markdown";
 import type { Guide } from "@/types/community";
 
 type CommentItem = {
@@ -58,19 +59,6 @@ function commentFromApi(comment: ApiComment, authorName: string, index: number):
 function formatCount(value: number) {
   if (value >= 10000) return (value / 10000).toFixed(value >= 100000 ? 0 : 1).replace(/\.0$/, "") + "w";
   return String(value);
-}
-
-function sectionIdForTitle(title: string, index: number) {
-  if (title.includes("先确定") || title.includes("队伍节奏")) return "section-team-rhythm";
-  if (title.includes("角色与声骸")) return "section-character-echoes";
-  if (title.includes("实战检查")) return "section-checklist";
-  const normalized = title.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-").replace(/^-|-$/g, "");
-  return `section-${normalized || index + 1}`;
-}
-
-function parseMarkdownHeading(value: string) {
-  const match = value.trim().match(/^#{1,2}\s+(.+)$/);
-  return match?.[1].trim() ?? null;
 }
 
 function getArticleSections(content?: string): ArticleSection[] {
@@ -239,76 +227,6 @@ function PostComments({ postId, authorName, onReport }: { postId: string; author
     {loading && <p className="comment-inline-status">正在整理漂泊者的留言…</p>}
     <div className="comment-list">{visibleComments.map((comment) => <article className={"comment-item" + (comment.parentId ? " comment-item--reply" : "") + (comment.pinned ? " comment-item--pinned" : "")} key={comment.id}><div className={"author-avatar author-avatar--" + comment.tone}>{comment.mark}</div><div className="comment-item-main"><div className="comment-item-meta"><strong>{comment.author}{comment.authorComment && <em>楼主</em>}{comment.pinned && <em className="pinned-badge">置顶</em>}</strong><span>{comment.floor} · {comment.date}</span></div><p className={comment.deleted ? "comment-deleted" : ""}>{comment.content}</p><div className="comment-item-actions"><span className="comment-like-count"><ThumbsUp size={14} />{comment.likes}</span>{!comment.deleted && !comment.parentId && <button type="button" onClick={() => { if (loggedIn) setReplyTo(comment.id); else requestLogin(() => setReplyTo(comment.id)); }}>回复</button>}<button type="button" onClick={() => onReport(comment.id)}>举报</button>{user?.id === comment.authorId && !comment.deleted && <button type="button" onClick={() => void removeComment(comment.id)}>删除</button>}</div></div></article>)}</div>
   </section>;
-}
-
-function isSafeMarkdownImageUrl(value: string) {
-  return value.startsWith("/media/") || /^https?:\/\//i.test(value);
-}
-
-function MarkdownImage({ src, alt }: { src: string; alt: string }) {
-  // eslint-disable-next-line @next/next/no-img-element
-  return <img alt={alt} loading="lazy" src={src} />;
-}
-
-function isSafeMarkdownLinkUrl(value: string) {
-  return value.startsWith("/") || /^https?:\/\//i.test(value);
-}
-
-function renderInlineMarkdown(value: string, keyPrefix: string): ReactNode[] {
-  const pattern = /(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(`([^`]+)`)|(\[([^\]]+)\]\(([^)\s]+)\))/g;
-  const nodes: ReactNode[] = [];
-  let cursor = 0;
-  let match: RegExpExecArray | null;
-  let nodeIndex = 0;
-  while ((match = pattern.exec(value)) !== null) {
-    if (match.index > cursor) nodes.push(value.slice(cursor, match.index));
-    if (match[2]) nodes.push(<strong key={`${keyPrefix}-${nodeIndex}`}>{match[2]}</strong>);
-    else if (match[4]) nodes.push(<em key={`${keyPrefix}-${nodeIndex}`}>{match[4]}</em>);
-    else if (match[6]) nodes.push(<code key={`${keyPrefix}-${nodeIndex}`}>{match[6]}</code>);
-    else if (match[8] && isSafeMarkdownLinkUrl(match[9])) nodes.push(<a href={match[9]} key={`${keyPrefix}-${nodeIndex}`}>{match[8]}</a>);
-    else nodes.push(match[0]);
-    cursor = match.index + match[0].length;
-    nodeIndex += 1;
-  }
-  if (cursor < value.length) nodes.push(value.slice(cursor));
-  return nodes;
-}
-
-function renderMarkdownText(lines: string[], keyPrefix: string) {
-  return lines.flatMap((line, index) => index === 0 ? renderInlineMarkdown(line, `${keyPrefix}-${index}`) : [<br key={`${keyPrefix}-br-${index}`} />, ...renderInlineMarkdown(line, `${keyPrefix}-${index}`)]);
-}
-
-function renderMarkdown(content: string): ReactNode[] {
-  let headingIndex = 0;
-  return content.split(/\n\s*\n/).map((block, index) => {
-    const lines = block.split("\n");
-    const image = block.match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+["'][^)]*["'])?\)$/);
-    if (image && isSafeMarkdownImageUrl(image[2])) return <figure className="post-markdown-image" key={index}><MarkdownImage alt={image[1] || "帖子配图"} src={image[2]} /></figure>;
-    if (lines.every((line) => line.startsWith("- "))) return <ul key={index}>{lines.map((line, lineIndex) => <li key={`${index}-${lineIndex}`}>{renderInlineMarkdown(line.slice(2), `${index}-${lineIndex}`)}</li>)}</ul>;
-    if (lines.every((line) => /^\d+\.\s/.test(line))) return <ol key={index}>{lines.map((line, lineIndex) => <li key={`${index}-${lineIndex}`}>{renderInlineMarkdown(line.replace(/^\d+\.\s/, ""), `${index}-${lineIndex}`)}</li>)}</ol>;
-    if (lines.every((line) => line.startsWith("> "))) return <blockquote key={index}>{renderMarkdownText(lines.map((line) => line.slice(2)), `${index}-quote`)}</blockquote>;
-    if (lines.some((line) => parseMarkdownHeading(line))) {
-      const nodes: ReactNode[] = [];
-      let paragraphLines: string[] = [];
-      const flushParagraph = () => {
-        if (paragraphLines.length > 0) {
-          nodes.push(<p key={`${index}-paragraph-${nodes.length}`}>{renderMarkdownText(paragraphLines, `${index}-paragraph-${nodes.length}`)}</p>);
-          paragraphLines = [];
-        }
-      };
-      lines.forEach((line, lineIndex) => {
-        const heading = parseMarkdownHeading(line);
-        if (!heading) { paragraphLines.push(line); return; }
-        flushParagraph();
-        const id = sectionIdForTitle(heading, headingIndex);
-        headingIndex += 1;
-        nodes.push(line.trimStart().startsWith("# ") ? <h1 id={id} key={`${index}-heading-${lineIndex}`}>{heading}</h1> : <h2 id={id} key={`${index}-heading-${lineIndex}`}>{heading}</h2>);
-      });
-      flushParagraph();
-      return nodes;
-    }
-    return <p key={index}>{renderMarkdownText(lines, `${index}-paragraph`)}</p>;
-  }).flat();
 }
 
 function GuideArticle({ content }: { content?: string }) {

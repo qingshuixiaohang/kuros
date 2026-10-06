@@ -10,6 +10,7 @@ import { z } from "zod";
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { CommunityPageFrame } from "@/components/community/community-pages";
 import { createPost, deleteImage, fetchPost, updatePost, uploadImage } from "@/lib/api";
+import { MarkdownArticle } from "./markdown";
 
 const publishFormSchema = z.object({
   title: z.string().trim().min(1, "请输入帖子标题").max(200, "标题长度不能超过 200 个字符"),
@@ -59,6 +60,7 @@ function PublishPageContent() {
   const [error, setError] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
   const [draftMessage, setDraftMessage] = useState("");
   const [historyAvailability, setHistoryAvailability] = useState({ canUndo: false, canRedo: false });
   const [loadingEdit, setLoadingEdit] = useState(Boolean(editPostId));
@@ -124,29 +126,37 @@ function PublishPageContent() {
   const registerContent = register("content");
   return <form aria-label="发布编辑器" className="publish-editor" id="publish-editor" onSubmit={(event) => { void handleSubmit(submit)(event); }}>
     <div className="publish-toolbar" role="toolbar" aria-label="Markdown 工具栏">
-      <PublishToolbarButton label="撤销" disabled={!historyAvailability.canUndo} icon={<Undo2 size={18} />} onClick={undo} />
-      <PublishToolbarButton label="重做" disabled={!historyAvailability.canRedo} icon={<Redo2 size={18} />} onClick={redo} />
+      <PublishToolbarButton label="撤销" disabled={previewMode || !historyAvailability.canUndo} icon={<Undo2 size={18} />} onClick={undo} />
+      <PublishToolbarButton label="重做" disabled={previewMode || !historyAvailability.canRedo} icon={<Redo2 size={18} />} onClick={redo} />
       <span className="publish-toolbar-separator" />
-      <span className="publish-toolbar-mode" aria-label="当前编辑模式：正文">正文</span>
+      <span className="publish-mode-switch" role="group" aria-label="编辑与预览切换"><button aria-pressed={!previewMode} className={"publish-toolbar-mode" + (!previewMode ? " is-active" : "")} onClick={() => setPreviewMode(false)} type="button">编辑</button><button aria-pressed={previewMode} className={"publish-toolbar-mode" + (previewMode ? " is-active" : "")} onClick={() => setPreviewMode(true)} type="button">预览</button></span>
       <span className="publish-toolbar-separator" />
-      <PublishToolbarButton label="一级标题" icon={<Heading1 size={18} />} onClick={() => prefixSelectedLines("# ")} />
-      <PublishToolbarButton label="二级标题" icon={<Heading2 size={18} />} onClick={() => prefixSelectedLines("## ")} />
-      <PublishToolbarButton label="加粗" icon={<Bold size={18} />} onClick={() => replaceSelection("**", "**")} />
-      <PublishToolbarButton label="斜体" icon={<Italic size={18} />} onClick={() => replaceSelection("*", "*")} />
-      <PublishToolbarButton label="引用" icon={<Quote size={18} />} onClick={() => prefixSelectedLines("> ")} />
-      <PublishToolbarButton label="无序列表" icon={<List size={18} />} onClick={() => prefixSelectedLines("- ")} />
-      <PublishToolbarButton label="有序列表" icon={<ListOrdered size={18} />} onClick={() => prefixSelectedLines("1. ")} />
+      <PublishToolbarButton label="一级标题" disabled={previewMode} icon={<Heading1 size={18} />} onClick={() => prefixSelectedLines("# ")} />
+      <PublishToolbarButton label="二级标题" disabled={previewMode} icon={<Heading2 size={18} />} onClick={() => prefixSelectedLines("## ")} />
+      <PublishToolbarButton label="加粗" disabled={previewMode} icon={<Bold size={18} />} onClick={() => replaceSelection("**", "**")} />
+      <PublishToolbarButton label="斜体" disabled={previewMode} icon={<Italic size={18} />} onClick={() => replaceSelection("*", "*")} />
+      <PublishToolbarButton label="引用" disabled={previewMode} icon={<Quote size={18} />} onClick={() => prefixSelectedLines("> ")} />
+      <PublishToolbarButton label="无序列表" disabled={previewMode} icon={<List size={18} />} onClick={() => prefixSelectedLines("- ")} />
+      <PublishToolbarButton label="有序列表" disabled={previewMode} icon={<ListOrdered size={18} />} onClick={() => prefixSelectedLines("1. ")} />
       <span className="publish-toolbar-separator" />
-      <PublishToolbarButton label="插入链接" icon={<Link2 size={18} />} onClick={insertLink} />
-      <PublishToolbarButton label="插入图片" disabled={imageUploading} icon={<ImagePlus size={18} />} onClick={() => fileRef.current?.click()} />
+      <PublishToolbarButton label="插入链接" disabled={previewMode} icon={<Link2 size={18} />} onClick={insertLink} />
+      <PublishToolbarButton label="插入图片" disabled={previewMode || imageUploading} icon={<ImagePlus size={18} />} onClick={() => fileRef.current?.click()} />
     </div>
     <div className="publish-editor-body">
       <div className="publish-title-field"><input aria-label="帖子标题" maxLength={200} placeholder="输入标题（必填）" {...registerTitle} /><span>{title.length} / 200</span></div>
       {errors.title && <p className="publish-field-error" role="alert">{errors.title.message}</p>}
-      <div className="publish-content-field" onDragOver={(event) => event.preventDefault()} onDrop={handleImageDrop}>
-        <textarea aria-label="帖子正文" placeholder="在这里写下你的内容..." rows={18} {...registerContent} onChange={handleContentChange} ref={(element) => { registerContent.ref(element); contentRef.current = element; }} value={content} />
-        {!content && <button aria-label="上传正文图片" className="publish-upload-prompt" onClick={() => fileRef.current?.click()} type="button"><ImagePlus size={25} /><span>点击上传图片，或直接拖拽到此处</span><small>支持 PNG、JPG、WebP，单张不超过 10MB</small></button>}
-        {imageUploading && <span className="publish-uploading" role="status">图片上传中…</span>}
+      <div className="publish-content-field" onDragOver={(event) => event.preventDefault()} onDrop={previewMode ? undefined : handleImageDrop}>
+        {previewMode ? (
+          <div aria-label="正文预览" className="publish-preview">
+            {content ? <MarkdownArticle content={content} /> : <p className="publish-preview-empty">还没有内容，回到「编辑」写点什么，这里会实时展示发布后的效果。</p>}
+          </div>
+        ) : (
+          <>
+            <textarea aria-label="帖子正文" placeholder="在这里写下你的内容..." rows={18} {...registerContent} onChange={handleContentChange} ref={(element) => { registerContent.ref(element); contentRef.current = element; }} value={content} />
+            {!content && <div aria-hidden="true" className="publish-upload-prompt"><ImagePlus size={25} /><span>把图片直接拖进来，或用上方工具栏插入</span><small>支持 PNG、JPG、WebP，单张不超过 10MB</small></div>}
+            {imageUploading && <span className="publish-uploading" role="status">图片上传中…</span>}
+          </>
+        )}
         <span className="publish-content-count">{content.length} / 50000</span>
       </div>
       {errors.content && <p className="publish-field-error" role="alert">{errors.content.message}</p>}

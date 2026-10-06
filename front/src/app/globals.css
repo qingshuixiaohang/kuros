@@ -779,7 +779,18 @@ select:focus-visible {
 .publish-content-field { position: relative; min-height: 480px; margin-top: 18px; }
 .publish-content-field textarea { display: block; width: 100%; height: 480px; min-height: 360px; padding: 22px 24px 51px; border: 1px solid #dfe7ed; border-radius: 5px; outline: 0; resize: vertical; background: #fff; color: #455565; font-size: 15px; line-height: 1.85; }
 .publish-content-field textarea::placeholder { color: #9aa8b8; }
-.publish-upload-prompt { position: absolute; top: 50%; left: 50%; display: grid; justify-items: center; gap: 8px; width: min(360px, calc(100% - 32px)); padding: 20px; transform: translate(-50%, -50%); background: transparent; color: #98a6b5; font-size: 14px; }
+.publish-upload-prompt { position: absolute; top: 50%; left: 50%; display: grid; justify-items: center; gap: 8px; width: min(360px, calc(100% - 32px)); padding: 20px; transform: translate(-50%, -50%); background: transparent; color: #98a6b5; font-size: 14px; pointer-events: none; }
+/* 实测坑（2026-10-06）：提示浮层曾是可以点击的 button，盖住空正文编辑区正中心——
+   用户想点进去打字，弹出的却是文件选择框。改为纯提示（pointer-events: none），
+   上传入口收敛到工具栏"插入图片"按钮 + 拖拽。 */
+.publish-mode-switch { display: inline-flex; flex: 0 0 auto; gap: 2px; padding: 2px; border-radius: 6px; background: #f0f3f6; }
+.publish-mode-switch .publish-toolbar-mode { border-radius: 4px; }
+.publish-toolbar-mode.is-active { background: #fff; color: #0dbbc5; box-shadow: 0 1px 3px rgba(31, 36, 42, .12); }
+.publish-mode-switch .publish-toolbar-mode:hover { background: #fff; }
+.publish-mode-switch .publish-toolbar-mode.is-active:hover { background: #fff; }
+.publish-preview { min-height: 480px; padding: 22px 24px 40px; border: 1px solid #dfe7ed; border-radius: 5px; background: #fff; overflow: auto; }
+.publish-preview .post-detail-body { padding: 0; }
+.publish-preview-empty { color: #9aa8b8; }
 .publish-upload-prompt svg { color: #708397; }
 .publish-upload-prompt small { color: #aab5c1; font-size: 13px; }
 .publish-upload-prompt:hover, .publish-upload-prompt:focus-visible { color: #0dbbc5; }
