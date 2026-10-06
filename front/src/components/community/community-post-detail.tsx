@@ -385,11 +385,6 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
       {usingDemo && <p className="api-fallback-note">{status === "loading" ? "正在从后端加载最新内容…" : "后端暂不可用，当前显示本地 Demo 数据。"}</p>}
     </article>
     <PostAuthorCard authorId={authorId} guide={guide} sections={sections} />
-        <section className="post-meta-card">
-          <h2>分区与话题</h2>
-          <div className="post-meta-row"><span>分区</span><strong>{guide.category}</strong></div>
-          {guide.tags.length > 0 && <div className="post-meta-row"><span>话题</span><div className="post-meta-tags">{guide.tags.map((tag) => <Link href={"/search?q=" + encodeURIComponent(tag)} key={tag}>#{tag}</Link>)}</div></div>}
-        </section>
     {reportTarget && <CommunityReportDialog onClose={() => setReportTarget(null)} onSuccess={() => setReportTarget(null)} targetId={reportTarget.id} targetType={reportTarget.type} />}
   </div></CommunityPageFrame>;
 }
