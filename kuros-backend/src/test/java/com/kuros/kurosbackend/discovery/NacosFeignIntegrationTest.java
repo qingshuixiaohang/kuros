@@ -72,6 +72,9 @@ class NacosFeignIntegrationTest {
         registry.add("spring.cloud.nacos.discovery.register-enabled", () -> "false");
         // 关键：url 留空 → Feign 走 lb://kuros-user（经 Nacos 发现），而非直连桩
         registry.add("app.feign.kuros-user.url", () -> "");
+        // sec-01 A2 漏洞修复：内部共享密钥，与桩的期望值同源（UserDirectoryStub 默认
+        // 期望 "test-internal-token"）。漏配 → Feign 请求被桩 401 → 本测试红。
+        registry.add("app.internal.token", () -> "test-internal-token");
         registry.add("spring.datasource.url", () -> TestDatabases.h2Url("nacos-feign"));
     }
 

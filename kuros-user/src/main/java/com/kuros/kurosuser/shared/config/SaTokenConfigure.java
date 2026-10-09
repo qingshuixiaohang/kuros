@@ -26,15 +26,27 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class SaTokenConfigure implements WebMvcConfigurer {
 
     private final CsrfInterceptor csrfInterceptor;
+    private final InternalTokenInterceptor internalTokenInterceptor;
 
-    public SaTokenConfigure(CsrfInterceptor csrfInterceptor) {
+    public SaTokenConfigure(CsrfInterceptor csrfInterceptor, InternalTokenInterceptor internalTokenInterceptor) {
         this.csrfInterceptor = csrfInterceptor;
+        this.internalTokenInterceptor = internalTokenInterceptor;
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        // SaToken 鉴权拦截器（order 0，先于 CSRF 执行）。
-        // 为什么鉴权在前、CSRF 在后？旧版 Spring Security 的 CSRF 忽略条件就是“匿名请求”
+        // 内部 API 共享密钥校验（order 0，最先执行，sec-01 A2 漏洞修复）。
+        // 为什么排在最前：它是"这个前缀归谁管"的第一道门——凭证不对就 401，
+        // 后面的会话鉴权、CSRF、业务逻辑都不该被执行。若顺序靠后，无凭证请求会
+        // 先被 SaToken 拦成 UNAUTHORIZED（语义错），调用方无法区分两类失败。
+        // addPathPatterns 精确限定 /internal/**：这个范围之外一律不生效，
+        // 公开认证链路（/api/v1/auth/**）因此完全不受影响。
+        registry.addInterceptor(internalTokenInterceptor)
+                .addPathPatterns("/internal/**")
+                .order(0);
+
+        // SaToken 鉴权拦截器（order 1，次于内部令牌校验）。
+        // 为什么鉴权在前、CSRF 在后？旧版 Spring Security 的 CSRF 忽略条件就是"匿名请求"
         // （ignoringRequestMatchers(request -> authentication == null || anonymous)），即：
         // 游客写操作先吃 401，只有已登录用户才轮到 CSRF 校验。
         // 若顺序反了（CSRF 在前），游客不带 Cookie 的写操作会得到 403 而非 401，破坏 API 契约
@@ -56,23 +68,25 @@ public class SaTokenConfigure implements WebMvcConfigurer {
 
             // 其余所有路由要求登录（auth 与 internal 前缀除外）——对齐旧版 anyRequest().authenticated()
             // 为什么 /internal/** 要免会话：内部 API（split-07 新增）面向服务间调用（split-08 起 backend 经 Feign 消费），
-            // 不带用户会话 Cookie 也无 CSRF token；它的安全边界在生产由网络层承担（mTLS/内部 token，见 InternalUserController 注释），
-            // 而不是本服务的会话鉴权。注：CSRF 拦截器只挂 /api/**，/internal/** 天然不经 CSRF 校验。
+            // 不带用户会话 Cookie 也无 CSRF token。
+            // 注意：免**会话**不等于免**鉴权**——该前缀的准入由 order 0 的 InternalTokenInterceptor
+            // 用共享密钥把守（sec-01 A2 漏洞修复前这里曾是零鉴权状态，任何能连到端口的人都能
+            // 批量导出全站用户）。CSRF 拦截器只挂 /api/**，/internal/** 天然不经 CSRF 校验。
             SaRouter.match("/**")
                     .notMatch("/api/v1/auth/**")
                     .notMatch("/internal/**")
                     .check(r -> StpUtil.checkLogin());
         }))
                 .addPathPatterns("/**")
-                .order(0);
+                .order(1);
 
-        // CSRF 双重提交 Cookie 拦截器（order 1，鉴权之后执行）：
+        // CSRF 双重提交 Cookie 拦截器（order 2，鉴权之后执行）：
         // 能走到这里 = 请求已登录（游客在上面已被 SaInterceptor 拦下 401），
         // 语义等价于旧版“仅对已认证用户做 CSRF 校验”；
         // 排除 /api/v1/auth/**：前端 api.ts 对 auth 路径不发 X-XSRF-TOKEN Header，与旧版一致
         registry.addInterceptor(csrfInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns("/api/v1/auth/**")
-                .order(1);
+                .order(2);
     }
 }
