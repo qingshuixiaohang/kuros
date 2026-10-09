@@ -1,0 +1,9 @@
+# 行尾锁定：Windows 上 core.autocrlf=true 会把 .sh 检出成 CRLF，
+# 破坏 shebang 与 heredoc（mysql-init 授权脚本已踩过一次，见 HANDOFF 陷阱 12）。
+# shell 脚本与 SQL 初始化脚本一律 LF 入库、LF 检出。
+*.sh text eol=lf
+*.mjs text eol=lf
+docker/**/*.sh text eol=lf
+docker/**/*.sql text eol=lf
+
+# 前端与 Java 侧保持 autocrlf 默认行为即可。

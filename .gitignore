@@ -44,6 +44,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# JVM 崩溃现场（hs_err_pid*.log / replay_pid*.log）：OOM 时 JVM 自动写到 cwd，
+# 属于案发现场而非源码，默认忽略；需要分析时手动 git add -f
+hs_err_pid*.log
+replay_pid*.log
+
 # env files (can opt-in for committing if needed)
 /front/.env*
 /.env
