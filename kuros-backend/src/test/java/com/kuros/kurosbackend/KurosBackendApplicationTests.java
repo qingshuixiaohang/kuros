@@ -84,6 +84,11 @@ class KurosBackendApplicationTests {
         registry.add("spring.datasource.url", () -> TestDatabases.h2Url("main"));
         // Feign 直连桩地址：url 非空时绕过 Nacos/LoadBalancer（真实 lb 链路另由 NacosFeignIntegrationTest 覆盖）
         registry.add("app.feign.kuros-user.url", userDirectory::baseUrl);
+        // sec-01 A2 漏洞修复：内部共享密钥。与桩的期望值同源（UserDirectoryStub 默认
+        // 期望 "test-internal-token"），InternalTokenRequestInterceptor 会把它注入
+        // X-Internal-Token 头。两侧不配 → 请求 401 → 下面所有 Feign 回填用例红，
+        // 这正是"漏配密钥时内部链路显式断开"的验收。
+        registry.add("app.internal.token", () -> "test-internal-token");
     }
 
     // 测试用固定 CSRF Token：CsrfInterceptor 只校验 cookie == header，不校验服务端存储

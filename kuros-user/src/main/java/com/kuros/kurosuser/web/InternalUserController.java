@@ -21,12 +21,15 @@ import java.util.List;
  * ProfileServiceImpl 与内容域作者组装经 OpenFeign 消费这里的接口，
  * 把"被拆掉的本库 JOIN"重建为跨服务组合。
  *
- * 安全边界（生产化前的显式让步）：
- * - 生产部署必须在此前缀前加 mTLS 或内部 token 校验（网络层隔离：
- *   服务网格 mTLS / Ingress 只放行集群内来源）。当前 dev/CI 环境依赖
- *   compose 网络隔离：容器间可直连，宿主机仅保留 8091 调试通道。
- * - 本前缀在 SaTokenConfigure 中显式 notMatch（不走会话鉴权）；
- *   CSRF 拦截器覆盖 /api/**，天然不涉及 /internal/**。
+ * 安全边界（sec-01 A2 漏洞修复后，两层纵深）：
+ * - 应用层：本前缀要求 X-Internal-Token 头且值等于 app.internal.token，
+ *   由 InternalTokenInterceptor 校验，未配置密钥时全部 401（fail-closed）。
+ *   backend 侧由 InternalTokenRequestInterceptor 自动带上该头。
+ * - 网络层：compose 只把端口绑到宿主机 127.0.0.1（不再 0.0.0.0），
+ *   内部调用走 compose 服务名，宿主机网络不可达。
+ * 本前缀在 SaTokenConfigure 中仍显式 notMatch（不走会话鉴权，服务间调用不带
+ * 用户 Cookie）；CSRF 拦截器覆盖 /api/**，天然不涉及 /internal/**。
+ * 修复前这里是零鉴权状态：任何能连到该端口的人都能批量导出全站用户与关注关系。
  *
  * 路径与响应结构对齐 backend 既有分页约定（items + meta），
  * 让 split-08 的 Feign 解码零适配成本。

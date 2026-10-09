@@ -156,6 +156,10 @@ services:
       APP_STORAGE_MINIO_BUCKET: ${APP_STORAGE_MINIO_BUCKET:-kuros-media}
       # Nacos 连接（切片 #8）：backend 通过服务名 nacos 访问注册中心
       NACOS_SERVER_ADDR: ${NACOS_SERVER_ADDR:-nacos:8848}
+      # 内部 API 共享密钥（sec-01 A2 漏洞修复）：与 user 服务的 APP_INTERNAL_TOKEN
+      # 必须是同一个值——backend 经 Feign 调 /internal/** 时由
+      # InternalTokenRequestInterceptor 自动带上 X-Internal-Token 头
+      APP_INTERNAL_TOKEN: ${APP_INTERNAL_TOKEN:-}
       # RocketMQ（切片 #11）：互动事件异步落库的 name-server（compose 网络内用服务名）。
       # MQ 不可用时写路径同步降级落库，故 broker 不是硬依赖（见下方 depends_on required:false）
       ROCKETMQ_NAME_SERVER: ${ROCKETMQ_NAME_SERVER:-rocketmq-namesrv:9876}
@@ -255,12 +259,20 @@ services:
       # 登录响应会 Set-Cookie 且浏览器从宿主机 :3000 跨域调用，CORS 响应头由本服务给出
       APP_CORS_ALLOWED_ORIGIN: ${APP_CORS_ALLOWED_ORIGIN:-http://localhost:3000}
       # dev 环境默认固定验证码 123456（与旧版 DevVerificationCodeService 的默认值一致）：
-      # compose-smoke.mjs 和前端演示登录都硬编码用它；生产环境走 .env.production.example，必须置空
+      # compose-smoke 脚本和前端演示登录都硬编码用它；生产环境走 .env.production.example，必须置空
+      # 注：这是**显式注入**而非默认值——主配置的默认值已改为空（sec-01 A1 漏洞修复），
+      # 万能码只应由开发环境主动选择带入，而非"忘配 env 就自动送钥匙"
       APP_AUTH_DEV_CODE: ${APP_AUTH_DEV_CODE:-123456}
       APP_AUTH_DEV_CODE_EXPOSED: ${APP_AUTH_DEV_CODE_EXPOSED:-false}
       APP_AUTH_SESSION_COOKIE_SECURE: ${APP_AUTH_SESSION_COOKIE_SECURE:-false}
+      # 内部 API 共享密钥（sec-01 A2 漏洞修复）：kuros-user 要求 X-Internal-Token 头，
+      # backend 侧同名变量注入同一值（两个服务必须成对配置，否则内部调用全部 401）
+      APP_INTERNAL_TOKEN: ${APP_INTERNAL_TOKEN:-}
     ports:
-      - "${USER_PORT:-8091}:8080"
+      # 只绑宿主机回环：内部 API（/internal/**）面向服务间调用，宿主机暴露它等于
+      # 把全站用户导出开给这台机器网络上任何人（A2 漏洞的另一半）。127.0.0.1 绑定后
+      # 仍保留 8091 本地调试通道，而容器间通信走 compose 网络名、不受此绑定影响
+      - "127.0.0.1:${USER_PORT:-8091}:8080"
     depends_on:
       mysql:
         condition: service_healthy

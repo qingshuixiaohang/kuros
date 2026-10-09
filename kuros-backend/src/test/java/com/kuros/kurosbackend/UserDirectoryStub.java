@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * kuros-user 内部 API 的 JDK HttpServer 桩（split-08 Feign 桩测试）。
@@ -31,8 +32,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 数据与 kuros-user 的 V2__user_seed.sql 逐字对齐：两侧种子漂移会让组合视图对不上
  * （种子文件的注释也显式声明了这条约束）。未命中的 id 按真实语义"静默跳过"，
  * 用来验证内容域对未知作者回退占位昵称"用户"。
+ *
+ * sec-01 A2 漏洞修复后本桩也校验 X-Internal-Token（与 kuros-user 的
+ * InternalTokenInterceptor 同行为）：Feign 客户端漏配密钥时这里返回 401，
+ * 而不是放行——否则桩测试绿得比生产宽松，等于把漏洞的回归防线拆了。
  */
 public final class UserDirectoryStub implements AutoCloseable {
+
+    /**
+     * 与 kuros-user 的 InternalTokenInterceptor.INTERNAL_TOKEN_HEADER 逐字一致
+     * （跨服务无法共享常量，改名必须同步——该机制唯一的脆弱点）。
+     */
+    private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
     /** 4 个种子用户：id → {nickname, avatarUrl(null), bio}，与 kuros-user V2__user_seed.sql 一致。 */
     private static final Map<String, String[]> SEED_USERS = seedUsers();
@@ -56,6 +67,17 @@ public final class UserDirectoryStub implements AutoCloseable {
     private final ExecutorService executor;
     /** 健康开关：置 false 时所有接口返回 500，用来模拟 kuros-user 整体不可用（触发降级）。 */
     private final AtomicBoolean healthy = new AtomicBoolean(true);
+
+    /** 最近一次请求携带的 X-Internal-Token（供断言 Feign 确实带了头，null = 没带）。 */
+    private final AtomicReference<String> lastSeenInternalToken = new AtomicReference<>();
+
+    /**
+     * 期望的 X-Internal-Token 值。默认非空（"test-internal-token"）——与
+     * kuros-user 侧测试常量同值。测试可用 setExpectedInternalToken("") 切成
+     * fail-closed 形态，用来验证"Feign 客户端也没配密钥时请求确实 401"。
+     */
+    private final AtomicReference<String> expectedInternalToken =
+            new AtomicReference<>("test-internal-token");
 
     public UserDirectoryStub() {
         try {
@@ -89,6 +111,32 @@ public final class UserDirectoryStub implements AutoCloseable {
         healthy.set(value);
     }
 
+    /** 切换桩期望的内部令牌：传 "" 模拟服务端未配置密钥的 fail-closed 形态。 */
+    public void setExpectedInternalToken(String value) {
+        expectedInternalToken.set(value == null ? "" : value);
+    }
+
+    /** 最近一次收到的 X-Internal-Token（供测试断言 Feign 确实带了头，null = 没带）。 */
+    public String lastSeenInternalToken() {
+        return lastSeenInternalToken.get();
+    }
+
+    /**
+     * 内部令牌校验（sec-01 A2 漏洞修复的服务端镜像）。
+     * 与 kuros-user 的 InternalTokenInterceptor 同语义：未配置期望值（空）时
+     * 一律拒绝——"两边都空即通过"会让忘记配置从显式故障退化成静默无防护。
+     */
+    private boolean rejectIfBadInternalToken(HttpExchange exchange) throws IOException {
+        String expected = expectedInternalToken.get();
+        String presented = exchange.getRequestHeaders().getFirst(INTERNAL_TOKEN_HEADER);
+        lastSeenInternalToken.set(presented);
+        if (expected.isEmpty() || presented == null || !expected.equals(presented)) {
+            writeJson(exchange, 401, "{\"code\":\"INTERNAL_TOKEN_INVALID\",\"message\":\"内部接口凭证无效\"}");
+            return true;
+        }
+        return false;
+    }
+
     @Override
     public void close() {
         server.stop(0);
@@ -98,7 +146,7 @@ public final class UserDirectoryStub implements AutoCloseable {
 
     /** GET /internal/v1/users/batch?ids=a&ids=b：按输入顺序返回命中项，未知 id 跳过。 */
     private void handleBatch(HttpExchange exchange) throws IOException {
-        if (rejectIfUnhealthy(exchange)) {
+        if (rejectIfBadInternalToken(exchange) || rejectIfUnhealthy(exchange)) {
             return;
         }
         List<String> ids = parseIds(exchange.getRequestURI().getRawQuery());
@@ -125,7 +173,7 @@ public final class UserDirectoryStub implements AutoCloseable {
      * 且这两个 id 都是种子用户，本地能查到其帖子统计，正好验证"跨服务用户 + 本地内容"的组合。
      */
     private void handleFollow(HttpExchange exchange) throws IOException {
-        if (rejectIfUnhealthy(exchange)) {
+        if (rejectIfBadInternalToken(exchange) || rejectIfUnhealthy(exchange)) {
             return;
         }
         String path = exchange.getRequestURI().getPath();
