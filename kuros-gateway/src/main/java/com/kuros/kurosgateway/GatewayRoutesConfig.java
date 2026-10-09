@@ -27,6 +27,17 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class GatewayRoutesConfig {
 
+    // 真实跨域响应去重：下游服务 CorsConfig 与网关 globalcors 各加一套 ACAO，
+    // 重复头被浏览器拒成 Failed to fetch；DedupeResponseHeader 在路由过滤器
+    // post 阶段（下游头已合并进响应之后）压回单个。
+    // 为什么编程式声明而不是 properties 的 default-filters[0] 索引写法：
+    // 与 routes[0].predicates[0] 同款 Boot 4.1 + SCG 5.x 索引绑定静默失效坑——
+    // 配置写了但过滤器从未生效（集成测试 expected:<1> but was:<2> 实证）。
+    private static final String CORS_DEDUPE_HEADERS =
+            "Access-Control-Allow-Origin Access-Control-Allow-Credentials "
+                    + "Access-Control-Allow-Methods Access-Control-Allow-Headers "
+                    + "Access-Control-Expose-Headers";
+
     @Bean
     public RouteLocator kurosRoutes(RouteLocatorBuilder builder,
             @Value("${app.routes.backend-uri:lb://kuros-backend}") String backendUri,
@@ -37,13 +48,16 @@ public class GatewayRoutesConfig {
                 // 分配 order，等 order 时匹配按稳定排序后的声明序取首个命中；
                 // ② 显式 order(-1)，低于 backend 的默认 order(0)——让"认证路由
                 // 先于 /** 匹配"成为显式配置语义，不依赖声明位置这一隐式约定
-                .route("kuros-user-auth", r -> r.order(-1).path("/api/v1/auth/**").uri(userUri))
+                .route("kuros-user-auth", r -> r.order(-1).path("/api/v1/auth/**")
+                        .filters(f -> f.dedupeResponseHeader(CORS_DEDUPE_HEADERS, "RETAIN_FIRST")).uri(userUri))
                 // split-07：关注端点迁至 kuros-user，与认证路由同款选项。
                 // 单段通配 * 只匹配一个路径段——不会误伤同前缀的资料页（/{id}）、
                 // 帖子列表（/{id}/posts）与个人中心（/me/profile），它们仍走 backend 通配路由；
                 // order(-1) 显式低于 backend 通配的默认 order(0)，优先级不依赖声明位置
-                .route("kuros-user-follow", r -> r.order(-1).path("/api/v1/users/*/follow").uri(userUri))
-                .route("kuros-backend", r -> r.path("/**").uri(backendUri))
+                .route("kuros-user-follow", r -> r.order(-1).path("/api/v1/users/*/follow")
+                        .filters(f -> f.dedupeResponseHeader(CORS_DEDUPE_HEADERS, "RETAIN_FIRST")).uri(userUri))
+                .route("kuros-backend", r -> r.path("/**")
+                        .filters(f -> f.dedupeResponseHeader(CORS_DEDUPE_HEADERS, "RETAIN_FIRST")).uri(backendUri))
                 .build();
     }
 

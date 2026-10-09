@@ -17,6 +17,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 纯路由转发集成测试（切片 #9 / gateway-02；split-06 扩为双桩）。
@@ -132,6 +133,56 @@ class GatewayRoutingIntegrationTest {
                 "认证路径必须命中用户服务路由（优先于 /** 通配）");
         assertEquals("/api/v1/auth/me", userStub.lastPath(), "认证路径应原样透传到用户服务");
         assertEquals("KUROS_SESSION=user-side-session", userStub.lastCookie(), "会话 Cookie 应透传");
+    }
+
+    @Test
+    void cors预检由网关层应答且带全允许头() throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
+        // 模拟浏览器预检：OPTIONS + Origin + Access-Control-Request-Method/Headers
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create(gatewayBase() + "/api/v1/auth/login"))
+                .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
+                .header("Origin", "http://localhost:3000")
+                .header("Access-Control-Request-Method", "POST")
+                .header("Access-Control-Request-Headers", "content-type")
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(200, response.statusCode());
+        // SCG 不会把预检转发给下游：未配 globalcors 时这里是"裸 200 无 CORS 头"，
+        // 浏览器随之拒绝真实请求（fetch 抛 Failed to fetch）。锁定网关层应答预检。
+        assertEquals("http://localhost:3000",
+                response.headers().firstValue("Access-Control-Allow-Origin").orElse(""),
+                "预检必须返回 Access-Control-Allow-Origin");
+        assertTrue(response.headers().firstValue("Access-Control-Allow-Methods").orElse("").contains("POST"),
+                "预检必须返回 Access-Control-Allow-Methods 且含 POST");
+        assertEquals("true", response.headers().firstValue("Access-Control-Allow-Credentials").orElse(""),
+                "携带 Cookie 的跨域必须允许 credentials");
+    }
+
+    @Test
+    void 真实跨域响应经网关去重后只保留单个允许头() throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
+        // 真实跨域请求（非预检）：带 Origin 不带 Access-Control-Request-*。
+        // 桩（模拟下游服务 CorsConfig）与网关 globalcors 各加一套 ACAO，
+        // 重复头会被浏览器直接拒成 Failed to fetch——去重过滤器必须把它压回单个。
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create(gatewayBase() + "/api/v1/auth/me"))
+                .header("Origin", "http://localhost:3000")
+                .GET().build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(200, response.statusCode());
+        assertEquals(1, response.headers().allValues("Access-Control-Allow-Origin").size(),
+                "真实跨域响应的 ACAO 必须去重为单个（重复头浏览器拒收）");
+        assertEquals("http://localhost:3000",
+                response.headers().firstValue("Access-Control-Allow-Origin").orElse(""));
     }
 
     @Test

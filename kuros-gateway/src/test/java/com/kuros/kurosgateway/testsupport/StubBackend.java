@@ -58,6 +58,10 @@ public final class StubBackend {
             byte[] responseBody = isPost ? requestBody : STUB_JSON.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", isPost ? "text/plain" : "application/json");
             exchange.getResponseHeaders().set(STUB_HEADER, name);
+            // 模拟各服务 CorsConfig 对真实跨域响应加的 ACAO（下游侧那一套）：
+            // 网关 globalcors 也会加一套，两套并存即浏览器拒绝的重复头场景——
+            // 去重过滤器的回归断言依赖桩复现这个下游行为
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "http://localhost:3000");
             exchange.sendResponseHeaders(isPost ? 201 : 200, responseBody.length == 0 ? -1 : responseBody.length);
             if (responseBody.length > 0) {
                 exchange.getResponseBody().write(responseBody);
