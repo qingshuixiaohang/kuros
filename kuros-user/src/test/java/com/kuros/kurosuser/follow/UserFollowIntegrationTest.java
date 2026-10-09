@@ -46,6 +46,8 @@ import static org.hamcrest.Matchers.hasSize;
  *    幂等关注/取关、自关注拒绝、目标不存在 404、并发防重复；
  * 2. 内部 API（/internal/v1/users/**，不经网关、供 split-08 的 backend Feign 消费）：
  *    批量用户查询保序跳过缺失、关注状态/计数、关注与粉丝列表分页。
+ *    sec-01 起该前缀要求 X-Internal-Token 共享密钥（A2 漏洞修复），
+ *    密钥校验本身由 InternalTokenIntegrationTest 覆盖，本类只验业务语义。
  *
  * 为什么用真实 MySQL 而不是 test profile 的 H2：
  * 1. 并发防重复的验证根基是"复合主键 + 分布式锁"在真实引擎上的行为——
@@ -93,12 +95,25 @@ class UserFollowIntegrationTest {
         registry.add("spring.datasource.password", () -> MYSQL_ROOT_PASSWORD);
         registry.add("spring.data.redis.host", () -> "127.0.0.1");
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+        // sec-01 A1 漏洞修复后显式声明 dev 固定验证码（与 AuthLoginIntegrationTest 同因）：
+        // 主配置默认值已改为空，本类 login() helper 靠 123456 走完整登录链路，
+        // 显式注入 = 验证"配了固定码的开发环境里便利路径不回归"
+        registry.add("app.auth.dev-code", () -> "123456");
+        registry.add("app.auth.dev-code-exposed", () -> "true");
+        // sec-01 A2 漏洞修复后显式声明内部共享密钥：/internal/** 现在要求 X-Internal-Token，
+        // 下方四个内部 API 用例带上该头（未配置时拦截器 fail-closed 全部 401）
+        registry.add("app.internal.token", () -> TEST_INTERNAL_TOKEN);
     }
 
     // 种子用户（V2__user_seed.sql）：作为稳定的"被关注方"，不依赖测试内的建号
     private static final String SEED_USER_1 = "10000000-0000-0000-0000-000000000001"; // 潮声档案员
     private static final String SEED_USER_2 = "10000000-0000-0000-0000-000000000002"; // 无音区夜行者
-    private static final String MISSING_USER = "00000000-0000-0000-0000-0000000000ff";
+    private static final String MISSING_USER = "00000000-0000-0000-0000-0000000000ff"; // 不存在的用户
+
+    // sec-01 A2 漏洞修复：内部 API 的共享密钥（与 @DynamicPropertySource 注入的
+    // app.internal.token 同值）。头名与生产契约一致（InternalTokenInterceptor 常量）。
+    private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
+    private static final String TEST_INTERNAL_TOKEN = "test-internal-token";
 
     // 固定 CSRF fixture：拦截器只比较 cookie == header，不校验服务端存储
     private static final String CSRF_TOKEN = "test-csrf-token";
@@ -236,10 +251,12 @@ class UserFollowIntegrationTest {
 
     @Test
     void 内部批量查询保留请求顺序并跳过未知ID() throws Exception {
-        // 刻意不带任何 Cookie：内部 API 在 SaToken 白名单内（/internal/**），
-        // 若放行规则缺失，这里会先被 checkLogin 拦成 401 而红
+        // 刻意不带用户 Cookie：内部 API 的边界是共享密钥而非会话（sec-01 A2 修复）。
+        // 若 X-Internal-Token 头缺失/错误，这里会先吃 401 INTERNAL_TOKEN_INVALID 而红——
+        // 这正是该漏洞的回归防线。
         mockMvc.perform(get("/internal/v1/users/batch")
-                        .param("ids", SEED_USER_1 + ",missing-id," + SEED_USER_2))
+                        .param("ids", SEED_USER_1 + ",missing-id," + SEED_USER_2)
+                        .header(INTERNAL_TOKEN_HEADER, TEST_INTERNAL_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(2)))
                 .andExpect(jsonPath("$.data[0].id").value(SEED_USER_1))
@@ -256,19 +273,22 @@ class UserFollowIntegrationTest {
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/internal/v1/users/" + SEED_USER_2 + "/follow-stats")
-                        .param("viewerId", session.userId()))
+                        .param("viewerId", session.userId())
+                        .header(INTERNAL_TOKEN_HEADER, TEST_INTERNAL_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.targetUserId").value(SEED_USER_2))
                 .andExpect(jsonPath("$.data.followerCount").value(1))
                 .andExpect(jsonPath("$.data.followed").value(true));
 
         // 不传 viewerId：匿名视角（followed=false，计数不受影响）
-        mockMvc.perform(get("/internal/v1/users/" + SEED_USER_2 + "/follow-stats"))
+        mockMvc.perform(get("/internal/v1/users/" + SEED_USER_2 + "/follow-stats")
+                        .header(INTERNAL_TOKEN_HEADER, TEST_INTERNAL_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.followerCount").value(1))
                 .andExpect(jsonPath("$.data.followed").value(false));
 
-        mockMvc.perform(get("/internal/v1/users/" + MISSING_USER + "/follow-stats"))
+        mockMvc.perform(get("/internal/v1/users/" + MISSING_USER + "/follow-stats")
+                        .header(INTERNAL_TOKEN_HEADER, TEST_INTERNAL_TOKEN))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
     }
@@ -282,7 +302,8 @@ class UserFollowIntegrationTest {
 
         // following：会话用户的关注列表 → 含被关注的种子用户
         mockMvc.perform(get("/internal/v1/users/" + session.userId() + "/following")
-                        .param("page", "1").param("pageSize", "10"))
+                        .param("page", "1").param("pageSize", "10")
+                        .header(INTERNAL_TOKEN_HEADER, TEST_INTERNAL_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(1)))
                 .andExpect(jsonPath("$.data[0].id").value(SEED_USER_2))
@@ -292,7 +313,8 @@ class UserFollowIntegrationTest {
 
         // followers：种子用户的粉丝列表 → 含会话用户（登录建号昵称 = 漂泊者 + 后四位）
         mockMvc.perform(get("/internal/v1/users/" + SEED_USER_2 + "/followers")
-                        .param("page", "1").param("pageSize", "10"))
+                        .param("page", "1").param("pageSize", "10")
+                        .header(INTERNAL_TOKEN_HEADER, TEST_INTERNAL_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(1)))
                 .andExpect(jsonPath("$.data[0].id").value(session.userId()))
