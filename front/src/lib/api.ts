@@ -24,6 +24,19 @@ export type ApiPost = {
   tags: string[];
 };
 
+export type ApiCharacter = {
+  id: string;
+  slug: string;
+  name: string;
+  role: string;
+  rarity: number;
+  attribute: string;
+  weaponType: string;
+  version: string;
+  imageUrl: string;
+  description: string;
+};
+
 export type ApiPageMeta = { page: number; pageSize: number; totalItems: number; totalPages: number };
 type ApiEnvelope<T> = { data: T; meta?: ApiPageMeta };
 
@@ -162,6 +175,25 @@ export async function fetchFollowingFeedByCursor(options: { cursor?: string | nu
   const envelope = await requestEnvelope<CursorPageResult<ApiPost>>("/api/v1/feed/following?" + params.toString());
   const data = envelope?.data;
   return { items: data?.items ?? [], nextCursor: data?.nextCursor ?? null, hasMore: data?.hasMore ?? false };
+}
+
+export async function fetchCharacterPage(options: { role?: string; attribute?: string; weapon?: string; rarity?: number; keyword?: string; page?: number; pageSize?: number } = {}) {
+  const params = new URLSearchParams({
+    page: String(options.page ?? 1),
+    pageSize: String(options.pageSize ?? 12),
+  });
+  // “全部X”哨兵在组件侧归一为 undefined；这里只透传真实筛选值
+  if (options.role) params.set("role", options.role);
+  if (options.attribute) params.set("attribute", options.attribute);
+  if (options.weapon) params.set("weapon", options.weapon);
+  if (options.rarity) params.set("rarity", String(options.rarity));
+  if (options.keyword?.trim()) params.set("keyword", options.keyword.trim());
+  const envelope = await requestEnvelope<ApiCharacter[]>("/api/v1/characters?" + params.toString());
+  return { items: envelope?.data ?? [], meta: envelope?.meta };
+}
+
+export function fetchCharacter(slug: string) {
+  return request<ApiCharacter>("/api/v1/characters/" + encodeURIComponent(slug));
 }
 
 export function fetchPost(id: string) {

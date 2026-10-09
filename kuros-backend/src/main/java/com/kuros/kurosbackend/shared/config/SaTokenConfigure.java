@@ -59,7 +59,7 @@ public class SaTokenConfigure implements WebMvcConfigurer {
                     "/api/v1/search",          // 全文检索（切片 #14）：与帖子列表同为公开只读，游客可搜
                     "/api/v1/users/*",         // 公开用户资料（单段通配，/users/me/profile 两段不在内，仍需登录）
                     "/api/v1/users/*/posts",   // 用户发布的帖子
-                    "/api/v1/characters/**",   // 角色图鉴预留（PR #57 待合并，当前分支尚无此路由）
+                    "/api/v1/characters/**",   // 角色图鉴（PR #57）：游戏资料只读，游客可浏览
                     "/media/**",               // 上传图片的静态资源访问
                     "/actuator/health",        // 容器健康检查
                     "/swagger-ui/**",           // Swagger UI 静态资源
