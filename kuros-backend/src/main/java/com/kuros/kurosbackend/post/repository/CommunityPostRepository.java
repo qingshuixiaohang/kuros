@@ -152,6 +152,17 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, St
     @Query("update CommunityPost p set p.likeCount = case when p.likeCount > 0 then p.likeCount - 1 else 0 end where p.id = :postId")
     int decrementLikeCount(@Param("postId") String postId);
 
+    /**
+     * 把点赞计数直接设为指定值（审计 M5 / B3：对账修正冗余列）。
+     *
+     * 与 increment/decrement 的区别：那两个是「增量」，用于正常投影路径；
+     * 这个是「绝对值」，用于对账——增量在事件丢失后会永久偏移，只有
+     * 用关系表 COUNT(*) 重算出的绝对值才能把它拉回真相。
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update CommunityPost p set p.likeCount = :count where p.id = :postId")
+    int updateLikeCount(@Param("postId") String postId, @Param("count") long count);
+
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("update CommunityPost p set p.favoriteCount = p.favoriteCount + 1 where p.id = :postId")
     int incrementFavoriteCount(@Param("postId") String postId);
@@ -159,4 +170,9 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, St
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("update CommunityPost p set p.favoriteCount = case when p.favoriteCount > 0 then p.favoriteCount - 1 else 0 end where p.id = :postId")
     int decrementFavoriteCount(@Param("postId") String postId);
+
+    /** 把收藏计数直接设为指定值（审计 M5 / B3：对账修正冗余列）。 */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update CommunityPost p set p.favoriteCount = :count where p.id = :postId")
+    int updateFavoriteCount(@Param("postId") String postId, @Param("count") long count);
 }

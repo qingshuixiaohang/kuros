@@ -50,6 +50,31 @@ public class InteractionRedisStore {
                     + "return redis.call('get', KEYS[1])",
             String.class);
 
+    /**
+     * 对账：把计数 key 设为 DB 真相值，返回修正后的值（审计 M5 / B3）。
+     *
+     * KEYS[1]=计数key，ARGV[1]=真相值，ARGV[2]=ttl。
+     * 返回值语义（供调用方判断是否需要记录/告警）：
+     *   1 = 原本就一致，未改动
+     *   0 = 原本不一致，已修正为真相值
+     *
+     * 为什么用 Lua 而不是「GET 比一下再 SET」：分步执行时，两次操作之间
+     * 可能有正常写路径的 flip 插进来（把计数改成新值），那样对账会用旧真相
+     * 覆盖掉一次合法增量——为了修偏差反而制造偏差。Lua 让「比对 + 修正」
+     * 原子完成，等价于持锁对账。
+     *
+     * 注意这里不复用 B2 踩过的坑（static 脚本实例复用导致 execute 返回 null），
+     * 每次调用本地构造脚本对象。
+     */
+    private static final String RECONCILE_SCRIPT =
+            "local current = redis.call('get', KEYS[1]); "
+                    + "if current == ARGV[1] then "
+                    + "  return 1; "
+                    + "end; "
+                    + "redis.call('set', KEYS[1], ARGV[1]); "
+                    + "redis.call('expire', KEYS[1], ARGV[2]); "
+                    + "return 0";
+
     private final StringRedisTemplate redisTemplate;
     private final long ttlSeconds;
 
@@ -104,6 +129,41 @@ public class InteractionRedisStore {
         Long value = redisTemplate.execute(COUNT_BACKFILL_DELTA, List.of(countKey(kind, postId)),
                 Long.toString(dbBaseline.getAsLong()), Long.toString(delta), Long.toString(ttlSeconds));
         return value != null ? value : dbBaseline.getAsLong() + delta;
+    }
+
+    /**
+     * 对账结果：修正后的计数值，以及是否真的发生了修正（供日志/告警判断）。
+     */
+    public record ReconcileResult(long count, boolean corrected) {
+    }
+
+    /**
+     * 对账计数：以 DB 真相为准修正 Redis（审计 M5 / B3）。
+     *
+     * 什么时候会不一致（所以需要对账）：
+     * - 写路径即时翻 Redis，DB 计数列靠 MQ 异步投影更新，中间有窗口；
+     * - MQ 投递失败虽有同步降级落库，但降级也失败（DB 抖动）时事件永久
+     *   丢失，DB 计数列永久偏低，而 Redis 是对的——此时该修的是 DB 列；
+     * - Redis 计数 TTL 到期后按 DB 基线回填，若基线本身是错的，错误会被
+     *   固化成真相。
+     *
+     * 本方法只负责「把 Redis 拉回真相」。DB 冗余列的修正是调用方的责任
+     * （见 InteractionCountReconciler.reconcile），因为那是 DB 写、要
+     * 走事务，不能跟 Redis 操作混在一个非事务方法里。
+     *
+     * @param truthSupplier 真相来源，通常是关系表的 COUNT(*)——幂等可重算，
+     *                       比增量维护的冗余列更可信
+     */
+    public ReconcileResult reconcileCount(InteractionKind kind, String postId, LongSupplier truthSupplier) {
+        String key = countKey(kind, postId);
+        long truth = truthSupplier.getAsLong();
+        // 本地构造脚本对象：static 实例复用会导致 execute 返回 null（B2 踩过的坑）
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>(RECONCILE_SCRIPT, Long.class);
+        Long changed = redisTemplate.execute(script, List.of(key),
+                Long.toString(truth), Long.toString(ttlSeconds));
+        // Lua 返回 0=修正了偏差、1=原本一致；execute 返回 null 时保守地当作"未修正"
+        boolean corrected = Long.valueOf(0L).equals(changed);
+        return new ReconcileResult(truth, corrected);
     }
 
     private String stateKey(InteractionKind kind, String postId, String userId) {
