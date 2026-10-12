@@ -13,6 +13,7 @@ import com.kuros.kurosbackend.report.domain.ReportStatus;
 import com.kuros.kurosbackend.report.domain.ReportTargetType;
 import com.kuros.kurosbackend.shared.exception.AuthRequestException;
 import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
+import com.kuros.kurosbackend.shared.cache.CacheInvalidationAfterCommit;
 import com.kuros.kurosbackend.shared.cache.CacheNames;
 import com.kuros.kurosbackend.shared.cache.TwoLevelCache;
 import com.kuros.kurosbackend.comment.repository.CommunityCommentRepository;
@@ -137,12 +138,14 @@ public class ContentReportService {
             postRepository.findById(report.getTargetId()).ifPresent(post -> {
                 if (post.getStatus() == PostStatus.PUBLISHED) post.delete(LocalDateTime.now());
             });
-            twoLevelCache.evict(CacheNames.POST_DETAIL, report.getTargetId());
+            CacheInvalidationAfterCommit.run(
+                    () -> twoLevelCache.evict(CacheNames.POST_DETAIL, report.getTargetId()));
             return;
         }
         commentRepository.findById(report.getTargetId()).ifPresent(comment -> {
             if (comment.getStatus() == CommentStatus.NORMAL) comment.delete(LocalDateTime.now());
-            twoLevelCache.evict(CacheNames.POST_DETAIL, comment.getPostId());
+            CacheInvalidationAfterCommit.run(
+                    () -> twoLevelCache.evict(CacheNames.POST_DETAIL, comment.getPostId()));
         });
     }
 

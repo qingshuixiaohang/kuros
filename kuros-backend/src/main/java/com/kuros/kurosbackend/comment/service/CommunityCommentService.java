@@ -13,6 +13,7 @@ import com.kuros.kurosbackend.shared.exception.ForbiddenException;
 import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.comment.repository.CommunityCommentRepository;
 import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
+import com.kuros.kurosbackend.shared.cache.CacheInvalidationAfterCommit;
 import com.kuros.kurosbackend.shared.cache.CacheNames;
 import com.kuros.kurosbackend.shared.cache.TwoLevelCache;
 import com.kuros.kurosbackend.user.client.UserBriefDto;
@@ -90,11 +91,14 @@ public class CommunityCommentService {
         CommunityComment comment = commentRepository.save(new CommunityComment(
                 UUID.randomUUID().toString(), postId, authorId, parentId, content, now
         ));
-        twoLevelCache.evict(CacheNames.POST_DETAIL, postId);
+        // 延迟到提交后（审计 H1）：回滚时评论并未入库，缓存却已被清，
+        // 读路径 miss 后回源 DB 再回填——白花一次跨节点失效广播。
+        CacheInvalidationAfterCommit.run(() -> twoLevelCache.evict(CacheNames.POST_DETAIL, postId));
         return toResponse(comment, userDirectory.findAuthors(List.of(authorId)));
     }
 
     // 评论删除后驱逐帖子详情两级缓存（切片 #13：同 create，从 @CacheEvict 迁为 twoLevelCache.evict 以覆盖 L2）
+    // 驱逐同样延迟到提交后（审计 H1）：回滚时评论并未删除，缓存却已被清。
     @Transactional
     public void delete(String postId, String commentId, String authorId) {
         CommunityComment comment = commentRepository.findById(commentId)
@@ -108,7 +112,7 @@ public class CommunityCommentService {
         if (comment.getStatus() == CommentStatus.NORMAL) {
             comment.delete(LocalDateTime.now());
         }
-        twoLevelCache.evict(CacheNames.POST_DETAIL, postId);
+        CacheInvalidationAfterCommit.run(() -> twoLevelCache.evict(CacheNames.POST_DETAIL, postId));
     }
 
     private CommunityPost ensurePublishedPost(String postId) {
