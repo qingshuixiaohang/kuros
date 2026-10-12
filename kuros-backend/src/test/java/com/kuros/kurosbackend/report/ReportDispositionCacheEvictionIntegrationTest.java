@@ -9,6 +9,7 @@ import com.kuros.kurosbackend.report.api.HandleReportRequest;
 import com.kuros.kurosbackend.report.service.ContentReportService;
 import com.kuros.kurosbackend.shared.cache.CacheNames;
 import com.kuros.kurosbackend.shared.cache.TwoLevelCache;
+import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 举报处置后必须驱逐帖子详情两级缓存（审计 H5 的回归测试）。
@@ -150,8 +152,10 @@ class ReportDispositionCacheEvictionIntegrationTest {
         // 且失效广播已发出（其他节点能准实时收到）
         assertThat(awaitSpyMessage(postId, 5000)).isTrue();
 
-        // ④ 帖子确实已不可读
-        assertThat(postService.findPublishedById(postId)).isNull();
+        // ④ 帖子确实已不可读：findPublishedById 对已删除帖子抛 ResourceNotFound
+        //    （这是该方法的既有契约，见 KurosBackendApplicationTests 的 404 用例）
+        assertThatThrownBy(() -> postService.findPublishedById(postId))
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
