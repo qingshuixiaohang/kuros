@@ -59,8 +59,10 @@ public class SaTokenConfigure implements WebMvcConfigurer {
             // 必须限定 GET：若只按路径豁免，匿名写操作也会跳过登录检查。
             // 白名单为什么只有两个端点：
             // - /actuator/health：容器 healthcheck 不带会话 Cookie，必须匿名可达
-            // - /actuator/prometheus：指标采集器同样匿名，且 split-05 验收时已是 200，
-            //   保持行为不回退（backend 不暴露此路径的无鉴权访问是它的选择，user 服务刻意放宽）
+            // - /actuator/prometheus：指标采集器同样匿名。注意 actuator 端点不经本
+            //   WebMvcConfigurer 的 MVC 拦截器链（由 WebEndpointServletHandlerMapping
+            //   处理），所以这两个条目对 /actuator/** 实际无效，此处仅为与 backend
+            //   白名单保持字面对称。真正的匿名面由 exposure.include 决定。
             SaRouter.match(SaHttpMethod.GET).match(
                     "/actuator/health",        // 容器健康检查
                     "/actuator/prometheus"     // Prometheus 指标采集

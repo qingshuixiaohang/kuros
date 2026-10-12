@@ -28,12 +28,14 @@ import java.util.Objects;
 import java.util.UUID;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -124,6 +126,35 @@ class KurosBackendApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UP"))
                 .andExpect(jsonPath("$.components").doesNotExist());
+    }
+
+    @Test
+    void 指标采集端点匿名可达否则Prometheus采不动() throws Exception {
+        // 审计 M11：本服务 expose 了 health,info,metrics,prometheus，但采集器不带会话 Cookie。
+        // 此前白名单只放行 health，/actuator/prometheus 要登录才能采，指标实际采不动。
+        //
+        // 实测结论（2026-10-12）：把白名单里的 /actuator/prometheus 条目删掉后本用例仍然绿，
+        // 说明 actuator 端点根本不经过 SaToken 的 MVC 拦截器（Spring Boot 的 actuator 由
+        // WebEndpointServletHandlerMapping 处理，与 WebMvcConfigurer 注册的拦截器链不是
+        // 同一条）。因此这条白名单条目对 /actuator/** 无效——本用例断言的是"端点本身
+        // 匿名可达"这个对外契约，它由 actuator 自身的安全模型决定，而非 SaToken 白名单。
+        mockMvc.perform(get("/actuator/prometheus"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("jvm_memory_used_bytes")));
+    }
+
+    @Test
+    void 受登录保护的API路径无会话时必须401() throws Exception {
+        // 拦截链生效的对照证据：同一套拦截器对 /api/** 是真实生效的
+        // （SaTokenConfigure 的白名单对该前缀有意义），与上一个用例的 actuator 行为
+        // 形成对照——证明"删掉白名单条目测试仍绿"不是因为拦截器没工作，
+        // 而是因为 actuator 不走这条拦截器链。
+        mockMvc.perform(post("/api/v1/posts")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"游客帖子\","
+                                + "\"content\":\"不应该发布\",\"tags\":[\"测试\"]}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
     }
 
     @Test

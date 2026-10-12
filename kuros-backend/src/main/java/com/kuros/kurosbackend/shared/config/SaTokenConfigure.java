@@ -61,7 +61,13 @@ public class SaTokenConfigure implements WebMvcConfigurer {
                     "/api/v1/users/*/posts",   // 用户发布的帖子
                     "/api/v1/characters/**",   // 角色图鉴（PR #57）：游戏资料只读，游客可浏览
                     "/media/**",               // 上传图片的静态资源访问
-                    "/actuator/health",        // 容器健康检查
+                    // 注意：不要在这里加 /actuator/** 的白名单条目。实测（2026-10-12）
+                    // actuator 端点由 WebEndpointServletHandlerMapping 处理，不经过本
+                    // WebMvcConfigurer 注册的 MVC 拦截器链——加了也是死配置，且会让人
+                    // 误以为 actuator 的访问控制由 SaToken 把守。它的匿名面由
+                    // management.endpoints.web.exposure.include 与 actuator 自身的安全
+                    // 模型决定，见 KurosBackendApplicationTests 的两个对照用例。
+                    "/actuator/health",        // 容器健康检查（历史条目，对 /api/** 无影响）
                     "/swagger-ui/**",           // Swagger UI 静态资源
                     "/v3/api-docs/**"            // OpenAPI JSON 文档
             ).stop();
