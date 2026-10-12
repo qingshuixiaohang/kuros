@@ -169,26 +169,35 @@ class FeedTimelineIntegrationTest {
         assertThat(result.items().get(1).title()).isEqualTo("标题1");
     }
 
+    /**
+     * 软删除的帖子不得出现在关注流里（审计 M9 / D2）。
+     *
+     * 原用例准备了帖子、软删除、调用服务，然后只有注释、零断言——永远绿。
+     * 注释里还留着一个错误假设："findAllById 能找到 DELETED 状态的帖子
+     * （JPA 不自动过滤）……这是当前实现的已知局限"。也就是说软删除帖
+     * 真的会漏进关注流，而测试选择了不验证。
+     *
+     * 这里把它变成真断言。若它变红，说明 {@code findPublishedByIds} 名不
+     * 副实——只 filter null 不过滤状态——那是要修的生产 bug，不是测试问题。
+     */
     @Test
     void findFollowingFeed_filtersOutDeletedPosts() {
-        // 准备：创建帖子 + 推到 timeline，然后软删除帖子
+        // 准备：创建帖子 + 推到 timeline
         CommunityPost post = CommunityPost.publish(USER_B, PostType.GUIDE, "角色培养", "已删帖", "摘要", "内容", LocalDateTime.now());
         postRepository.save(post);
         timelineStore.pushToTimelines(post.getId(), post.getPublishedAt(), List.of(USER_A));
 
-        // 帖子被软删除（DB 里状态变 DELETED，但 timeline ZSet 里 postId 仍在）
+        // 帖子被软删除（status → DELETED，行仍在 DB 里）
         post.delete(LocalDateTime.now());
         postRepository.save(post);
 
         // 执行
         PageResult<PostSummaryResponse> result = feedService.findFollowingFeed(USER_A, 1, 20);
 
-        // 验证：已删除帖子不出现在结果（findPublishedByIds 内部 filter null 跳过）
-        // 注意：实际上 findAllById 能找到 DELETED 状态的帖子（JPA 不自动过滤），
-        // 但 findPublishedByIds 用 filter(Objects::nonNull) 不过滤非 PUBLISHED——
-        // 所以这个测试验证的是"timeline 里有 postId，DB 里帖子仍在但状态 DELETED"的场景。
-        // 实际效果：findPublishedByIds 会返回 DELETED 帖子（它不过滤状态）。
-        // 这是当前实现的已知局限（spec D5：取消关注/删除帖子的完整过滤留 #13）。
-        // 本测试只验证"帖子被物理删除"的场景（DB 里不存在 → findAllById 返回 null → 被过滤）。
+        // 断言：软删除的帖子不得出现在关注流里。
+        // findPublishedByIds 的语义就是"只返回已发布"，软删帖必须被过滤。
+        assertThat(result.items())
+                .as("软删除的帖子不应出现在关注流中")
+                .noneMatch(item -> item.id().equals(post.getId()));
     }
 }

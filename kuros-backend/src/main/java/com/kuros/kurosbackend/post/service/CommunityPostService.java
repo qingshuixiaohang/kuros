@@ -276,9 +276,28 @@ public class CommunityPostService {
         return new PageResult<>(items, new PageMeta(normalizedPage, normalizedPageSize, posts.getTotalElements(), posts.getTotalPages()));
     }
 
+    /**
+     * 按 id 批量构建摘要，只返回 PUBLISHED 状态的帖子（审计 M9 / D2）。
+     *
+     * 为什么必须按状态过滤：方法名承诺的是 Published。timeline ZSet 里的
+     * postId 不会随软删除而消失（删帖只改 status，不动 ZSet），
+     * findAllById 也能查到 DELETED 的行——只 filter null 的话软删帖会
+     * 漏进关注流，用户在自己的首页看到已删除内容。这正是原零断言测试
+     * 注释里记成"已知局限"的那个缺陷（FeedTimelineIntegrationTest
+     * .findFollowingFeed_filtersOutDeletedPosts 现在真正断言它）。
+     *
+     * 调用方：FeedService.findFollowingFeed / findFollowingFeedByCursor、
+     * ProfileService 收藏列表。三处都要求"只给用户看已发布内容"。
+     */
     public PageResult<PostSummaryResponse> findPublishedByIds(Page<String> ids) {
-        List<CommunityPost> posts = postRepository.findAllById(ids.getContent());
-        Map<String, CommunityPost> postsById = posts.stream().collect(Collectors.toMap(CommunityPost::getId, Function.identity()));
+        List<CommunityPost> all = postRepository.findAllById(ids.getContent());
+        // 先筛一次状态，后续的作者回填/媒体装载/组装都只处理已发布帖，
+        // 避免同一个 filter 条件在三个 stream 里重复
+        List<CommunityPost> posts = all.stream()
+                .filter(post -> post.getStatus() == PostStatus.PUBLISHED)
+                .toList();
+        Map<String, CommunityPost> postsById = posts.stream()
+                .collect(Collectors.toMap(CommunityPost::getId, Function.identity()));
         Map<String, UserBriefDto> authors = userDirectory.findAuthors(
                 posts.stream().map(CommunityPost::getAuthorId).toList());
         // M5/C1：整页媒体一次批量装载

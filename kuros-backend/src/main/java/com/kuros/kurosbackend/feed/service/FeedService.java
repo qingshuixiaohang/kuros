@@ -67,10 +67,10 @@ public class FeedService {
                             (int) Math.ceil((double) total / normalizedPageSize)));
         }
 
-        // 2. 委托 CommunityPostService 构建摘要（批量查帖子 + 作者回填 + 媒体查询）
-        //    findPublishedByIds 内部会过滤 null（已删除的帖子），但不过滤非 PUBLISHED 状态
-        //    ——这里传的 postId 都来自 timeline（发帖时已 PUBLISHED），删除的帖子在 findAllById 查不到
-        //    自然被 filter(Objects::nonNull) 跳过。
+        // 2. 委托 CommunityPostService 构建摘要（批量查帖子 + 作者回填 + 媒体查询）。
+        //    findPublishedByIds 按 PUBLISHED 状态过滤：timeline ZSet 里的 postId
+        //    不随软删除消失（删帖只改 status），只靠"查不到"是漏不掉删帖的
+        //    （审计 M9 / D2 修的就是这个）。
         Page<String> idPage = new PageImpl<>(postIds,
                 PageRequest.of(normalizedPage - 1, normalizedPageSize), total);
         return postService.findPublishedByIds(idPage);
