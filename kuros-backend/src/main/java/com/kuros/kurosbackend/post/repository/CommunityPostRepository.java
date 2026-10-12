@@ -15,12 +15,24 @@ import java.util.Optional;
 
 public interface CommunityPostRepository extends JpaRepository<CommunityPost, String> {
 
+    /**
+     * 可见帖子分页（列表读路径）。
+     *
+     * 为什么是 fetch join 而不是普通 join（审计 M5 / C1）：tags 是 LAZY
+     * ManyToMany。普通 join（哪怕是这里的过滤用 join）不会填充集合——
+     * 访问 post.getTags() 时每帖仍要发一条 SQL，一页 50 帖就是 50 条
+     * （见 PostListSqlCountIntegrationTest）。fetch join 在同一条 SQL 里
+     * 把整页的 tags 拉齐，SQL 数降为常数。
+     *
+     * distinct 不可省：collection fetch join 会因 tags 笛卡尔积产生重复行，
+     * 不 distinct 会让分页条数虚增、Page 元数据错乱。
+     */
     @Query("""
             select distinct p from CommunityPost p
-            left join p.tags tag
+            left join fetch p.tags
             where p.status = :status
               and (:category is null or p.category = :category)
-              and (:tag is null or tag.name = :tag)
+              and (:tag is null or exists (select t from p.tags t where t.name = :tag))
               and (:keyword is null or lower(p.title) like lower(concat('%', :keyword, '%'))
                    or lower(p.excerpt) like lower(concat('%', :keyword, '%')))
             """)
@@ -41,13 +53,17 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, St
      * 谓词 (published_at &lt; :ts) OR (published_at = :ts AND id &lt; :id)：同发布时间时用 id 字典序兜底全序，
      * 保证不丢不重。:hasCursor=false 时首个析取项恒真 → 退化为「取最新 limit 条」（第一页）。
      * 返回 List（非 Page）避开 COUNT(*)；limit 由 Pageable 施加（调用方传 limit+1 探测 hasMore）。
+     *
+     * fetch join + distinct：与 {@link #findVisiblePosts} 同理，一次性拉齐整页 tags，
+     * 避免每帖一条 SQL（审计 M5 / C1）。tag 过滤改用 exists 子查询，因为 fetch join
+     * 的路径不能再被 where 直接引用。
      */
     @Query("""
             select distinct p from CommunityPost p
-            left join p.tags tag
+            left join fetch p.tags
             where p.status = :status
               and (:category is null or p.category = :category)
-              and (:tag is null or tag.name = :tag)
+              and (:tag is null or exists (select t from p.tags t where t.name = :tag))
               and (:keyword is null or lower(p.title) like lower(concat('%', :keyword, '%'))
                    or lower(p.excerpt) like lower(concat('%', :keyword, '%')))
               and (:hasCursor = false
@@ -71,13 +87,15 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, St
      *
      * 四元组比较展开为 OR 链（JPQL 无 row-value 语法）：逐级相等才比下一级，任一级严格小于即命中下一页。
      * 同热度（like+comment 相等）时用 published_at、再用 id 兜底全序，保证不丢不重。
+     *
+     * fetch join + distinct：同上，一次性拉齐整页 tags。
      */
     @Query("""
             select distinct p from CommunityPost p
-            left join p.tags tag
+            left join fetch p.tags
             where p.status = :status
               and (:category is null or p.category = :category)
-              and (:tag is null or tag.name = :tag)
+              and (:tag is null or exists (select t from p.tags t where t.name = :tag))
               and (:keyword is null or lower(p.title) like lower(concat('%', :keyword, '%'))
                    or lower(p.excerpt) like lower(concat('%', :keyword, '%')))
               and (:hasCursor = false
