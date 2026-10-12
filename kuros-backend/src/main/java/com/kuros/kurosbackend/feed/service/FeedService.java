@@ -1,6 +1,7 @@
 package com.kuros.kurosbackend.feed.service;
 
 import com.kuros.kurosbackend.feed.redis.FeedTimelineStore;
+import com.kuros.kurosbackend.feed.redis.FeedTimelineStore.TimelineEntry;
 import com.kuros.kurosbackend.post.api.PostSummaryResponse;
 import com.kuros.kurosbackend.post.service.CommunityPostService;
 import com.kuros.kurosbackend.shared.api.CursorCodec;
@@ -95,25 +96,28 @@ public class FeedService {
         FeedCursor feedCursor = decodeFeedCursor(cursor);
 
         // 多取一条用于探测是否还有下一页
-        List<String> ids = timelineStore.readTimelineByCursor(
+        List<TimelineEntry> entries = timelineStore.readTimelineByCursor(
                 userId,
                 feedCursor == null ? null : feedCursor.score(),
                 feedCursor == null ? null : feedCursor.postId(),
                 normalizedLimit + 1);
-        if (ids.isEmpty()) {
+        if (entries.isEmpty()) {
             return CursorPageResult.empty();
         }
-        boolean hasMore = ids.size() > normalizedLimit;
-        List<String> pageIds = hasMore ? ids.subList(0, normalizedLimit) : ids;
+        boolean hasMore = entries.size() > normalizedLimit;
+        List<TimelineEntry> pageEntries = hasMore ? entries.subList(0, normalizedLimit) : entries;
 
+        // nextCursor 直接用本次查询带回的 score——不必再发一次 ZSCORE
+        // （member 已是复合键，调用方手里只有 postId，拼不出原始 member）。
+        // 基于「timeline 原始 id 序列」的最后一条（而非过滤已删后的可见项），
+        // 保证翻页按 timeline 位置稳定推进，不因中间有已删帖而错位或丢页。
         String nextCursor = null;
         if (hasMore) {
-            String lastId = pageIds.get(pageIds.size() - 1);
-            long lastScore = timelineStore.scoreOf(userId, lastId);
-            nextCursor = CursorCodec.encode(List.of(Long.toString(lastScore), lastId));
+            TimelineEntry last = pageEntries.get(pageEntries.size() - 1);
+            nextCursor = CursorCodec.encode(List.of(Long.toString(last.score()), last.postId()));
         }
 
-        // 复用 findPublishedByIds 构建摘要（批量查帖 + 作者回填 + 媒体），保留 pageIds 顺序、自然过滤已物理删除的帖
+        List<String> pageIds = pageEntries.stream().map(TimelineEntry::postId).toList();
         Page<String> idPage = new PageImpl<>(pageIds, PageRequest.of(0, pageIds.size()), pageIds.size());
         List<PostSummaryResponse> items = postService.findPublishedByIds(idPage).items();
         return new CursorPageResult<>(items, nextCursor, hasMore);

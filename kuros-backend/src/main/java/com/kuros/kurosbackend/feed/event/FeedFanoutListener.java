@@ -53,7 +53,7 @@ public class FeedFanoutListener {
                 log.debug("帖子 {} 作者 {} 无粉丝，跳过扇出", event.postId(), event.authorId());
                 return;
             }
-            timelineStore.pushToTimelines(event.postId(), event.publishedAt(), followerIds);
+            timelineStore.pushToTimelines(event.postId(), event.authorId(), event.publishedAt(), followerIds);
             log.info("帖子 {} 扇出到 {} 个粉丝的 timeline", event.postId(), followerIds.size());
         } catch (Exception exception) {
             // 降级：扇出失败不影响发帖成功响应（best-effort）

@@ -61,6 +61,8 @@ class FeedTimelineIntegrationTest {
     private static final String USER_A = "user-a";
     private static final String USER_B = "user-b";
     private static final String USER_C = "user-c";
+    /** 这些用例只关心 timeline 存取，用统一虚拟作者（member 复合键的作者段）。 */
+    private static final String AUTHOR = "timeline-test-author";
 
     @BeforeEach
     void setUp() {
@@ -79,7 +81,7 @@ class FeedTimelineIntegrationTest {
     @Test
     void pushToTimelines_addsPostToFollowersZSet() {
         LocalDateTime now = LocalDateTime.of(2026, 9, 21, 12, 0);
-        timelineStore.pushToTimelines("post-1", now, List.of(USER_A, USER_B));
+        timelineStore.pushToTimelines("post-1", AUTHOR, now, List.of(USER_A, USER_B));
 
         assertThat(timelineStore.contains(USER_A, "post-1")).isTrue();
         assertThat(timelineStore.contains(USER_B, "post-1")).isTrue();
@@ -93,9 +95,9 @@ class FeedTimelineIntegrationTest {
         LocalDateTime t2 = LocalDateTime.of(2026, 9, 21, 11, 0);
         LocalDateTime t3 = LocalDateTime.of(2026, 9, 21, 12, 0);
 
-        timelineStore.pushToTimelines("post-old", t1, List.of(USER_A));
-        timelineStore.pushToTimelines("post-mid", t2, List.of(USER_A));
-        timelineStore.pushToTimelines("post-new", t3, List.of(USER_A));
+        timelineStore.pushToTimelines("post-old", AUTHOR, t1, List.of(USER_A));
+        timelineStore.pushToTimelines("post-mid", AUTHOR, t2, List.of(USER_A));
+        timelineStore.pushToTimelines("post-new", AUTHOR, t3, List.of(USER_A));
 
         List<String> result = timelineStore.readTimeline(USER_A, 0, 10);
         assertThat(result).containsExactly("post-new", "post-mid", "post-old");
@@ -105,7 +107,7 @@ class FeedTimelineIntegrationTest {
     void readTimeline_pagination_worksCorrectly() {
         for (int i = 0; i < 5; i++) {
             LocalDateTime time = LocalDateTime.of(2026, 9, 21, 10 + i, 0);
-            timelineStore.pushToTimelines("post-" + i, time, List.of(USER_A));
+            timelineStore.pushToTimelines("post-" + i, AUTHOR, time, List.of(USER_A));
         }
 
         List<String> page1 = timelineStore.readTimeline(USER_A, 0, 2);
@@ -124,7 +126,7 @@ class FeedTimelineIntegrationTest {
         // 推 501 条，验证第 1 条被裁剪
         for (int i = 0; i < 501; i++) {
             LocalDateTime time = LocalDateTime.of(2026, 9, 21, 0, 0).plusMinutes(i);
-            timelineStore.pushToTimelines("post-" + i, time, List.of(USER_A));
+            timelineStore.pushToTimelines("post-" + i, AUTHOR, time, List.of(USER_A));
         }
 
         assertThat(timelineStore.size(USER_A)).isEqualTo(500);
@@ -136,8 +138,8 @@ class FeedTimelineIntegrationTest {
 
     @Test
     void pushToTimelines_emptyFollowerList_doesNothing() {
-        timelineStore.pushToTimelines("post-1", LocalDateTime.now(), List.of());
-        timelineStore.pushToTimelines("post-2", LocalDateTime.now(), null);
+        timelineStore.pushToTimelines("post-1", AUTHOR, LocalDateTime.now(), List.of());
+        timelineStore.pushToTimelines("post-2", AUTHOR, LocalDateTime.now(), null);
 
         assertThat(timelineStore.size(USER_A)).isEqualTo(0);
     }
@@ -157,8 +159,8 @@ class FeedTimelineIntegrationTest {
         postRepository.save(post1);
         postRepository.save(post2);
 
-        timelineStore.pushToTimelines(post1.getId(), post1.getPublishedAt(), List.of(USER_A));
-        timelineStore.pushToTimelines(post2.getId(), post2.getPublishedAt(), List.of(USER_A));
+        timelineStore.pushToTimelines(post1.getId(), post1.getAuthorId(), post1.getPublishedAt(), List.of(USER_A));
+        timelineStore.pushToTimelines(post2.getId(), post2.getAuthorId(), post2.getPublishedAt(), List.of(USER_A));
 
         // 执行
         PageResult<PostSummaryResponse> result = feedService.findFollowingFeed(USER_A, 1, 20);
@@ -185,7 +187,7 @@ class FeedTimelineIntegrationTest {
         // 准备：创建帖子 + 推到 timeline
         CommunityPost post = CommunityPost.publish(USER_B, PostType.GUIDE, "角色培养", "已删帖", "摘要", "内容", LocalDateTime.now());
         postRepository.save(post);
-        timelineStore.pushToTimelines(post.getId(), post.getPublishedAt(), List.of(USER_A));
+        timelineStore.pushToTimelines(post.getId(), post.getAuthorId(), post.getPublishedAt(), List.of(USER_A));
 
         // 帖子被软删除（status → DELETED，行仍在 DB 里）
         post.delete(LocalDateTime.now());

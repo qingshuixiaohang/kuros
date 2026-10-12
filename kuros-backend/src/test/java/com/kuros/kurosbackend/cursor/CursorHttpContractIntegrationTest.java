@@ -138,9 +138,9 @@ class CursorHttpContractIntegrationTest {
     void 关注流游标模式返回CursorPageResult信封() throws Exception {
         // 把 5 个帖子推入 USER 的 timeline，并直建会话（脱离 HTTP 登录，等价真实登录态）
         List<String> postIds = postRepository.findAll().stream().map(CommunityPost::getId).toList();
-        timelineStore.pushToTimelines(postIds.get(0), BASE.plusMinutes(0), List.of(USER));
+        timelineStore.pushToTimelines(postIds.get(0), AUTHOR, BASE.plusMinutes(0), List.of(USER));
         for (int i = 1; i < postIds.size(); i++) {
-            timelineStore.pushToTimelines(postIds.get(i), BASE.plusMinutes(i), List.of(USER));
+            timelineStore.pushToTimelines(postIds.get(i), AUTHOR, BASE.plusMinutes(i), List.of(USER));
         }
         Cookie session = new Cookie("KUROS_SESSION", StpUtil.createLoginSession(USER));
 
