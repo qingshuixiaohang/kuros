@@ -86,10 +86,19 @@ public class AuthService {
     /**
      * 登录流程（SaToken 版本）：
      * 1. 验证码校验（Redis）
-     * 2. 查找或创建用户
-     * 3. StpUtil.login(userId) → SaToken 自动生成 Token、存 Redis、设 Cookie
-     * 4. 同步角色/权限到 Redis（后续鉴权不再查 DB）
-     * 5. 同步 users.role 冗余字段（保持现有 API 响应格式不变）
+     * 2. 查找或创建用户（DB）
+     * 3. 同步 users.role 冗余字段（DB）
+     * 4. 事务提交后：建 SaToken 会话 + 同步 RBAC 到 Redis
+     *
+     * 为什么把 StpUtil.login() 也放到 afterCommit（安全加固 A3）：
+     * 它写共享 Redis，是非事务资源。若放在事务内，而第 3 步的 save 失败导致
+     * 回滚，Redis 里就残留一个指向**从未提交用户**的有效会话——用户拿着 Cookie
+     * 能过 backend 的 checkLogin（拆服务不拆会话把爆炸半径放大到整个 backend）。
+     * 这正是本类原来那段 afterCommit 注释想避免的场景，只是漏了最关键的一次写。
+     *
+     * afterCommit 里 SaHolder 仍可用的依据：同事务内 HTTP 响应尚未提交，
+     * SaToken 写 Cookie 依赖的请求上下文还在。token 值也在此处才能取到——
+     * 故用 request 作用域的 holder 把它带出回调，方法末尾读取后返回。
      */
     @Transactional
     public LoginResult login(PhoneLoginRequest request) {
@@ -100,29 +109,40 @@ public class AuthService {
 
         CommunityUser user = userRepository.findByPhone(phone).orElseGet(() -> createUser(phone));
 
-        // SaToken 登录：自动生成 Token、存入 Redis、通过 Cookie 返回给前端
-        // 为什么不用手动 set-cookie？因为 SaToken 配置了 is-read-cookie=true + token-name=KUROS_SESSION，
-        // 它会自动在响应中设置 HttpOnly Cookie，前端零改动（配置随迁移逐字复制，Cookie 名不变）。
-        StpUtil.login(user.getId());
-
         // 同步 users.role 冗余字段：保持 AuthUserResponse 格式不变，前端不用改
         syncRoleField(user);
 
-        // 事务提交后再同步 RBAC 数据到 Redis，避免 DB 回滚时 Redis 产生孤儿会话
-        // 为什么延迟？因为 Redis 是非事务资源，如果 syncPermissionsToRedis 在事务内执行，
-        // 而后续的 syncRoleField 失败导致 DB 回滚，Redis 中已写入的权限缓存无法回滚，
-        // 导致缓存与 DB 不一致。延迟到事务提交后执行，保证 DB 已持久化再写缓存。
+        // 事务提交后再做两件写 Redis 的事：建会话 + 同步 RBAC。
+        // 顺序有讲究——必须先建会话再同步权限：StpInterfaceImpl 读 Redis 里的
+        // 角色/权限缓存，若反过来，会话可用的瞬间权限缓存还是空的。
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
+                StpUtil.login(user.getId());
+                SESSION_TOKEN_HOLDER.set(StpUtil.getTokenValue());
                 syncPermissionsToRedis(user.getId());
             }
         });
 
-        String token = StpUtil.getTokenValue();
+        String token;
+        try {
+            token = SESSION_TOKEN_HOLDER.get();
+        } finally {
+            // 必须清理：请求线程会被池化复用，残留的 token 会串到下一次登录
+            SESSION_TOKEN_HOLDER.remove();
+        }
         long maxAgeSeconds = StpUtil.getTokenTimeout();
         return new LoginResult(toResponse(user), token, maxAgeSeconds);
     }
+
+    /**
+     * 把 afterCommit 里生成的 token 带出回调。
+     *
+     * 为什么用 ThreadLocal 而不是让 login() 直接返回：afterCommit 在事务管理器
+     * 提交成功后同步调用，仍在同一请求线程上，但它的返回值无处可去。用一个
+     * request 作用域的 holder 承载这一次性的传递，方法末尾读取后立即清理。
+     */
+    private static final ThreadLocal<String> SESSION_TOKEN_HOLDER = new ThreadLocal<>();
 
     /**
      * 获取当前登录用户（SaToken 版本）。
