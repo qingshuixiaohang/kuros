@@ -34,17 +34,8 @@ import { CommunityFollowButton } from "@/components/community/community-follow-b
 import { CommunityHeroCarousel, CommunityImageCarousel } from "@/components/community/community-carousel";
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
-import {
-  ApiError,
-  favoritePost,
-  fetchFollowingFeedByCursor,
-  fetchMyProfile,
-  fetchPostInteractionsBatch,
-  fetchPosts,
-  likePost,
-  unfavoritePost,
-  unlikePost,
-} from "@/lib/api";
+import { ApiError, fetchFollowingFeedByCursor, fetchMyProfile, fetchPostInteractionsBatch, fetchPosts } from "@/lib/api";
+import { useFavoriteMutation, useLikeMutation } from "@/lib/community-queries";
 import { guides, newsItems } from "@/lib/mock";
 import { DEMO_AUTHOR_ID_BY_NAME, toGuide } from "@/lib/post-view";
 import type { Guide } from "@/types/community";
@@ -378,23 +369,24 @@ function PostCard({ guide, interaction: initialInteraction }: { guide: Guide; in
     ? { postId: postId ?? "", likeCount: parseLikeCount(guide.likes), favoriteCount: 0, ...initialInteraction, ...override }
     : null;
   const isBookmarked = interaction?.favorited ?? bookmarked.includes(guide.id);
+  const likeMutation = useLikeMutation(postId ?? "");
+  const favoriteMutation = useFavoriteMutation(postId ?? "");
   function change(kind: "like" | "favorite") {
-    requestLogin(() => {
+    requestLogin(async () => {
       if (!postId || !interaction) {
         if (kind === "like") toggleLike(guide.id);
         else toggleBookmark(guide.id);
         return;
       }
-      const action = kind === "like" ? (interaction.liked ? unlikePost : likePost) : interaction.favorited ? unfavoritePost : favoritePost;
-      void action(postId)
-        .then((result) => {
-          // 只覆盖状态位：计数由列表重取刷新（invalidate 后 guide.likes 变新值），
-          // 在这里叠加 result.likeCount 会让它和列表数据打架
-          setOverride({ liked: result.liked, favorited: result.favorited });
-          if (kind === "like") toggleLike(guide.id);
-          else toggleBookmark(guide.id);
-        })
-        .catch((error) => notify(error instanceof Error ? error.message : "操作失败，请稍后重试"));
+      // 收藏和点赞一样走 mutation：onSuccess 会 invalidate 首页批量状态，
+      // 去详情页时读到的是新值，不再"首页收藏了、详情页显示未收藏"
+      // 两个 mutation 的变量类型不同，分开写而不是塞进同一个联合变量——
+      // TS 会把联合推断成 never，then 也就取不到
+      const settled =
+        kind === "like"
+          ? await likeMutation.mutateAsync(interaction.liked ? "unlike" : "like")
+          : await favoriteMutation.mutateAsync(interaction.favorited ? "unfavorite" : "favorite");
+      setOverride({ liked: settled.liked, favorited: settled.favorited });
     });
   }
   const isLiked = interaction?.liked ?? liked.includes(guide.id);

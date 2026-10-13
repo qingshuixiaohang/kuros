@@ -19,21 +19,10 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
 import { CommunityImageCarousel } from "@/components/community/community-carousel";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
-import { useLikeMutation, usePostInteractionsQuery } from "@/lib/community-queries";
+import { useFavoriteMutation, useLikeMutation, usePostInteractionsQuery } from "@/lib/community-queries";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
 import { useCommunityDemo } from "@/components/community/community-interactions";
-import {
-  ApiError,
-  createComment,
-  deleteComment,
-  favoritePost,
-  fetchComments,
-  fetchPost,
-  unfavoritePost,
-  type ApiComment,
-  type PostInteraction,
-  type ReportTargetType,
-} from "@/lib/api";
+import { ApiError, createComment, deleteComment, fetchComments, fetchPost, type ApiComment, type PostInteraction, type ReportTargetType } from "@/lib/api";
 import { guides } from "@/lib/mock";
 import { DEMO_COVER_BY_SLUG, DEMO_POST_ID_BY_SLUG, extractMarkdownImages, formatPublishedAt } from "@/lib/post-view";
 import { parseMarkdownHeading, renderMarkdown, sectionIdForTitle } from "./markdown";
@@ -113,6 +102,7 @@ function PostReactionRail({ guide, postId }: { guide: Guide; postId: string }) {
   // mutation 的 onSuccess invalidate 会让两侧一起重取。
   const interactionsQuery = usePostInteractionsQuery(postId);
   const likeMutation = useLikeMutation(postId);
+  const favoriteMutation = useFavoriteMutation(postId);
   const interaction: PostInteraction = interactionsQuery.data ?? {
     postId,
     likeCount: parseCount(guide.likes),
@@ -120,24 +110,18 @@ function PostReactionRail({ guide, postId }: { guide: Guide; postId: string }) {
     liked: false,
     favorited: false,
   };
-  // 收藏仍走原有手写路径（本次改造范围只到点赞，收藏的 mutation 留作下一步）
-  const [favorite, setFavorite] = useState<PostInteraction | null>(null);
-  const display = favorite ?? interaction;
-  const loading = likeMutation.isPending;
+  // 收藏也走 mutation 了：点赞/收藏改的是同一个互动状态资源，
+  // 任一侧写入都要让首页卡片、搜索卡片、关注流一起重取。
+  const display = interaction;
+  const loading = likeMutation.isPending || favoriteMutation.isPending;
   async function change(kind: "like" | "favorite") {
     if (loading) return;
-    if (kind === "favorite") {
-      try {
-        const next = display.favorited ? await unfavoritePost(postId) : await favoritePost(postId);
-        setFavorite(next);
-      } catch (error) {
-        notify(error instanceof Error ? error.message : "操作失败，请稍后重试");
-      }
-      return;
-    }
-    // 点赞：mutation 的 onSuccess 已负责 invalidate，这里只处理错误提示
     try {
-      await likeMutation.mutateAsync(display.liked ? "unlike" : "like");
+      if (kind === "like") {
+        await likeMutation.mutateAsync(display.liked ? "unlike" : "like");
+      } else {
+        await favoriteMutation.mutateAsync(display.favorited ? "unfavorite" : "favorite");
+      }
     } catch (error) {
       notify(error instanceof Error ? error.message : "操作失败，请稍后重试");
     }

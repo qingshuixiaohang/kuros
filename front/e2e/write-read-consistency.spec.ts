@@ -116,6 +116,21 @@ async function mockBackend(page: Page) {
     });
   });
 
+  // 收藏：与点赞同样的处理。缺了这条路由，收藏 mutation 的请求会落到
+  // 真实 dev server（404），服务端状态永远不变——测试只会看到"没生效"
+  await page.route(new RegExp(`/api/v1/posts/${POST_ID}/interactions/favorite`), async (route) => {
+    if (route.request().method() === "POST") {
+      state[POST_ID] = { ...state[POST_ID], favorited: true, favoriteCount: state[POST_ID].favoriteCount + 1 };
+    } else {
+      state[POST_ID] = { ...state[POST_ID], favorited: false, favoriteCount: Math.max(0, state[POST_ID].favoriteCount - 1) };
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ code: "SUCCESS", data: { postId: POST_ID, ...state[POST_ID] } }),
+    });
+  });
+
   // CSRF 前置（前端 ensureCsrfToken 会打这个）
   await page.route("**/api/v1/auth/csrf", (route) =>
     route.fulfill({
@@ -227,5 +242,40 @@ test.describe("写后读一致性", () => {
     await expect(homeCard).toBeVisible();
     const homeLikeButton = homeCard.locator("button").filter({ hasText: /^\d/ }).first();
     await expect(homeLikeButton).toContainText("6");
+  });
+});
+
+test.describe("收藏的写后读一致性", () => {
+  test("详情页收藏后返回首页，首页卡片显示已收藏", async ({ page }) => {
+    await seedLogin(page);
+    const state = await mockBackend(page);
+
+    await page.goto(`/guides/${POST_ID}`);
+    await expect(page.getByText("写后读一致性测试帖").first()).toBeVisible();
+    await page.locator('button:has-text("收藏"), button[aria-label*="收藏"]').first().click();
+    await expect.poll(() => state[POST_ID].favorited).toBe(true);
+
+    await page.goto("/");
+    const homeCard = page.locator("article.post-card").filter({ hasText: "写后读一致性测试帖" }).first();
+    await expect(homeCard).toBeVisible();
+    // 收藏按钮在"更多"菜单里，它的可见信号是文案从"收藏帖子"变成"取消收藏"
+    await homeCard.locator("button.more-button").first().click();
+    await expect(homeCard.locator("button").filter({ hasText: "取消收藏" }).first()).toBeVisible();
+  });
+
+  test("首页收藏后进详情页，详情页显示已收藏", async ({ page }) => {
+    await seedLogin(page);
+    const state = await mockBackend(page);
+
+    await page.goto("/");
+    const homeCard = page.locator("article.post-card").filter({ hasText: "写后读一致性测试帖" }).first();
+    await expect(homeCard).toBeVisible();
+    await homeCard.locator("button.more-button").first().click();
+    await homeCard.locator("button").filter({ hasText: "收藏帖子" }).first().click();
+    await expect.poll(() => state[POST_ID].favorited).toBe(true);
+
+    await page.goto(`/guides/${POST_ID}`);
+    await expect(page.getByText("写后读一致性测试帖").first()).toBeVisible();
+    await expect(page.locator('button[aria-label="取消收藏"]').first()).toBeVisible();
   });
 });

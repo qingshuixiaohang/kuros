@@ -1,5 +1,5 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchPostInteractions, fetchPostPage, likePost, searchPosts, unlikePost } from "@/lib/api";
+import { favoritePost, fetchPostInteractions, fetchPostPage, likePost, searchPosts, unfavoritePost, unlikePost } from "@/lib/api";
 
 export function useCommunityPostQuery(options: {
   category?: string;
@@ -83,6 +83,25 @@ export function useLikeMutation(postId: string) {
     onSuccess: () => {
       // 本帖互动状态 + 所有列表查询一起失效：首页/搜索/关注流的卡片
       // 都会在下一次渲染前重取，不再有"一头新一头旧"
+      queryClient.invalidateQueries({ queryKey: ["post-interactions", postId] });
+      queryClient.invalidateQueries({ queryKey: ["community-posts"] });
+      queryClient.invalidateQueries({ queryKey: ["search-posts"] });
+      queryClient.invalidateQueries({ queryKey: ["feed-interaction-states"] });
+    },
+  });
+}
+
+/**
+ * 收藏 mutation（H-12：写操作纳入 react-query 的第二类）。
+ *
+ * 与 useLikeMutation 共享同一套失效集合：点赞和收藏改的是同一个资源
+ * （一帖的互动状态），任一侧写入都必须让两侧视图一起重取。
+ */
+export function useFavoriteMutation(postId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (next: "favorite" | "unfavorite") => (next === "favorite" ? favoritePost(postId) : unfavoritePost(postId)),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["post-interactions", postId] });
       queryClient.invalidateQueries({ queryKey: ["community-posts"] });
       queryClient.invalidateQueries({ queryKey: ["search-posts"] });
