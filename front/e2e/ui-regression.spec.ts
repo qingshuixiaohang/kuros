@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { mockPostDetail } from "./helpers/post-detail-mock";
 
 const coreRoutes = ["/", "/guides/10000000-0000-0000-0000-000000000001", "/profile", "/publish"];
 const targetViewports = [
@@ -102,6 +103,7 @@ test("减少动画偏好下发布编辑器设置滚动使用 auto", async ({ pag
 });
 
 test("减少动画偏好下帖子互动滚动使用 auto", async ({ page }) => {
+  await mockPostDetail(page);
   await page.addInitScript(() => {
     const original = Element.prototype.scrollIntoView;
     Element.prototype.scrollIntoView = function (options) {
@@ -150,6 +152,7 @@ test("桌面端已登录账户区：点头像展开账户面板，含个人中�
 });
 
 test("评论编辑器提供表情、图片和提及工具", async ({ page }) => {
+  await mockPostDetail(page);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/guides/10000000-0000-0000-0000-000000000001");
   const composer = page.getByRole("region", { name: "评论区" });
@@ -191,6 +194,7 @@ test("评论编辑器提供表情、图片和提及工具", async ({ page }) => 
 });
 
 test("窄视口下表情浮层脱离帖子裁剪且可以插入", async ({ page }) => {
+  await mockPostDetail(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/guides/10000000-0000-0000-0000-000000000001");
   const composer = page.getByRole("region", { name: "评论区" });
