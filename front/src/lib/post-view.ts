@@ -5,8 +5,9 @@ const markdownImage = /!\[[^\]]*\]\(([^)\s]+)(?:\s+["'][^)]*["'])?\)/g;
 
 export function extractMarkdownImages(content?: string) {
   if (!content) return [];
-  return Array.from(content.matchAll(markdownImage), (match) => match[1])
-    .filter((source) => source.startsWith("/media/") || source.startsWith("/art/") || /^https?:\/\//i.test(source));
+  return Array.from(content.matchAll(markdownImage), (match) => match[1]).filter(
+    (source) => source.startsWith("/media/") || source.startsWith("/art/") || /^https?:\/\//i.test(source),
+  );
 }
 
 export function formatPostCount(value: number) {
@@ -36,7 +37,16 @@ export function toGuide(post: ApiPost): Guide {
     replies: post.commentCount,
     likes: formatPostCount(post.likeCount),
     tags: post.tags,
-    mediaUrls: post.media?.length ? post.media.slice().sort((left, right) => left.sortOrder - right.sortOrder).map((item) => item.url) : post.mediaUrls?.length ? post.mediaUrls : post.coverImageUrl ? [post.coverImageUrl] : extractMarkdownImages(post.content),
+    mediaUrls: post.media?.length
+      ? post.media
+          .slice()
+          .sort((left, right) => left.sortOrder - right.sortOrder)
+          .map((item) => item.url)
+      : post.mediaUrls?.length
+        ? post.mediaUrls
+        : post.coverImageUrl
+          ? [post.coverImageUrl]
+          : extractMarkdownImages(post.content),
   };
 }
 
@@ -77,9 +87,7 @@ export const DEMO_POST_ID_BY_SLUG: Record<string, string> = {
   "new-player-route": "10000000-0000-0000-0000-000000000004",
 };
 
-export const DEMO_SLUG_BY_POST_ID: Record<string, string> = Object.fromEntries(
-  Object.entries(DEMO_POST_ID_BY_SLUG).map(([slug, id]) => [id, slug])
-);
+export const DEMO_SLUG_BY_POST_ID: Record<string, string> = Object.fromEntries(Object.entries(DEMO_POST_ID_BY_SLUG).map(([slug, id]) => [id, slug]));
 
 /** 演示作者昵称 → 种子用户 UUID（未登录 demo 场景的作者归属换算）。 */
 export const DEMO_AUTHOR_ID_BY_NAME: Record<string, string> = {

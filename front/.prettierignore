@@ -1,0 +1,7 @@
+# 构建产物与依赖
+.next
+node_modules
+output
+
+# 自动生成的文件（改不动也没必要改）
+src/app/**/page.tsx.bak

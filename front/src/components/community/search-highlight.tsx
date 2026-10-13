@@ -20,8 +20,14 @@ export function HighlightText({ fragments, fallback }: { fragments?: string[]; f
   const nodes: ReactNode[] = [];
   let inMark = false;
   parts.forEach((part, index) => {
-    if (part === "<mark>") { inMark = true; return; }
-    if (part === "</mark>") { inMark = false; return; }
+    if (part === "<mark>") {
+      inMark = true;
+      return;
+    }
+    if (part === "</mark>") {
+      inMark = false;
+      return;
+    }
     if (!part) return;
     nodes.push(inMark ? <mark key={index}>{part}</mark> : <span key={index}>{part}</span>);
   });

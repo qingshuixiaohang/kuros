@@ -106,14 +106,21 @@ export type ProfileOverview = {
 };
 
 export class ApiError extends Error {
-  constructor(public readonly status: number, public readonly code?: string, message = "API request failed") {
+  constructor(
+    public readonly status: number,
+    public readonly code?: string,
+    message = "API request failed",
+  ) {
     super(message);
   }
 }
 
 function csrfToken() {
   if (typeof document === "undefined") return undefined;
-  return document.cookie.split("; ").find((item) => item.startsWith("XSRF-TOKEN="))?.split("=")[1];
+  return document.cookie
+    .split("; ")
+    .find((item) => item.startsWith("XSRF-TOKEN="))
+    ?.split("=")[1];
 }
 
 async function ensureCsrfToken() {
@@ -134,11 +141,15 @@ async function requestEnvelope<T>(path: string, init: RequestInit = {}): Promise
   });
   if (!response.ok) {
     let error: { code?: string; message?: string } = {};
-    try { error = await response.json() as { code?: string; message?: string }; } catch { /* Keep the HTTP status. */ }
+    try {
+      error = (await response.json()) as { code?: string; message?: string };
+    } catch {
+      /* Keep the HTTP status. */
+    }
     throw new ApiError(response.status, error.code, error.message ?? "API request failed");
   }
   if (response.status === 204) return undefined as unknown as ApiEnvelope<T>;
-  return await response.json() as ApiEnvelope<T>;
+  return (await response.json()) as ApiEnvelope<T>;
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -146,7 +157,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return envelope?.data as T;
 }
 
-export async function fetchPostPage(options: { category?: string; keyword?: string; tag?: string; page?: number; pageSize?: number; sort?: "latest" | "hot" } = {}) {
+export async function fetchPostPage(
+  options: { category?: string; keyword?: string; tag?: string; page?: number; pageSize?: number; sort?: "latest" | "hot" } = {},
+) {
   const params = new URLSearchParams();
   params.set("page", String(options.page ?? 1));
   params.set("pageSize", String(options.pageSize ?? 20));
@@ -158,7 +171,9 @@ export async function fetchPostPage(options: { category?: string; keyword?: stri
   return { items: envelope?.data ?? [], meta: envelope?.meta };
 }
 
-export async function fetchPosts(options: { category?: string; keyword?: string; tag?: string; page?: number; pageSize?: number; sort?: "latest" | "hot" } = {}) {
+export async function fetchPosts(
+  options: { category?: string; keyword?: string; tag?: string; page?: number; pageSize?: number; sort?: "latest" | "hot" } = {},
+) {
   return (await fetchPostPage(options)).items;
 }
 
@@ -177,7 +192,9 @@ export async function fetchFollowingFeedByCursor(options: { cursor?: string | nu
   return { items: data?.items ?? [], nextCursor: data?.nextCursor ?? null, hasMore: data?.hasMore ?? false };
 }
 
-export async function fetchCharacterPage(options: { role?: string; attribute?: string; weapon?: string; rarity?: number; keyword?: string; page?: number; pageSize?: number } = {}) {
+export async function fetchCharacterPage(
+  options: { role?: string; attribute?: string; weapon?: string; rarity?: number; keyword?: string; page?: number; pageSize?: number } = {},
+) {
   const params = new URLSearchParams({
     page: String(options.page ?? 1),
     pageSize: String(options.pageSize ?? 12),
@@ -212,15 +229,17 @@ export function fetchPost(id: string) {
  * ES 软依赖降级：后端不可用时返回 503(code=SERVICE_UNAVAILABLE)，此处抛 {@link ApiError} 交调用方区分
  * 「搜索暂不可用」(503) 与「后端整体不可用→本地 Demo 回退」(其他错误)。
  */
-export async function searchPosts(options: {
-  keyword?: string;
-  category?: string;
-  tag?: string;
-  type?: "GUIDE" | "GENERAL";
-  sort?: "relevance" | "latest" | "hot";
-  cursor?: string | null;
-  limit?: number;
-} = {}): Promise<CursorPageResult<PostSearchItem>> {
+export async function searchPosts(
+  options: {
+    keyword?: string;
+    category?: string;
+    tag?: string;
+    type?: "GUIDE" | "GENERAL";
+    sort?: "relevance" | "latest" | "hot";
+    cursor?: string | null;
+    limit?: number;
+  } = {},
+): Promise<CursorPageResult<PostSearchItem>> {
   const params = new URLSearchParams();
   params.set("limit", String(options.limit ?? 10));
   params.set("sort", options.sort ?? "relevance");
@@ -234,7 +253,15 @@ export async function searchPosts(options: {
   return { items: data?.items ?? [], nextCursor: data?.nextCursor ?? null, hasMore: data?.hasMore ?? false };
 }
 
-export type CreatePostInput = { type: "GUIDE" | "GENERAL"; category: string; title: string; excerpt?: string; content: string; tags: string[]; mediaAssetIds?: string[] };
+export type CreatePostInput = {
+  type: "GUIDE" | "GENERAL";
+  category: string;
+  title: string;
+  excerpt?: string;
+  content: string;
+  tags: string[];
+  mediaAssetIds?: string[];
+};
 
 export function createPost(input: CreatePostInput) {
   return ensureCsrfToken().then(() => request<ApiPost>("/api/v1/posts", { method: "POST", body: JSON.stringify(input) }));
@@ -251,12 +278,26 @@ export function deletePost(postId: string) {
 export type ReportTargetType = "POST" | "COMMENT";
 export type ReportReason = "SPAM" | "ABUSE" | "MISINFORMATION" | "OTHER";
 export type ReportStatus = "PENDING" | "CONFIRMED" | "REJECTED";
-export type ApiReport = { id: string; reporterId: string; targetType: ReportTargetType; targetId: string; reason: ReportReason; status: ReportStatus; handledBy: string | null; handledAt: string | null; handlingNote: string | null; createdAt: string };
+export type ApiReport = {
+  id: string;
+  reporterId: string;
+  targetType: ReportTargetType;
+  targetId: string;
+  reason: ReportReason;
+  status: ReportStatus;
+  handledBy: string | null;
+  handledAt: string | null;
+  handlingNote: string | null;
+  createdAt: string;
+};
 
 export function createReport(targetType: ReportTargetType, targetId: string, reason: ReportReason) {
-  return ensureCsrfToken().then(() => request<ApiReport>(`/api/v1/reports/${targetType}/${encodeURIComponent(targetId)}`, {
-    method: "POST", body: JSON.stringify({ reason }),
-  }));
+  return ensureCsrfToken().then(() =>
+    request<ApiReport>(`/api/v1/reports/${targetType}/${encodeURIComponent(targetId)}`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+  );
 }
 
 export function fetchAdminReports(status?: ReportStatus) {
@@ -266,9 +307,12 @@ export function fetchAdminReports(status?: ReportStatus) {
 }
 
 export function handleReport(reportId: string, action: "CONFIRM" | "REJECT", note?: string) {
-  return ensureCsrfToken().then(() => request<ApiReport>(`/api/v1/admin/reports/${encodeURIComponent(reportId)}/handle`, {
-    method: "POST", body: JSON.stringify({ action, note: note?.trim() || null }),
-  }));
+  return ensureCsrfToken().then(() =>
+    request<ApiReport>(`/api/v1/admin/reports/${encodeURIComponent(reportId)}/handle`, {
+      method: "POST",
+      body: JSON.stringify({ action, note: note?.trim() || null }),
+    }),
+  );
 }
 
 export type UploadedImage = { assetId: string; url: string; originalName: string | null; contentType: string; size: number };
@@ -309,8 +353,7 @@ export function fetchPostInteractions(postId: string) {
  */
 export async function fetchPostInteractionsBatch(postIds: string[]): Promise<Map<string, { liked: boolean; favorited: boolean }>> {
   if (postIds.length === 0) return new Map();
-  const envelope = await requestEnvelope<Record<string, [number, number]>>(
-    `/api/v1/interactions/batch-states?ids=${encodeURIComponent(postIds.join(","))}`);
+  const envelope = await requestEnvelope<Record<string, [number, number]>>(`/api/v1/interactions/batch-states?ids=${encodeURIComponent(postIds.join(","))}`);
   const result = new Map<string, { liked: boolean; favorited: boolean }>();
   for (const [postId, state] of Object.entries(envelope?.data ?? {})) {
     result.set(postId, { liked: state[0] === 1, favorited: state[1] === 1 });
@@ -355,14 +398,18 @@ export async function fetchComments(postId: string, options: { page?: number; pa
 }
 
 export function createComment(postId: string, content: string, parentId?: string | null) {
-  return ensureCsrfToken().then(() => request<ApiComment>(`/api/v1/posts/${encodeURIComponent(postId)}/comments`, {
+  return ensureCsrfToken().then(() =>
+    request<ApiComment>(`/api/v1/posts/${encodeURIComponent(postId)}/comments`, {
       method: "POST",
       body: JSON.stringify({ content, parentId: parentId ?? null }),
-    }));
+    }),
+  );
 }
 
 export function deleteComment(postId: string, commentId: string) {
-  return ensureCsrfToken().then(() => request<void>(`/api/v1/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`, { method: "DELETE" }));
+  return ensureCsrfToken().then(() =>
+    request<void>(`/api/v1/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`, { method: "DELETE" }),
+  );
 }
 
 export function requestVerificationCode(phone: string) {
@@ -374,7 +421,12 @@ export function loginWithPhone(phone: string, code: string) {
 }
 
 export async function fetchCurrentUser() {
-  try { return await request<AuthUser>("/api/v1/auth/me"); } catch (error) { if (error instanceof ApiError && error.status === 401) return null; throw error; }
+  try {
+    return await request<AuthUser>("/api/v1/auth/me");
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) return null;
+    throw error;
+  }
 }
 
 export function fetchPublicProfile(userId: string) {

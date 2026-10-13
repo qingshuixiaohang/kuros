@@ -96,27 +96,51 @@ export function CommunityImageCarousel({
     >
       <CarouselImageView image={{ ...image, alt: `${image.alt}第 ${currentIndex + 1} 张` }} priority={priority} />
     </Link>
-  ) : <CarouselImageView image={{ ...image, alt: `${image.alt}第 ${currentIndex + 1} 张` }} priority={priority} />;
+  ) : (
+    <CarouselImageView image={{ ...image, alt: `${image.alt}第 ${currentIndex + 1} 张` }} priority={priority} />
+  );
 
-  return <div
-    aria-label={label}
-    aria-roledescription="carousel"
-    className={`community-carousel ${className}`.trim()}
-    onKeyDown={handleKeyDown}
-    onPointerDown={handlePointerDown}
-    onPointerUp={handlePointerUp}
-    role="region"
-    tabIndex={0}
-  >
-    <div className="community-carousel-viewport">
-      {imageContent}
-      {hasControls && <>
-        <button aria-label="上一张" className="community-carousel-arrow community-carousel-arrow--previous" onClick={() => move(-1)} type="button"><ChevronLeft size={18} /></button>
-        <button aria-label="下一张" className="community-carousel-arrow community-carousel-arrow--next" onClick={() => move(1)} type="button"><ChevronRight size={18} /></button>
-      </>}
+  return (
+    <div
+      aria-label={label}
+      aria-roledescription="carousel"
+      className={`community-carousel ${className}`.trim()}
+      onKeyDown={handleKeyDown}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      role="region"
+      tabIndex={0}
+    >
+      <div className="community-carousel-viewport">
+        {imageContent}
+        {hasControls && (
+          <>
+            <button aria-label="上一张" className="community-carousel-arrow community-carousel-arrow--previous" onClick={() => move(-1)} type="button">
+              <ChevronLeft size={18} />
+            </button>
+            <button aria-label="下一张" className="community-carousel-arrow community-carousel-arrow--next" onClick={() => move(1)} type="button">
+              <ChevronRight size={18} />
+            </button>
+          </>
+        )}
+      </div>
+      {hasControls && (
+        <div aria-label={`${label}分页`} className="community-carousel-dots" role="tablist">
+          {images.map((item, index) => (
+            <button
+              aria-current={index === currentIndex ? "true" : undefined}
+              aria-label={`${label}第 ${index + 1} 张`}
+              className={index === currentIndex ? "is-active" : ""}
+              key={`${item.src}-${index}`}
+              onClick={() => setActiveIndex(index)}
+              role="tab"
+              type="button"
+            />
+          ))}
+        </div>
+      )}
     </div>
-    {hasControls && <div aria-label={`${label}分页`} className="community-carousel-dots" role="tablist">{images.map((item, index) => <button aria-current={index === currentIndex ? "true" : undefined} aria-label={`${label}第 ${index + 1} 张`} className={index === currentIndex ? "is-active" : ""} key={`${item.src}-${index}`} onClick={() => setActiveIndex(index)} role="tab" type="button" />)}</div>}
-  </div>;
+  );
 }
 
 export type BannerSlide = CarouselImage & { description: string; title: string };
@@ -167,33 +191,64 @@ export function CommunityHeroCarousel({ label, slides }: { label: string; slides
     if (Math.abs(delta) >= 40) move(delta > 0 ? -1 : 1);
   }
 
-  return <section
-    aria-label={label}
-    aria-roledescription="carousel"
-    className="community-banner community-banner--carousel"
-    id="top"
-    onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setPaused(false); }}
-    onFocusCapture={() => setPaused(true)}
-    onKeyDown={handleKeyDown}
-    onMouseEnter={() => setPaused(true)}
-    onMouseLeave={() => setPaused(false)}
-    onPointerDown={handlePointerDown}
-    onPointerUp={handlePointerUp}
-    role="region"
-    tabIndex={0}
-  >
-    <div className="community-banner-stage">{slides.map((slide, index) => {
-      const offset = bannerOffset(index, activeIndex, slides.length);
-      const position = offset === 0 ? "current" : offset === -1 ? "previous" : offset === 1 ? "next" : "hidden";
-      return <article aria-hidden={position !== "current"} className={`community-banner-slide community-banner-slide--${position}`} key={slide.src}>
-        <Image alt={position === "current" ? slide.alt : ""} fill priority={position === "current"} sizes="(max-width: 720px) 100vw, 880px" src={slide.src} />
-        
-      </article>;
-    })}</div>
-    {slides.length > 1 && <>
-      <button aria-label="上一张 Banner" className="community-banner-arrow community-banner-arrow--previous" onClick={() => move(-1)} type="button"><ChevronLeft size={19} /></button>
-      <button aria-label="下一张 Banner" className="community-banner-arrow community-banner-arrow--next" onClick={() => move(1)} type="button"><ChevronRight size={19} /></button>
-      <div aria-label={`${label}分页`} className="community-banner-dots" role="tablist">{slides.map((slide, index) => <button aria-current={index === activeIndex ? "true" : undefined} aria-label={`${label}第 ${index + 1} 张`} className={index === activeIndex ? "is-active" : ""} key={slide.src} onClick={() => setActiveIndex(index)} role="tab" type="button" />)}</div>
-    </>}
-  </section>;
+  return (
+    <section
+      aria-label={label}
+      aria-roledescription="carousel"
+      className="community-banner community-banner--carousel"
+      id="top"
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setPaused(false);
+      }}
+      onFocusCapture={() => setPaused(true)}
+      onKeyDown={handleKeyDown}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      role="region"
+      tabIndex={0}
+    >
+      <div className="community-banner-stage">
+        {slides.map((slide, index) => {
+          const offset = bannerOffset(index, activeIndex, slides.length);
+          const position = offset === 0 ? "current" : offset === -1 ? "previous" : offset === 1 ? "next" : "hidden";
+          return (
+            <article aria-hidden={position !== "current"} className={`community-banner-slide community-banner-slide--${position}`} key={slide.src}>
+              <Image
+                alt={position === "current" ? slide.alt : ""}
+                fill
+                priority={position === "current"}
+                sizes="(max-width: 720px) 100vw, 880px"
+                src={slide.src}
+              />
+            </article>
+          );
+        })}
+      </div>
+      {slides.length > 1 && (
+        <>
+          <button aria-label="上一张 Banner" className="community-banner-arrow community-banner-arrow--previous" onClick={() => move(-1)} type="button">
+            <ChevronLeft size={19} />
+          </button>
+          <button aria-label="下一张 Banner" className="community-banner-arrow community-banner-arrow--next" onClick={() => move(1)} type="button">
+            <ChevronRight size={19} />
+          </button>
+          <div aria-label={`${label}分页`} className="community-banner-dots" role="tablist">
+            {slides.map((slide, index) => (
+              <button
+                aria-current={index === activeIndex ? "true" : undefined}
+                aria-label={`${label}第 ${index + 1} 张`}
+                className={index === activeIndex ? "is-active" : ""}
+                key={slide.src}
+                onClick={() => setActiveIndex(index)}
+                role="tab"
+                type="button"
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
 }

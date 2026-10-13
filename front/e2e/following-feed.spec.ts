@@ -87,9 +87,7 @@ async function mockFeeds(page: Page, options: { followingStatus?: number } = {})
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(
-        cursor ? feedPage([FEED_POST_2], null, false) : feedPage([FEED_POST_1], "cursor-2", true),
-      ),
+      body: JSON.stringify(cursor ? feedPage([FEED_POST_2], null, false) : feedPage([FEED_POST_1], "cursor-2", true)),
     });
   });
 
@@ -134,9 +132,7 @@ test.describe("关注流正常路径", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(
-          cursor ? feedPage([FEED_POST_2], null, false) : feedPage([FEED_POST_1], "cursor-2", true),
-        ),
+        body: JSON.stringify(cursor ? feedPage([FEED_POST_2], null, false) : feedPage([FEED_POST_1], "cursor-2", true)),
       });
     });
     await page.route("**/api/v1/posts**", (route) =>

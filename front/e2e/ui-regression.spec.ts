@@ -71,9 +71,20 @@ test("登录弹窗打开后焦点留在弹窗内，Escape 关闭并恢复触发�
 });
 
 test("减少动画偏好下发布编辑器设置滚动使用 auto", async ({ page }) => {
-  await page.route("**/api/v1/auth/me", (route) => route.fulfill({ json: { data: {
-    id: "user-100", phone: "13800000001", nickname: "潮声档案员", avatarUrl: null, bio: "记录鸣潮实战", role: "USER",
-  } } }));
+  await page.route("**/api/v1/auth/me", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          id: "user-100",
+          phone: "13800000001",
+          nickname: "潮声档案员",
+          avatarUrl: null,
+          bio: "记录鸣潮实战",
+          role: "USER",
+        },
+      },
+    }),
+  );
   await page.addInitScript(() => {
     const original = Element.prototype.scrollIntoView;
     Element.prototype.scrollIntoView = function (options) {
@@ -109,9 +120,20 @@ test("减少动画偏好下帖子互动滚动使用 auto", async ({ page }) => {
 });
 
 test("桌面端已登录账户区：点头像展开账户面板，含个人中心与退出", async ({ page }) => {
-  await page.route("**/api/v1/auth/me", (route) => route.fulfill({ json: { data: {
-    id: "user-100", phone: "13800000001", nickname: "潮声档案员", avatarUrl: null, bio: "记录鸣潮实战", role: "USER",
-  } } }));
+  await page.route("**/api/v1/auth/me", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          id: "user-100",
+          phone: "13800000001",
+          nickname: "潮声档案员",
+          avatarUrl: null,
+          bio: "记录鸣潮实战",
+          role: "USER",
+        },
+      },
+    }),
+  );
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/");
   const avatarButton = page.getByRole("button", { name: "打开账户菜单" });
@@ -183,14 +205,16 @@ test("窄视口下表情浮层脱离帖子裁剪且可以插入", async ({ page 
   await expect(composer.getByRole("menu", { name: "常用表情" })).toHaveCount(0);
   const trigger = composer.getByRole("button", { name: "插入表情" });
   await page.evaluate(() => window.scrollBy(0, -120));
-  await expect.poll(async () => {
-    const anchorBox = await trigger.boundingBox();
-    const pickerBox = await emojiPicker.boundingBox();
-    if (!anchorBox || !pickerBox) return false;
-    const pickerBottom = pickerBox.y + pickerBox.height;
-    const anchorBottom = anchorBox.y + anchorBox.height;
-    return Math.abs(pickerBottom - anchorBox.y + 8) < 2 || Math.abs(pickerBox.y - anchorBottom - 8) < 2;
-  }).toBe(true);
+  await expect
+    .poll(async () => {
+      const anchorBox = await trigger.boundingBox();
+      const pickerBox = await emojiPicker.boundingBox();
+      if (!anchorBox || !pickerBox) return false;
+      const pickerBottom = pickerBox.y + pickerBox.height;
+      const anchorBottom = anchorBox.y + anchorBox.height;
+      return Math.abs(pickerBottom - anchorBox.y + 8) < 2 || Math.abs(pickerBox.y - anchorBottom - 8) < 2;
+    })
+    .toBe(true);
   const pickerBox = await emojiPicker.boundingBox();
   if (!pickerBox) throw new Error("表情浮层没有可测量的边界");
   expect(pickerBox.x).toBeGreaterThanOrEqual(0);

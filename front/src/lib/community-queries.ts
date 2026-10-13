@@ -1,7 +1,14 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchPostInteractions, fetchPostPage, likePost, searchPosts, unlikePost } from "@/lib/api";
 
-export function useCommunityPostQuery(options: { category?: string; keyword?: string; tag?: string; page?: number; pageSize?: number; sort?: "latest" | "hot" }) {
+export function useCommunityPostQuery(options: {
+  category?: string;
+  keyword?: string;
+  tag?: string;
+  page?: number;
+  pageSize?: number;
+  sort?: "latest" | "hot";
+}) {
   const { category = "", keyword = "", tag = "", page = 1, pageSize = 20, sort = "latest" } = options;
   return useQuery({
     queryKey: ["community-posts", category, keyword, tag, page, pageSize, sort],

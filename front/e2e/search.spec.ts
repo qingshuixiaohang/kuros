@@ -215,9 +215,8 @@ test.describe("搜索页竞态", () => {
     await page.route("**/api/v1/search**", async (route) => {
       const url = new URL(route.request().url());
       const keyword = url.searchParams.get("keyword");
-      const item = keyword === "深塔"
-        ? { ...POST_C, title: "深塔专属结果", highlight: undefined }
-        : { ...POST_A, title: "共鸣效率专属结果", highlight: undefined };
+      const item =
+        keyword === "深塔" ? { ...POST_C, title: "深塔专属结果", highlight: undefined } : { ...POST_A, title: "共鸣效率专属结果", highlight: undefined };
       await route.fulfill({
         status: 200,
         contentType: "application/json",

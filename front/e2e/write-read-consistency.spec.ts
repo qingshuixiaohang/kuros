@@ -158,7 +158,7 @@ test.describe("写后读一致性", () => {
     await expect(page.getByText("写后读一致性测试帖").first()).toBeVisible();
 
     const likeButton = page.locator('button[aria-label="点赞"], button[aria-label="取消点赞"]').first();
-    if (await likeButton.count() === 0) {
+    if ((await likeButton.count()) === 0) {
       test.skip(true, "详情页未找到点赞按钮（选择器需调整）");
     }
     await likeButton.click();
@@ -179,8 +179,7 @@ test.describe("写后读一致性", () => {
     const pressedClass = await homeLikeButton.getAttribute("class");
     const pressed = await homeLikeButton.getAttribute("aria-pressed");
 
-    expect(pressed === "true" || (pressedClass ?? "").includes("is-active") || (pressedClass ?? "").includes("is-liked"))
-      .toBe(true);
+    expect(pressed === "true" || (pressedClass ?? "").includes("is-active") || (pressedClass ?? "").includes("is-liked")).toBe(true);
   });
 
   test("首页点赞后进详情页，详情页显示已赞", async ({ page }) => {
@@ -205,8 +204,7 @@ test.describe("写后读一致性", () => {
     const detailLikeButton = page.locator('button[aria-label="点赞"], button[aria-label="取消点赞"]').first();
     const pressedClass = await detailLikeButton.getAttribute("class");
     const pressed = await detailLikeButton.getAttribute("aria-pressed");
-    expect(pressed === "true" || (pressedClass ?? "").includes("is-active") || (pressedClass ?? "").includes("is-liked"))
-      .toBe(true);
+    expect(pressed === "true" || (pressedClass ?? "").includes("is-active") || (pressedClass ?? "").includes("is-liked")).toBe(true);
   });
 
   test("点赞数在首页与详情页一致", async ({ page }) => {

@@ -2,7 +2,31 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { AtSign, BadgeCheck, Bell, ChevronDown, ChevronRight, Eye, FileText, Heart, Home, LayoutGrid, LibraryBig, LogOut, Menu, MessageSquare, MoreHorizontal, Newspaper, PenSquare, Search, Shield, Sparkles, UserRound, UsersRound, X } from "lucide-react";
+import {
+  AtSign,
+  BadgeCheck,
+  Bell,
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  FileText,
+  Heart,
+  Home,
+  LayoutGrid,
+  LibraryBig,
+  LogOut,
+  Menu,
+  MessageSquare,
+  MoreHorizontal,
+  Newspaper,
+  PenSquare,
+  Search,
+  Shield,
+  Sparkles,
+  UserRound,
+  UsersRound,
+  X,
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiFallbackNote } from "@/components/community/api-fallback-note";
@@ -10,12 +34,33 @@ import { CommunityFollowButton } from "@/components/community/community-follow-b
 import { CommunityHeroCarousel, CommunityImageCarousel } from "@/components/community/community-carousel";
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
-import { ApiError, favoritePost, fetchFollowingFeedByCursor, fetchMyProfile, fetchPostInteractionsBatch, fetchPosts, likePost, unfavoritePost, unlikePost } from "@/lib/api";
+import {
+  ApiError,
+  favoritePost,
+  fetchFollowingFeedByCursor,
+  fetchMyProfile,
+  fetchPostInteractionsBatch,
+  fetchPosts,
+  likePost,
+  unfavoritePost,
+  unlikePost,
+} from "@/lib/api";
 import { guides, newsItems } from "@/lib/mock";
 import { DEMO_AUTHOR_ID_BY_NAME, toGuide } from "@/lib/post-view";
 import type { Guide } from "@/types/community";
 
-const channels = [{ label: "推荐", icon: Home, href: "/" }, { label: "关注", icon: Heart, href: "/?tab=following" }, { label: "攻略", icon: FileText, href: "/guides" }, { label: "新手", icon: Sparkles, href: "/guides?category=新手攻略" }, { label: "角色图鉴", icon: UsersRound, href: "/characters" }, { label: "声骸图鉴", icon: LibraryBig, href: "/echoes" }, { label: "官方", icon: Bell, href: "/news?category=官方公告" }, { label: "同人", icon: UsersRound, href: "/creations" }, { label: "资讯", icon: Newspaper, href: "/news" }, { label: "工具箱", icon: LayoutGrid, href: "/tools" }];
+const channels = [
+  { label: "推荐", icon: Home, href: "/" },
+  { label: "关注", icon: Heart, href: "/?tab=following" },
+  { label: "攻略", icon: FileText, href: "/guides" },
+  { label: "新手", icon: Sparkles, href: "/guides?category=新手攻略" },
+  { label: "角色图鉴", icon: UsersRound, href: "/characters" },
+  { label: "声骸图鉴", icon: LibraryBig, href: "/echoes" },
+  { label: "官方", icon: Bell, href: "/news?category=官方公告" },
+  { label: "同人", icon: UsersRound, href: "/creations" },
+  { label: "资讯", icon: Newspaper, href: "/news" },
+  { label: "工具箱", icon: LayoutGrid, href: "/tools" },
+];
 const quickTools = [
   { title: "养成计算器", href: "/tools/calculator", iconSrc: "/icons/upgrade-calculator.webp" },
   { title: "声骸图鉴", href: "/echoes", iconSrc: "/icons/echo-archive.webp" },
@@ -24,55 +69,292 @@ const quickTools = [
   { title: "版本资讯", href: "/news", iconSrc: "/icons/version-news.webp" },
   { title: "新手指南", href: "/guides?category=新手攻略", iconSrc: "/icons/exploration-map.webp" },
 ];
-function isActive(label: string, path: string, params: URLSearchParams) { if (label === "推荐") return path === "/" && params.get("tab") !== "following"; if (label === "关注") return path === "/" && params.get("tab") === "following"; if (label === "新手") return path === "/guides" && params.get("category") === "新手攻略"; if (label === "攻略") return path.startsWith("/guides") && params.get("category") !== "新手攻略"; if (label === "官方") return path === "/news" && params.get("category") === "官方公告"; if (label === "资讯") return path.startsWith("/news") && params.get("category") !== "官方公告"; return path.startsWith("/creations"); }
-function GameLogo() { return <div className="game-logo"><Image alt="鸣潮" className="game-logo-wordmark" height={72} priority src="/brand/wuthering-waves.png" width={114} /><p>海潮回响 · 共鸣此间</p></div>; }
-export function Sidebar({ drawer = false }: { drawer?: boolean }) { const path = usePathname(); const params = useSearchParams(); return <aside className={"sidebar " + (drawer ? "drawer-sidebar" : "")} aria-label="社区频道"><GameLogo /><nav className="channel-list">{channels.map(({ label, icon: Icon, href }) => <Link className={"channel-item " + (isActive(label, path, params) ? "is-active" : "")} href={href} key={label}><Icon size={22} strokeWidth={1.6} /><span>{label}</span></Link>)}</nav></aside>; }
-export function TopNavigation({ query, onQueryChange, onMenu }: { query: string; onQueryChange: (query: string) => void; onMenu: () => void }) { const router = useRouter(); const [gameOpen, setGameOpen] = useState(false); const { loggedIn, user, requestLogin, logout } = useCommunityDemo(); function submitSearch(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (query.trim()) router.push("/search?q=" + encodeURIComponent(query.trim())); }
+function isActive(label: string, path: string, params: URLSearchParams) {
+  if (label === "推荐") return path === "/" && params.get("tab") !== "following";
+  if (label === "关注") return path === "/" && params.get("tab") === "following";
+  if (label === "新手") return path === "/guides" && params.get("category") === "新手攻略";
+  if (label === "攻略") return path.startsWith("/guides") && params.get("category") !== "新手攻略";
+  if (label === "官方") return path === "/news" && params.get("category") === "官方公告";
+  if (label === "资讯") return path.startsWith("/news") && params.get("category") !== "官方公告";
+  return path.startsWith("/creations");
+}
+function GameLogo() {
+  return (
+    <div className="game-logo">
+      <Image alt="鸣潮" className="game-logo-wordmark" height={72} priority src="/brand/wuthering-waves.png" width={114} />
+      <p>海潮回响 · 共鸣此间</p>
+    </div>
+  );
+}
+export function Sidebar({ drawer = false }: { drawer?: boolean }) {
+  const path = usePathname();
+  const params = useSearchParams();
+  return (
+    <aside className={"sidebar " + (drawer ? "drawer-sidebar" : "")} aria-label="社区频道">
+      <GameLogo />
+      <nav className="channel-list">
+        {channels.map(({ label, icon: Icon, href }) => (
+          <Link className={"channel-item " + (isActive(label, path, params) ? "is-active" : "")} href={href} key={label}>
+            <Icon size={22} strokeWidth={1.6} />
+            <span>{label}</span>
+          </Link>
+        ))}
+      </nav>
+    </aside>
+  );
+}
+export function TopNavigation({ query, onQueryChange, onMenu }: { query: string; onQueryChange: (query: string) => void; onMenu: () => void }) {
+  const router = useRouter();
+  const [gameOpen, setGameOpen] = useState(false);
+  const { loggedIn, user, requestLogin, logout } = useCommunityDemo();
+  function submitSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (query.trim()) router.push("/search?q=" + encodeURIComponent(query.trim()));
+  }
   // 库街区同款：鼠标悬停头像即弹出账户面板（昵称/UID + 关注/粉丝/获赞 + 个人中心/退出）；
   // 移出头像与面板 180ms 后收起（缓冲防止斜穿面板时闪关）；Esc/点击外部也可关闭
-  const [accountOpen, setAccountOpen] = useState(false); const [bellOpen, setBellOpen] = useState(false); const bellWrapRef = useRef<HTMLDivElement>(null); const accountWrapRef = useRef<HTMLDivElement>(null); const accountCloseTimerRef = useRef<number | undefined>(undefined);
-  const openAccount = useCallback(() => { window.clearTimeout(accountCloseTimerRef.current); setAccountOpen(true); }, []);
-  const scheduleCloseAccount = useCallback(() => { window.clearTimeout(accountCloseTimerRef.current); accountCloseTimerRef.current = window.setTimeout(() => setAccountOpen(false), 180); }, []);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
+  const bellWrapRef = useRef<HTMLDivElement>(null);
+  const accountWrapRef = useRef<HTMLDivElement>(null);
+  const accountCloseTimerRef = useRef<number | undefined>(undefined);
+  const openAccount = useCallback(() => {
+    window.clearTimeout(accountCloseTimerRef.current);
+    setAccountOpen(true);
+  }, []);
+  const scheduleCloseAccount = useCallback(() => {
+    window.clearTimeout(accountCloseTimerRef.current);
+    accountCloseTimerRef.current = window.setTimeout(() => setAccountOpen(false), 180);
+  }, []);
   useEffect(() => () => window.clearTimeout(accountCloseTimerRef.current), []);
   useEffect(() => {
     if (!bellOpen) return;
-    function onPointerDown(event: MouseEvent) { if (bellWrapRef.current && !bellWrapRef.current.contains(event.target as Node)) setBellOpen(false); }
-    function onKeyDown(event: KeyboardEvent) { if (event.key === "Escape") setBellOpen(false); }
-    document.addEventListener("mousedown", onPointerDown); document.addEventListener("keydown", onKeyDown);
-    return () => { document.removeEventListener("mousedown", onPointerDown); document.removeEventListener("keydown", onKeyDown); };
+    function onPointerDown(event: MouseEvent) {
+      if (bellWrapRef.current && !bellWrapRef.current.contains(event.target as Node)) setBellOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setBellOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [bellOpen]);
-  const bellItems = [{ href: "/profile?tab=comments", icon: MessageSquare, label: "评论" }, { href: "/profile?tab=comments", icon: AtSign, label: "@我" }, { href: "/profile?tab=posts", icon: Heart, label: "点赞" }, { href: "/news", icon: Sparkles, label: "系统通知" }];
-  const accountOverview = useQuery({ queryKey: ["account-menu-overview"], queryFn: () => fetchMyProfile(), enabled: loggedIn && accountOpen, staleTime: 30_000, retry: false });
+  const bellItems = [
+    { href: "/profile?tab=comments", icon: MessageSquare, label: "评论" },
+    { href: "/profile?tab=comments", icon: AtSign, label: "@我" },
+    { href: "/profile?tab=posts", icon: Heart, label: "点赞" },
+    { href: "/news", icon: Sparkles, label: "系统通知" },
+  ];
+  const accountOverview = useQuery({
+    queryKey: ["account-menu-overview"],
+    queryFn: () => fetchMyProfile(),
+    enabled: loggedIn && accountOpen,
+    staleTime: 30_000,
+    retry: false,
+  });
   useEffect(() => {
     if (!accountOpen) return;
-    function onPointerDown(event: MouseEvent) { if (accountWrapRef.current && !accountWrapRef.current.contains(event.target as Node)) setAccountOpen(false); }
-    function onKeyDown(event: KeyboardEvent) { if (event.key === "Escape") setAccountOpen(false); }
-    document.addEventListener("mousedown", onPointerDown); document.addEventListener("keydown", onKeyDown);
-    return () => { document.removeEventListener("mousedown", onPointerDown); document.removeEventListener("keydown", onKeyDown); };
+    function onPointerDown(event: MouseEvent) {
+      if (accountWrapRef.current && !accountWrapRef.current.contains(event.target as Node)) setAccountOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setAccountOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [accountOpen]);
-  return <header className="top-nav"><div className="top-nav-inner"><button className="mobile-menu-button" onClick={onMenu} type="button" aria-label="打开导航"><Menu size={22} /></button><Link className="top-logo" href="/" aria-label="鸣潮社区首页"><Image alt="" className="top-logo-icon" height={26} priority src="/brand/kurobbs-icon.png" width={26} /><Image alt="鸣潮" className="top-logo-wordmark" height={26} priority src="/brand/wuthering-waves-white.png" width={42} /></Link><div className="game-selector"><button className="game-switcher" onClick={() => setGameOpen(!gameOpen)} type="button" aria-expanded={gameOpen}><span>战双帕弥什</span><span className="current-game">鸣潮</span><ChevronDown size={14} /></button>{gameOpen && <div className="game-popover"><strong>库洛游戏社区</strong><Link href="/">鸣潮 <small>当前社区</small></Link><span>战双帕弥什 <small>暂未接入 Demo</small></span></div>}</div><form className="top-search" onSubmit={submitSearch}><Search size={18} /><input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="搜索帖子、攻略、玩家..." aria-label="搜索帖子、攻略、玩家" /><button type="submit" aria-label="提交搜索" /></form><button className="mobile-search-button" onClick={() => router.push("/search")} type="button" aria-label="打开搜索"><Search size={19} /></button><Link className="top-action" href="/publish" aria-label="发布内容"><PenSquare size={20} /></Link>{user?.role === "ADMIN" && <Link aria-label="管理入口" className="top-admin-link" href="/admin/reports" title="举报审核台"><Shield size={16} />管理</Link>}
-{loggedIn && <div className="top-bell-wrap" ref={bellWrapRef}><button className="top-bell" onClick={() => setBellOpen((current) => !current)} aria-expanded={bellOpen} aria-haspopup="menu" aria-label="消息通知" type="button"><Bell size={20} /></button>{bellOpen && <div className="bell-menu" role="menu" aria-label="消息通知">{bellItems.map(({ href, icon: Icon, label }) => <Link className="bell-item" href={href} key={label} onClick={() => setBellOpen(false)} role="menuitem"><Icon size={16} /><span>{label}</span><ChevronRight className="bell-item-chevron" size={14} /></Link>)}<p className="bell-note">新消息会在这里提醒</p></div>}</div>}<>{loggedIn ? <div aria-label="账户操作" className="top-login-group" ref={accountWrapRef} onMouseEnter={openAccount} onMouseLeave={scheduleCloseAccount}><button className="top-account-avatar" onClick={openAccount} aria-expanded={accountOpen} aria-haspopup="menu" aria-label="打开账户菜单" title="账户菜单"><span className="login-avatar">漂</span></button>{accountOpen && <div className="account-menu" role="menu" aria-label="账户面板"><div className="account-menu-head"><span className="account-menu-avatar">漂</span><div><strong>{user?.nickname ?? "漂泊者"}</strong><small title={user?.id}>UID: {user?.id}</small></div></div><div className="account-menu-stats"><div><b>{accountOverview.data?.following.meta?.totalItems ?? "—"}</b><span>关注</span></div><div><b>{accountOverview.data?.fans.meta?.totalItems ?? "—"}</b><span>粉丝</span></div><div><b>{accountOverview.data?.stats.likeCount ?? "—"}</b><span>获赞</span></div></div><Link className="account-menu-item" href="/profile" onClick={() => setAccountOpen(false)} role="menuitem"><UserRound size={16} /><span>个人中心</span><ChevronRight size={14} className="account-menu-chevron" /></Link><button className="account-menu-item" onClick={logout} role="menuitem"><LogOut size={16} /><span>退出登录</span></button></div>}</div> : <button className="top-login" onClick={() => requestLogin()} type="button"><span className="login-avatar">漂</span><span>登录</span></button>}</></div></header>; }
+  return (
+    <header className="top-nav">
+      <div className="top-nav-inner">
+        <button className="mobile-menu-button" onClick={onMenu} type="button" aria-label="打开导航">
+          <Menu size={22} />
+        </button>
+        <Link className="top-logo" href="/" aria-label="鸣潮社区首页">
+          <Image alt="" className="top-logo-icon" height={26} priority src="/brand/kurobbs-icon.png" width={26} />
+          <Image alt="鸣潮" className="top-logo-wordmark" height={26} priority src="/brand/wuthering-waves-white.png" width={42} />
+        </Link>
+        <div className="game-selector">
+          <button className="game-switcher" onClick={() => setGameOpen(!gameOpen)} type="button" aria-expanded={gameOpen}>
+            <span>战双帕弥什</span>
+            <span className="current-game">鸣潮</span>
+            <ChevronDown size={14} />
+          </button>
+          {gameOpen && (
+            <div className="game-popover">
+              <strong>库洛游戏社区</strong>
+              <Link href="/">
+                鸣潮 <small>当前社区</small>
+              </Link>
+              <span>
+                战双帕弥什 <small>暂未接入 Demo</small>
+              </span>
+            </div>
+          )}
+        </div>
+        <form className="top-search" onSubmit={submitSearch}>
+          <Search size={18} />
+          <input
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="搜索帖子、攻略、玩家..."
+            aria-label="搜索帖子、攻略、玩家"
+          />
+          <button type="submit" aria-label="提交搜索" />
+        </form>
+        <button className="mobile-search-button" onClick={() => router.push("/search")} type="button" aria-label="打开搜索">
+          <Search size={19} />
+        </button>
+        <Link className="top-action" href="/publish" aria-label="发布内容">
+          <PenSquare size={20} />
+        </Link>
+        {user?.role === "ADMIN" && (
+          <Link aria-label="管理入口" className="top-admin-link" href="/admin/reports" title="举报审核台">
+            <Shield size={16} />
+            管理
+          </Link>
+        )}
+        {loggedIn && (
+          <div className="top-bell-wrap" ref={bellWrapRef}>
+            <button
+              className="top-bell"
+              onClick={() => setBellOpen((current) => !current)}
+              aria-expanded={bellOpen}
+              aria-haspopup="menu"
+              aria-label="消息通知"
+              type="button"
+            >
+              <Bell size={20} />
+            </button>
+            {bellOpen && (
+              <div className="bell-menu" role="menu" aria-label="消息通知">
+                {bellItems.map(({ href, icon: Icon, label }) => (
+                  <Link className="bell-item" href={href} key={label} onClick={() => setBellOpen(false)} role="menuitem">
+                    <Icon size={16} />
+                    <span>{label}</span>
+                    <ChevronRight className="bell-item-chevron" size={14} />
+                  </Link>
+                ))}
+                <p className="bell-note">新消息会在这里提醒</p>
+              </div>
+            )}
+          </div>
+        )}
+        <>
+          {loggedIn ? (
+            <div aria-label="账户操作" className="top-login-group" ref={accountWrapRef} onMouseEnter={openAccount} onMouseLeave={scheduleCloseAccount}>
+              <button
+                className="top-account-avatar"
+                onClick={openAccount}
+                aria-expanded={accountOpen}
+                aria-haspopup="menu"
+                aria-label="打开账户菜单"
+                title="账户菜单"
+              >
+                <span className="login-avatar">漂</span>
+              </button>
+              {accountOpen && (
+                <div className="account-menu" role="menu" aria-label="账户面板">
+                  <div className="account-menu-head">
+                    <span className="account-menu-avatar">漂</span>
+                    <div>
+                      <strong>{user?.nickname ?? "漂泊者"}</strong>
+                      <small title={user?.id}>UID: {user?.id}</small>
+                    </div>
+                  </div>
+                  <div className="account-menu-stats">
+                    <div>
+                      <b>{accountOverview.data?.following.meta?.totalItems ?? "—"}</b>
+                      <span>关注</span>
+                    </div>
+                    <div>
+                      <b>{accountOverview.data?.fans.meta?.totalItems ?? "—"}</b>
+                      <span>粉丝</span>
+                    </div>
+                    <div>
+                      <b>{accountOverview.data?.stats.likeCount ?? "—"}</b>
+                      <span>获赞</span>
+                    </div>
+                  </div>
+                  <Link className="account-menu-item" href="/profile" onClick={() => setAccountOpen(false)} role="menuitem">
+                    <UserRound size={16} />
+                    <span>个人中心</span>
+                    <ChevronRight size={14} className="account-menu-chevron" />
+                  </Link>
+                  <button className="account-menu-item" onClick={logout} role="menuitem">
+                    <LogOut size={16} />
+                    <span>退出登录</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button className="top-login" onClick={() => requestLogin()} type="button">
+              <span className="login-avatar">漂</span>
+              <span>登录</span>
+            </button>
+          )}
+        </>
+      </div>
+    </header>
+  );
+}
 const bannerSlides = [
   { alt: "鸣潮 2.6 版本前瞻", description: "版本情报 · 攻略与漂泊者记录", src: "/art/修-2.6版本PV预告图 5K.webp", title: "鸣潮" },
   { alt: "心灵海男漂地图", description: "探索地图 · 标记你的下一处回响", src: "/art/修-心灵海 男漂地图.webp", title: "心灵海" },
   { alt: "嘉贝莉娜角色唤取动画", description: "角色图鉴 · 记录每一次共鸣相遇", src: "/art/修-嘉贝莉娜  唤取动画.webp", title: "嘉贝莉娜" },
 ];
-function Banner() { return <CommunityHeroCarousel label="社区头图轮播" slides={bannerSlides} />; }
-const postIdBySlug: Record<string, string> = { "changli-team": "10000000-0000-0000-0000-000000000001", "tower-24": "10000000-0000-0000-0000-000000000002", "camellya-echo": "10000000-0000-0000-0000-000000000003", "new-player-route": "10000000-0000-0000-0000-000000000004" };
-function feedCount(value: number) { return value >= 10000 ? (value / 10000).toFixed(1).replace(/\.0$/, "") + "w" : value >= 1000 ? (value / 1000).toFixed(1).replace(/\.0$/, "") + "k" : String(value); }
+function Banner() {
+  return <CommunityHeroCarousel label="社区头图轮播" slides={bannerSlides} />;
+}
+const postIdBySlug: Record<string, string> = {
+  "changli-team": "10000000-0000-0000-0000-000000000001",
+  "tower-24": "10000000-0000-0000-0000-000000000002",
+  "camellya-echo": "10000000-0000-0000-0000-000000000003",
+  "new-player-route": "10000000-0000-0000-0000-000000000004",
+};
+function feedCount(value: number) {
+  return value >= 10000
+    ? (value / 10000).toFixed(1).replace(/\.0$/, "") + "w"
+    : value >= 1000
+      ? (value / 1000).toFixed(1).replace(/\.0$/, "") + "k"
+      : String(value);
+}
 /** guide.likes 是列表响应里的字符串计数（如 "5"），批量互动状态只给 liked/favorited，
  *  卡片显示的计数要拼回 PostInteraction，故在此解析为 number。 */
-function parseLikeCount(value: string) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
+function parseLikeCount(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 function PostMedia({ guide, href }: { guide: Guide; href: string }) {
   const sources = guide.mediaUrls ?? [];
   if (!sources.length) return null;
   // 多图帖子：宫格缩略图（库街区同款——单图才用大图，多图为方形小图网格，2 张两列、3 张起三列）
   if (sources.length >= 2) {
-    return <div className="post-media-grid" style={{ gridTemplateColumns: `repeat(${Math.min(sources.length, 3)}, 1fr)` }}>
-      {sources.slice(0, 6).map((src, index) => <Link className="post-media-grid-item" href={href} key={src + index} rel="noopener noreferrer" target="_blank"><Image alt={`${guide.title}配图 ${index + 1}`} fill sizes="160px" src={src} /></Link>)}
-    </div>;
+    return (
+      <div className="post-media-grid" style={{ gridTemplateColumns: `repeat(${Math.min(sources.length, 3)}, 1fr)` }}>
+        {sources.slice(0, 6).map((src, index) => (
+          <Link className="post-media-grid-item" href={href} key={src + index} rel="noopener noreferrer" target="_blank">
+            <Image alt={`${guide.title}配图 ${index + 1}`} fill sizes="160px" src={src} />
+          </Link>
+        ))}
+      </div>
+    );
   }
-  return <CommunityImageCarousel className="post-media post-media-carousel" href={href} images={sources.slice(0, 6).map((src) => ({ alt: `${guide.title}帖子配图`, src }))} label={`${guide.title}帖子配图轮播`} />;
+  return (
+    <CommunityImageCarousel
+      className="post-media post-media-carousel"
+      href={href}
+      images={sources.slice(0, 6).map((src) => ({ alt: `${guide.title}帖子配图`, src }))}
+      label={`${guide.title}帖子配图轮播`}
+    />
+  );
 }
 function PostCard({ guide, interaction: initialInteraction }: { guide: Guide; interaction?: { liked: boolean; favorited: boolean } | null }) {
   const { liked, bookmarked, toggleLike, toggleBookmark, notify, requestLogin } = useCommunityDemo();
@@ -99,47 +381,106 @@ function PostCard({ guide, interaction: initialInteraction }: { guide: Guide; in
   function change(kind: "like" | "favorite") {
     requestLogin(() => {
       if (!postId || !interaction) {
-        if (kind === "like") toggleLike(guide.id); else toggleBookmark(guide.id);
+        if (kind === "like") toggleLike(guide.id);
+        else toggleBookmark(guide.id);
         return;
       }
-      const action = kind === "like" ? (interaction.liked ? unlikePost : likePost) : (interaction.favorited ? unfavoritePost : favoritePost);
-      void action(postId).then((result) => {
-        // 只覆盖状态位：计数由列表重取刷新（invalidate 后 guide.likes 变新值），
-        // 在这里叠加 result.likeCount 会让它和列表数据打架
-        setOverride({ liked: result.liked, favorited: result.favorited });
-        if (kind === "like") toggleLike(guide.id); else toggleBookmark(guide.id);
-      }).catch((error) => notify(error instanceof Error ? error.message : "操作失败，请稍后重试"));
+      const action = kind === "like" ? (interaction.liked ? unlikePost : likePost) : interaction.favorited ? unfavoritePost : favoritePost;
+      void action(postId)
+        .then((result) => {
+          // 只覆盖状态位：计数由列表重取刷新（invalidate 后 guide.likes 变新值），
+          // 在这里叠加 result.likeCount 会让它和列表数据打架
+          setOverride({ liked: result.liked, favorited: result.favorited });
+          if (kind === "like") toggleLike(guide.id);
+          else toggleBookmark(guide.id);
+        })
+        .catch((error) => notify(error instanceof Error ? error.message : "操作失败，请稍后重试"));
     });
   }
   const isLiked = interaction?.liked ?? liked.includes(guide.id);
-  
+
   const likeLabel = interaction ? feedCount(interaction.likeCount) : guide.likes;
   const detailHref = `/guides/${guide.id}`;
-  const authorRole = guide.category.includes("攻略") ? "攻略作者" : guide.category.includes("同人") ? "同人画师" : guide.category.includes("心得") ? "社区达人" : null;
-    return <article className="post-card">
-    <div className="post-header">
-      <div className={`author-avatar author-avatar--${guide.avatarTone}`}>{guide.authorMark}</div>
-      <div className="author-info"><strong>{guide.author}<BadgeCheck size={13} />{authorRole && <span className="author-role-badge">{authorRole}</span>}</strong><time>{guide.publishedAt}</time></div>
-      <CommunityFollowButton className="follow-button" fallbackKey={guide.author} targetUserId={DEMO_AUTHOR_ID_BY_NAME[guide.author]} />
-      <div className="more-wrap">
-        <button aria-expanded={menuOpen} aria-label="更多操作" className="more-button" onClick={() => setMenuOpen(!menuOpen)} type="button"><MoreHorizontal size={20} /></button>
-        {menuOpen && <div className="post-menu">
-          <button onClick={() => { change("favorite"); setMenuOpen(false); }} type="button">{isBookmarked ? "取消收藏" : "收藏帖子"}</button>
-          <button onClick={() => { if (postId) setReportOpen(true); else notify("当前内容暂不支持举报。"); setMenuOpen(false); }} type="button">举报反馈</button>
-        </div>}
+  const authorRole = guide.category.includes("攻略")
+    ? "攻略作者"
+    : guide.category.includes("同人")
+      ? "同人画师"
+      : guide.category.includes("心得")
+        ? "社区达人"
+        : null;
+  return (
+    <article className="post-card">
+      <div className="post-header">
+        <div className={`author-avatar author-avatar--${guide.avatarTone}`}>{guide.authorMark}</div>
+        <div className="author-info">
+          <strong>
+            {guide.author}
+            <BadgeCheck size={13} />
+            {authorRole && <span className="author-role-badge">{authorRole}</span>}
+          </strong>
+          <time>{guide.publishedAt}</time>
+        </div>
+        <CommunityFollowButton className="follow-button" fallbackKey={guide.author} targetUserId={DEMO_AUTHOR_ID_BY_NAME[guide.author]} />
+        <div className="more-wrap">
+          <button aria-expanded={menuOpen} aria-label="更多操作" className="more-button" onClick={() => setMenuOpen(!menuOpen)} type="button">
+            <MoreHorizontal size={20} />
+          </button>
+          {menuOpen && (
+            <div className="post-menu">
+              <button
+                onClick={() => {
+                  change("favorite");
+                  setMenuOpen(false);
+                }}
+                type="button"
+              >
+                {isBookmarked ? "取消收藏" : "收藏帖子"}
+              </button>
+              <button
+                onClick={() => {
+                  if (postId) setReportOpen(true);
+                  else notify("当前内容暂不支持举报。");
+                  setMenuOpen(false);
+                }}
+                type="button"
+              >
+                举报反馈
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-    <Link href={detailHref} rel="noopener noreferrer" target="_blank"><h2>{guide.title}</h2></Link>
-    <p className="post-excerpt">{guide.excerpt}</p>
-    <PostMedia guide={guide} href={detailHref} />
-    <div className="post-tags">{guide.tags.map((tag) => <Link href={`/search?q=${encodeURIComponent(tag)}`} key={tag}># {tag}</Link>)}</div>
-    <div className="post-actions">
-      <span><Eye size={17} />{guide.views}</span>
-      <Link href={`${detailHref}#comments`} rel="noopener noreferrer" target="_blank"><MessageSquare size={17} />{guide.replies}</Link>
-      <button className={isLiked ? "is-active" : ""} onClick={() => change("like")} type="button"><Heart fill={isLiked ? "currentColor" : "none"} size={18} />{likeLabel}</button>
+      <Link href={detailHref} rel="noopener noreferrer" target="_blank">
+        <h2>{guide.title}</h2>
+      </Link>
+      <p className="post-excerpt">{guide.excerpt}</p>
+      <PostMedia guide={guide} href={detailHref} />
+      <div className="post-tags">
+        {guide.tags.map((tag) => (
+          <Link href={`/search?q=${encodeURIComponent(tag)}`} key={tag}>
+            # {tag}
+          </Link>
+        ))}
       </div>
-    {reportOpen && postId && <CommunityReportDialog targetId={postId} targetType="POST" onClose={() => setReportOpen(false)} onSuccess={() => setReportOpen(false)} />}
-  </article>;
+      <div className="post-actions">
+        <span>
+          <Eye size={17} />
+          {guide.views}
+        </span>
+        <Link href={`${detailHref}#comments`} rel="noopener noreferrer" target="_blank">
+          <MessageSquare size={17} />
+          {guide.replies}
+        </Link>
+        <button className={isLiked ? "is-active" : ""} onClick={() => change("like")} type="button">
+          <Heart fill={isLiked ? "currentColor" : "none"} size={18} />
+          {likeLabel}
+        </button>
+      </div>
+      {reportOpen && postId && (
+        <CommunityReportDialog targetId={postId} targetType="POST" onClose={() => setReportOpen(false)} onSuccess={() => setReportOpen(false)} />
+      )}
+    </article>
+  );
 }
 function guideFromListItem(post: Parameters<typeof toGuide>[0]) {
   const guide = toGuide(post);
@@ -183,74 +524,229 @@ function Feed({ query }: { query: string }) {
     let active = true;
     /* slice-12: following tab → /api/v1/feed/following (Redis ZSet timeline); recommend/latest → GET /api/v1/posts */
     /* slice-13: following tab switches to cursor mode (limit triggers cursor), first page cursor=null */
-    const request = tab === "following"
-      ? fetchFollowingFeedByCursor({ limit: 20 }).then((result) => { if (active) { setNextCursor(result.nextCursor); setHasMore(result.hasMore); } return result.items; })
-      : fetchPosts({ keyword: query, sort, pageSize: 20 });
-    request.then((posts) => {
-      if (!active) return;
-      setItems(posts.map(guideFromListItem));
-      setApiUnavailable(false);
-      setFeedIssue(null);
-      setLoadedKey(requestKey);
-    }).catch((error) => {
-      if (!active) return;
-      if (tab === "following") {
-        setFeedIssue({ kind: error instanceof ApiError && error.status === 401 ? "unauthorized" : "error" });
-        setItems([]);
-        setHasMore(false);
-        setNextCursor(null);
+    const request =
+      tab === "following"
+        ? fetchFollowingFeedByCursor({ limit: 20 }).then((result) => {
+            if (active) {
+              setNextCursor(result.nextCursor);
+              setHasMore(result.hasMore);
+            }
+            return result.items;
+          })
+        : fetchPosts({ keyword: query, sort, pageSize: 20 });
+    request
+      .then((posts) => {
+        if (!active) return;
+        setItems(posts.map(guideFromListItem));
         setApiUnavailable(false);
-      } else {
-        const keyword = query.trim().toLowerCase();
-        const fallback = guides.filter((guide) => (guide.title + guide.excerpt + guide.category + guide.tags.join("")).toLowerCase().includes(keyword));
-        setItems(tab === "latest" ? [...fallback].reverse() : fallback);
-        setApiUnavailable(true);
         setFeedIssue(null);
-      }
-      setLoadedKey(requestKey);
-    });
-    return () => { active = false; };
+        setLoadedKey(requestKey);
+      })
+      .catch((error) => {
+        if (!active) return;
+        if (tab === "following") {
+          setFeedIssue({ kind: error instanceof ApiError && error.status === 401 ? "unauthorized" : "error" });
+          setItems([]);
+          setHasMore(false);
+          setNextCursor(null);
+          setApiUnavailable(false);
+        } else {
+          const keyword = query.trim().toLowerCase();
+          const fallback = guides.filter((guide) => (guide.title + guide.excerpt + guide.category + guide.tags.join("")).toLowerCase().includes(keyword));
+          setItems(tab === "latest" ? [...fallback].reverse() : fallback);
+          setApiUnavailable(true);
+          setFeedIssue(null);
+        }
+        setLoadedKey(requestKey);
+      });
+    return () => {
+      active = false;
+    };
   }, [query, reloadKey, requestKey, sort, tab]);
   /* "加载更多"：透传上一页 nextCursor 拉下一页，追加到现有列表（按 id 去重），hasMore=false 后隐藏按钮 */
   function loadMore() {
     if (tab !== "following" || !hasMore || !nextCursor || loadingMore) return;
     setLoadingMore(true);
-    fetchFollowingFeedByCursor({ cursor: nextCursor, limit: 20 }).then((result) => {
-      setItems((current) => {
-        const seen = new Set(current.map((guide) => guide.id));
-        const appended = result.items.map(guideFromListItem).filter((guide) => !seen.has(guide.id));
-        return [...current, ...appended];
-      });
-      setNextCursor(result.nextCursor);
-      setHasMore(result.hasMore);
-    }).catch(() => { setHasMore(false); }).finally(() => setLoadingMore(false));
+    fetchFollowingFeedByCursor({ cursor: nextCursor, limit: 20 })
+      .then((result) => {
+        setItems((current) => {
+          const seen = new Set(current.map((guide) => guide.id));
+          const appended = result.items.map(guideFromListItem).filter((guide) => !seen.has(guide.id));
+          return [...current, ...appended];
+        });
+        setNextCursor(result.nextCursor);
+        setHasMore(result.hasMore);
+      })
+      .catch(() => {
+        setHasMore(false);
+      })
+      .finally(() => setLoadingMore(false));
   }
   const loading = loadedKey !== requestKey;
   const visible = items;
-  const tabs = [{ key: "recommend", label: "默认", href: "/" }, { key: "latest", label: "最新发布", href: "/?tab=latest" }, { key: "following", label: "关注", href: "/?tab=following" }];
-  const emptyState = feedIssue
-    ? <div className="empty-state">{feedIssue.kind === "unauthorized"
-      ? <><p>登录后查看关注的创作者动态</p><button className="secondary-button" onClick={() => requestLogin()} type="button">去登录</button></>
-      : <><p>关注流加载失败，请稍后重试。</p><button className="secondary-button" onClick={() => setReloadKey((key) => key + 1)} type="button">重新加载</button></>}</div>
-    : <div className="empty-state"><p>{tab === "following" ? "还没有关注的创作者。去推荐页看看吧。" : "没有找到相关帖子，换个关键词试试。"}</p>{tab === "following" && <Link className="secondary-button" href="/">返回推荐页</Link>}</div>;
-  return <section className="feed" id="feed" aria-label="社区内容流"><Banner /><div className="feed-tabs">{tabs.map((item) => <button className={tab === item.key ? "is-active" : ""} key={item.key} onClick={() => router.push(item.href)} type="button">{item.label}</button>)}</div>{loading ? <div className="feed-status">正在整理漂泊者的最新内容…</div> : visible.length ? <>{visible.map((guide) => <PostCard guide={guide} key={guide.id} interaction={interactionStates.get(guide.id) ?? null} />)}{tab === "following" && (hasMore ? <button className="feed-load-more" disabled={loadingMore} onClick={loadMore} type="button">{loadingMore ? "正在加载更多…" : "加载更多"}</button> : <p className="feed-end-note">已经到底啦，关注的动态都看完了。</p>)}</> : emptyState}{apiUnavailable && tab !== "following" && <ApiFallbackNote onRetry={() => setReloadKey((key) => key + 1)} />}</section>;
+  const tabs = [
+    { key: "recommend", label: "默认", href: "/" },
+    { key: "latest", label: "最新发布", href: "/?tab=latest" },
+    { key: "following", label: "关注", href: "/?tab=following" },
+  ];
+  const emptyState = feedIssue ? (
+    <div className="empty-state">
+      {feedIssue.kind === "unauthorized" ? (
+        <>
+          <p>登录后查看关注的创作者动态</p>
+          <button className="secondary-button" onClick={() => requestLogin()} type="button">
+            去登录
+          </button>
+        </>
+      ) : (
+        <>
+          <p>关注流加载失败，请稍后重试。</p>
+          <button className="secondary-button" onClick={() => setReloadKey((key) => key + 1)} type="button">
+            重新加载
+          </button>
+        </>
+      )}
+    </div>
+  ) : (
+    <div className="empty-state">
+      <p>{tab === "following" ? "还没有关注的创作者。去推荐页看看吧。" : "没有找到相关帖子，换个关键词试试。"}</p>
+      {tab === "following" && (
+        <Link className="secondary-button" href="/">
+          返回推荐页
+        </Link>
+      )}
+    </div>
+  );
+  return (
+    <section className="feed" id="feed" aria-label="社区内容流">
+      <Banner />
+      <div className="feed-tabs">
+        {tabs.map((item) => (
+          <button className={tab === item.key ? "is-active" : ""} key={item.key} onClick={() => router.push(item.href)} type="button">
+            {item.label}
+          </button>
+        ))}
+      </div>
+      {loading ? (
+        <div className="feed-status">正在整理漂泊者的最新内容…</div>
+      ) : visible.length ? (
+        <>
+          {visible.map((guide) => (
+            <PostCard guide={guide} key={guide.id} interaction={interactionStates.get(guide.id) ?? null} />
+          ))}
+          {tab === "following" &&
+            (hasMore ? (
+              <button className="feed-load-more" disabled={loadingMore} onClick={loadMore} type="button">
+                {loadingMore ? "正在加载更多…" : "加载更多"}
+              </button>
+            ) : (
+              <p className="feed-end-note">已经到底啦，关注的动态都看完了。</p>
+            ))}
+        </>
+      ) : (
+        emptyState
+      )}
+      {apiUnavailable && tab !== "following" && <ApiFallbackNote onRetry={() => setReloadKey((key) => key + 1)} />}
+    </section>
+  );
 }
 export function RightRail() {
   const [tab, setTab] = useState<"recommend" | "news">("recommend");
-  const items = tab === "recommend" ? newsItems.slice(0, 5) : newsItems.filter((item) => item.category === "官方公告" || item.category === "版本前瞻").slice(0, 5);
+  const items =
+    tab === "recommend" ? newsItems.slice(0, 5) : newsItems.filter((item) => item.category === "官方公告" || item.category === "版本前瞻").slice(0, 5);
   // 热门话题：聚合真实帖子标签（库街区右栏话题卡同款：缩略图 + 帖子数）
-  const hotTopics = useQuery({ queryKey: ["hot-topics"], queryFn: async () => { const posts = await fetchPosts({ sort: "hot", pageSize: 40 }); const byTag = new Map<string, { count: number; cover?: string }>(); for (const post of posts) { const cover = post.coverImageUrl ?? post.mediaUrls?.[0]; for (const tag of post.tags ?? []) { const entry = byTag.get(tag) ?? { count: 0, cover: undefined }; entry.count += 1; if (!entry.cover && cover) entry.cover = cover; byTag.set(tag, entry); } } return [...byTag.entries()].sort((left, right) => right[1].count - left[1].count).slice(0, 5).map(([tag, value]) => ({ tag, ...value })); }, staleTime: 120_000, retry: false });
-  return <aside className="right-rail" aria-label="推荐与工具">
-    <section className="right-panel" id="news">
-      <div className="panel-tabs"><button className={tab === "recommend" ? "is-active" : ""} onClick={() => setTab("recommend")} type="button">推荐</button><button className={tab === "news" ? "is-active" : ""} onClick={() => setTab("news")} type="button">资讯</button></div>
-      <div className="ranking-list">{items.map((item) => { const chip = item.category === "官方公告" ? { kind: "official", label: "官方" } : item.category === "活动资讯" ? { kind: "activity", label: "活动" } : { kind: "info", label: "资讯" }; return <Link className="ranking-item" href={"/news/" + item.id} key={item.id}><span className={"news-chip news-chip--" + chip.kind}>{chip.label}</span><span className="ranking-title">{item.title}</span></Link>; })}</div>
-    </section>
-    <section aria-label="快捷工具" className="right-panel tools-panel" id="tools">
-      <div className="panel-title"><h2>实用工具</h2><Link href="/tools">更多 <ChevronRight size={14} /></Link></div>
-      <ul aria-label="工具列表" className="tool-grid">{quickTools.map(({ title, href, iconSrc }) => <li key={title}><Link className="tool-grid-item" href={href}><span className="tool-icon"><Image alt="" fill sizes="36px" src={iconSrc} /></span><strong>{title}</strong></Link></li>)}</ul>
-    </section>
-    {hotTopics.data && hotTopics.data.length > 0 && <section aria-label="热门话题" className="right-panel topics-panel"><div className="panel-title"><h2>热门话题</h2></div><div className="topic-list">{hotTopics.data.map(({ tag, count, cover }) => <Link className="topic-card" href={"/search?q=" + encodeURIComponent(tag)} key={tag}><span className="topic-thumb"><Image alt="" fill sizes="44px" src={cover ?? "/art/guide-coast.webp"} /></span><span className="topic-copy"><strong>#{tag}</strong><small>{count} 篇帖子</small></span></Link>)}</div></section>}
-  </aside>;
+  const hotTopics = useQuery({
+    queryKey: ["hot-topics"],
+    queryFn: async () => {
+      const posts = await fetchPosts({ sort: "hot", pageSize: 40 });
+      const byTag = new Map<string, { count: number; cover?: string }>();
+      for (const post of posts) {
+        const cover = post.coverImageUrl ?? post.mediaUrls?.[0];
+        for (const tag of post.tags ?? []) {
+          const entry = byTag.get(tag) ?? { count: 0, cover: undefined };
+          entry.count += 1;
+          if (!entry.cover && cover) entry.cover = cover;
+          byTag.set(tag, entry);
+        }
+      }
+      return [...byTag.entries()]
+        .sort((left, right) => right[1].count - left[1].count)
+        .slice(0, 5)
+        .map(([tag, value]) => ({ tag, ...value }));
+    },
+    staleTime: 120_000,
+    retry: false,
+  });
+  return (
+    <aside className="right-rail" aria-label="推荐与工具">
+      <section className="right-panel" id="news">
+        <div className="panel-tabs">
+          <button className={tab === "recommend" ? "is-active" : ""} onClick={() => setTab("recommend")} type="button">
+            推荐
+          </button>
+          <button className={tab === "news" ? "is-active" : ""} onClick={() => setTab("news")} type="button">
+            资讯
+          </button>
+        </div>
+        <div className="ranking-list">
+          {items.map((item) => {
+            const chip =
+              item.category === "官方公告"
+                ? { kind: "official", label: "官方" }
+                : item.category === "活动资讯"
+                  ? { kind: "activity", label: "活动" }
+                  : { kind: "info", label: "资讯" };
+            return (
+              <Link className="ranking-item" href={"/news/" + item.id} key={item.id}>
+                <span className={"news-chip news-chip--" + chip.kind}>{chip.label}</span>
+                <span className="ranking-title">{item.title}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+      <section aria-label="快捷工具" className="right-panel tools-panel" id="tools">
+        <div className="panel-title">
+          <h2>实用工具</h2>
+          <Link href="/tools">
+            更多 <ChevronRight size={14} />
+          </Link>
+        </div>
+        <ul aria-label="工具列表" className="tool-grid">
+          {quickTools.map(({ title, href, iconSrc }) => (
+            <li key={title}>
+              <Link className="tool-grid-item" href={href}>
+                <span className="tool-icon">
+                  <Image alt="" fill sizes="36px" src={iconSrc} />
+                </span>
+                <strong>{title}</strong>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+      {hotTopics.data && hotTopics.data.length > 0 && (
+        <section aria-label="热门话题" className="right-panel topics-panel">
+          <div className="panel-title">
+            <h2>热门话题</h2>
+          </div>
+          <div className="topic-list">
+            {hotTopics.data.map(({ tag, count, cover }) => (
+              <Link className="topic-card" href={"/search?q=" + encodeURIComponent(tag)} key={tag}>
+                <span className="topic-thumb">
+                  <Image alt="" fill sizes="44px" src={cover ?? "/art/guide-coast.webp"} />
+                </span>
+                <span className="topic-copy">
+                  <strong>#{tag}</strong>
+                  <small>{count} 篇帖子</small>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+    </aside>
+  );
 }
 export function useCommunityDrawer(open: boolean, setOpen: (value: boolean) => void) {
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -279,16 +775,55 @@ export function useCommunityDrawer(open: boolean, setOpen: (value: boolean) => v
       const first = focusable[0];
       const last = focusable.at(-1);
       if (!first || !last) return;
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener("keydown", handleKeyDown);
-    return () => { window.cancelAnimationFrame(focusFrame); document.removeEventListener("keydown", handleKeyDown); };
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [open, setOpen]);
   return { drawerCloseRef, drawerRef };
 }
-function HomeContent() { const [drawerOpen, setDrawerOpen] = useState(false); const [query, setQuery] = useState(""); const { drawerCloseRef, drawerRef } = useCommunityDrawer(drawerOpen, setDrawerOpen); return <main className="app-shell"><TopNavigation query={query} onQueryChange={setQuery} onMenu={() => setDrawerOpen(true)} />{drawerOpen && <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)}><div aria-label="社区频道" aria-modal="true" className="mobile-drawer" onClick={(event) => event.stopPropagation()} ref={drawerRef} role="dialog"><div className="drawer-header"><span>频道</span><button onClick={() => setDrawerOpen(false)} ref={drawerCloseRef} type="button" aria-label="关闭导航"><X size={20} /></button></div><Sidebar drawer /></div></div>}<div className="page-grid"><Sidebar /><div className="main-column"><Feed query={query} /></div><RightRail /></div></main>; }
+function HomeContent() {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const { drawerCloseRef, drawerRef } = useCommunityDrawer(drawerOpen, setDrawerOpen);
+  return (
+    <main className="app-shell">
+      <TopNavigation query={query} onQueryChange={setQuery} onMenu={() => setDrawerOpen(true)} />
+      {drawerOpen && (
+        <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)}>
+          <div aria-label="社区频道" aria-modal="true" className="mobile-drawer" onClick={(event) => event.stopPropagation()} ref={drawerRef} role="dialog">
+            <div className="drawer-header">
+              <span>频道</span>
+              <button onClick={() => setDrawerOpen(false)} ref={drawerCloseRef} type="button" aria-label="关闭导航">
+                <X size={20} />
+              </button>
+            </div>
+            <Sidebar drawer />
+          </div>
+        </div>
+      )}
+      <div className="page-grid">
+        <Sidebar />
+        <div className="main-column">
+          <Feed query={query} />
+        </div>
+        <RightRail />
+      </div>
+    </main>
+  );
+}
 // 登录态 Provider 只在 layout 层挂载一份（与 CommunityPageFrame 同理）：
 // 首页再嵌套一份会让"首页登录"不为主持栏之外的其他页面感知，且双实例共写
 // 同一 localStorage 键互相覆盖——会话恢复也会重复请求 /auth/me。
-export function CommunityHome() { return <HomeContent />; }
+export function CommunityHome() {
+  return <HomeContent />;
+}

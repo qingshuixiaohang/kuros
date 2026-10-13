@@ -85,21 +85,23 @@ test("首页内容流在有配图时展示可访问的帖子媒体", async ({ pa
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
-        data: [{
-          id: "media-post",
-          type: "GUIDE",
-          category: "配队攻略",
-          title: "含图片的真实列表数据",
-          excerpt: "列表摘要",
-          coverImageUrl: "/art/guide-sword.webp",
-          author: { id: "author-1", nickname: "潮声档案员", avatarUrl: null, bio: null },
-          publishedAt: "2026-09-16T10:00:00",
-          viewCount: 10,
-          likeCount: 3,
-          favoriteCount: 1,
-          commentCount: 2,
-          tags: ["配队"],
-        }],
+        data: [
+          {
+            id: "media-post",
+            type: "GUIDE",
+            category: "配队攻略",
+            title: "含图片的真实列表数据",
+            excerpt: "列表摘要",
+            coverImageUrl: "/art/guide-sword.webp",
+            author: { id: "author-1", nickname: "潮声档案员", avatarUrl: null, bio: null },
+            publishedAt: "2026-09-16T10:00:00",
+            viewCount: 10,
+            likeCount: 3,
+            favoriteCount: 1,
+            commentCount: 2,
+            tags: ["配队"],
+          },
+        ],
         meta: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
       }),
     });
@@ -147,16 +149,43 @@ test("帖子详情页分享会将帖子地址写入剪贴板", async ({ page }) 
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
-      value: { writeText: (value: string) => { (window as typeof window & { sharedText?: string }).sharedText = value; return Promise.resolve(); } },
+      value: {
+        writeText: (value: string) => {
+          (window as typeof window & { sharedText?: string }).sharedText = value;
+          return Promise.resolve();
+        },
+      },
     });
   });
-  await page.route("http://localhost:8080/api/v1/posts/10000000-0000-0000-0000-000000000001", (route) => route.fulfill({ json: { data: {
-    id: "10000000-0000-0000-0000-000000000001", type: "GUIDE", category: "配队攻略", title: "分享验证帖", excerpt: "用于验证分享", content: "正文", coverImageUrl: null, mediaUrls: [], author: { id: "user-100", nickname: "潮声档案员" }, publishedAt: "2026-09-15T10:24:00Z", viewCount: 10, commentCount: 0, likeCount: 0, favoriteCount: 0, tags: [],
-  } } }));
+  await page.route("http://localhost:8080/api/v1/posts/10000000-0000-0000-0000-000000000001", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          id: "10000000-0000-0000-0000-000000000001",
+          type: "GUIDE",
+          category: "配队攻略",
+          title: "分享验证帖",
+          excerpt: "用于验证分享",
+          content: "正文",
+          coverImageUrl: null,
+          mediaUrls: [],
+          author: { id: "user-100", nickname: "潮声档案员" },
+          publishedAt: "2026-09-15T10:24:00Z",
+          viewCount: 10,
+          commentCount: 0,
+          likeCount: 0,
+          favoriteCount: 0,
+          tags: [],
+        },
+      },
+    }),
+  );
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/guides/10000000-0000-0000-0000-000000000001");
   await page.getByRole("button", { name: "分享" }).click();
-  await expect.poll(() => page.evaluate(() => (window as typeof window & { sharedText?: string }).sharedText)).toContain("/guides/10000000-0000-0000-0000-000000000001");
+  await expect
+    .poll(() => page.evaluate(() => (window as typeof window & { sharedText?: string }).sharedText))
+    .toContain("/guides/10000000-0000-0000-0000-000000000001");
 });
 
 test("窄桌面端可以通过菜单打开频道抽屉", async ({ page }) => {

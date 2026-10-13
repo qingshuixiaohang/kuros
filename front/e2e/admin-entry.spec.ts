@@ -8,14 +8,14 @@ const normalUser = { ...adminUser, role: "USER" };
 
 function mockAuthMe(page: import("@playwright/test").Page, user: Record<string, unknown> | null) {
   return page.route("http://localhost:8080/api/v1/auth/me", (route) =>
-    user ? route.fulfill({ json: { data: user } }) : route.fulfill({ status: 401, json: { code: "UNAUTHORIZED", message: "请先登录" } })
+    user ? route.fulfill({ json: { data: user } }) : route.fulfill({ status: 401, json: { code: "UNAUTHORIZED", message: "请先登录" } }),
   );
 }
 
 test("管理员登录后顶栏出现管理入口，可直达举报审核台", async ({ page }) => {
   await mockAuthMe(page, adminUser);
   await page.route("http://localhost:8080/api/v1/admin/reports**", (route) =>
-    route.fulfill({ json: { data: [], meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 } } })
+    route.fulfill({ json: { data: [], meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 } } }),
   );
 
   await page.goto("/");

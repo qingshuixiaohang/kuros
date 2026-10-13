@@ -11,19 +11,37 @@ export function CommunityFollowButton({ targetUserId, fallbackKey, className = "
   useEffect(() => {
     if (!loggedIn || !targetUserId) return;
     let active = true;
-    fetchUserFollow(targetUserId).then((result) => { if (active) setFollow(result); }).catch(() => { if (active) notify("关注状态获取失败，请稍后刷新。"); });
-    return () => { active = false; };
+    fetchUserFollow(targetUserId)
+      .then((result) => {
+        if (active) setFollow(result);
+      })
+      .catch(() => {
+        if (active) notify("关注状态获取失败，请稍后刷新。");
+      });
+    return () => {
+      active = false;
+    };
   }, [loggedIn, targetUserId, notify]);
 
   const isFollowed = loggedIn && targetUserId ? follow?.followed === true : followed.includes(fallbackKey);
   function toggle() {
     requestLogin(() => {
-      if (!targetUserId) { toggleFollow(fallbackKey); return; }
+      if (!targetUserId) {
+        toggleFollow(fallbackKey);
+        return;
+      }
       void (isFollowed ? unfollowUser(targetUserId) : followUser(targetUserId))
-        .then((result) => { setFollow(result); toggleFollow(fallbackKey); })
+        .then((result) => {
+          setFollow(result);
+          toggleFollow(fallbackKey);
+        })
         .catch((error) => notify(error instanceof Error ? error.message : "关注操作失败，请稍后重试"));
     });
   }
 
-  return <button className={`${className} ${isFollowed ? "is-followed" : ""}`.trim()} onClick={toggle} type="button">{isFollowed ? "已关注" : "＋关注"}</button>;
+  return (
+    <button className={`${className} ${isFollowed ? "is-followed" : ""}`.trim()} onClick={toggle} type="button">
+      {isFollowed ? "已关注" : "＋关注"}
+    </button>
+  );
 }

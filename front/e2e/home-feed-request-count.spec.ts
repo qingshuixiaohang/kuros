@@ -78,7 +78,9 @@ test.describe("首页 Feed 请求数", () => {
       });
     });
     // 其余请求（hot-topics、account overview 等）放行到真实 dev server 或落空
-    await page.route("**/api/v1/posts/hot-topics**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ code: "SUCCESS", data: [] }) }));
+    await page.route("**/api/v1/posts/hot-topics**", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ code: "SUCCESS", data: [] }) }),
+    );
 
     await page.goto("/");
     // 等列表渲染出内容

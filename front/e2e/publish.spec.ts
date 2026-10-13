@@ -125,9 +125,9 @@ test("图片工具按钮上传后将 Markdown 插入正文并完成发布", asyn
   await mockAuth(page);
   await page.route("**/api/v1/auth/csrf", (route) => route.fulfill({ status: 204 }));
   await page.route("**/api/v1/files/images", (route) => route.fulfill({ json: { data: { url: "/media/wave-guide.png", originalName: "wave-guide.png" } } }));
-  await page.route("**/api/v1/posts", (route) => route.request().method() === "POST"
-    ? route.fulfill({ json: { data: { ...post, id: "created-post" } } })
-    : route.continue());
+  await page.route("**/api/v1/posts", (route) =>
+    route.request().method() === "POST" ? route.fulfill({ json: { data: { ...post, id: "created-post" } } }) : route.continue(),
+  );
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/publish");
 
@@ -136,7 +136,10 @@ test("图片工具按钮上传后将 Markdown 插入正文并完成发布", asyn
   await editor.getByRole("textbox", { name: "帖子标题" }).fill("鸣潮探索路线中的图片记录");
   await content.fill("这是正文。\n\n");
   await editor.getByRole("button", { name: "插入图片" }).click();
-  await editor.locator("input[type=file]").last().setInputFiles({ name: "wave-guide.png", mimeType: "image/png", buffer: Buffer.from("fake-image") });
+  await editor
+    .locator("input[type=file]")
+    .last()
+    .setInputFiles({ name: "wave-guide.png", mimeType: "image/png", buffer: Buffer.from("fake-image") });
   await expect(content).toHaveValue(/!\[wave-guide\.png\]\(\/media\/wave-guide\.png\)/);
 
   await page.evaluate(() => window.localStorage.setItem("wuthering-community-publish-draft-v2", "test-draft"));
@@ -182,7 +185,11 @@ test("发布页移除临时帖子配图时会清理上传资源", async ({ page 
   await mockAuth(page);
   await page.route("**/api/v1/auth/csrf", (route) => route.fulfill({ status: 204 }));
   let deleteRequested = false;
-  await page.route("**/api/v1/files/images", (route) => route.fulfill({ json: { data: { assetId: "asset-delete", url: "/media/asset-delete.png", originalName: "delete.png", contentType: "image/png", size: 3 } } }));
+  await page.route("**/api/v1/files/images", (route) =>
+    route.fulfill({
+      json: { data: { assetId: "asset-delete", url: "/media/asset-delete.png", originalName: "delete.png", contentType: "image/png", size: 3 } },
+    }),
+  );
   await page.route("**/api/v1/files/images/asset-delete", async (route) => {
     if (route.request().method() === "DELETE") {
       deleteRequested = true;
@@ -195,7 +202,9 @@ test("发布页移除临时帖子配图时会清理上传资源", async ({ page 
 
   const editor = page.getByRole("form", { name: "发布编辑器" });
   await editor.getByRole("button", { name: "添加帖子配图" }).click();
-  await editor.locator("section[aria-label='帖子配图'] input[type=file]").setInputFiles({ name: "delete.png", mimeType: "image/png", buffer: Buffer.from("delete") });
+  await editor
+    .locator("section[aria-label='帖子配图'] input[type=file]")
+    .setInputFiles({ name: "delete.png", mimeType: "image/png", buffer: Buffer.from("delete") });
   await expect(editor.getByRole("article", { name: /第 \d+ 张帖子配图/ })).toHaveCount(1);
   await editor.getByRole("button", { name: "删除图片 1" }).click();
   await expect(editor.getByRole("article", { name: /第 \d+ 张帖子配图/ })).toHaveCount(0);
@@ -251,7 +260,12 @@ test("编辑模式回填帖子配图并提交调整后的媒体顺序", async ({
   expect(requestBody?.mediaAssetIds).toEqual(["asset-2", "asset-1"]);
 });
 
-for (const viewport of [{ width: 1280, height: 900 }, { width: 1024, height: 900 }, { width: 768, height: 900 }, { width: 390, height: 844 }]) {
+for (const viewport of [
+  { width: 1280, height: 900 },
+  { width: 1024, height: 900 },
+  { width: 768, height: 900 },
+  { width: 390, height: 844 },
+]) {
   test(`发布编辑器在 ${viewport.width}px 保持可用且没有横向滚动`, async ({ page }) => {
     await mockAuth(page);
     await page.setViewportSize(viewport);

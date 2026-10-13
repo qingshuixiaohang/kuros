@@ -8,5 +8,9 @@ import { CommunityDemoProvider } from "@/components/community/community-interact
 
 export function CommunityProvider({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } } }));
-  return <QueryClientProvider client={queryClient}><CommunityDemoProvider>{children}</CommunityDemoProvider></QueryClientProvider>;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <CommunityDemoProvider>{children}</CommunityDemoProvider>
+    </QueryClientProvider>
+  );
 }

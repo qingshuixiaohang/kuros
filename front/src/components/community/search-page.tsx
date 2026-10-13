@@ -53,8 +53,10 @@ function EsSearchResults({ keyword }: { keyword: string }) {
   const unavailable = error instanceof ApiError && error.status === 503;
   const demoFallbackActive = Boolean(error) && !unavailable;
   const items: Guide[] = error
-    ? (demoFallbackActive ? demoFallback(keyword) : [])
-    : query.data?.pages.flatMap((page) => page.items.map(searchItemToGuide)) ?? [];
+    ? demoFallbackActive
+      ? demoFallback(keyword)
+      : []
+    : (query.data?.pages.flatMap((page) => page.items.map(searchItemToGuide)) ?? []);
   return (
     <section className="guide-list-page">
       {query.isLoading ? (
@@ -63,11 +65,15 @@ function EsSearchResults({ keyword }: { keyword: string }) {
         <div className="empty-state">
           <Search size={20} />
           <p>搜索暂不可用，请稍后重试。</p>
-          <button className="secondary-button" onClick={() => query.refetch()} type="button">重新加载</button>
+          <button className="secondary-button" onClick={() => query.refetch()} type="button">
+            重新加载
+          </button>
         </div>
       ) : items.length ? (
         <>
-          {items.map((guide) => <GuideListItem guide={guide} key={guide.id} />)}
+          {items.map((guide) => (
+            <GuideListItem guide={guide} key={guide.id} />
+          ))}
           {query.hasNextPage ? (
             <button className="feed-load-more" disabled={query.isFetchingNextPage} onClick={() => query.fetchNextPage()} type="button">
               {query.isFetchingNextPage ? "正在加载更多…" : "加载更多"}
@@ -94,8 +100,8 @@ function EsSearchResults({ keyword }: { keyword: string }) {
 function BrowseResults() {
   const [page, setPage] = useState(1);
   const result = useCommunityPostQuery({ keyword: "", page, pageSize: 10, sort: "latest" });
-  const items = result.error ? demoFallback("") : result.data?.items.map(toGuide) ?? [];
-  const totalPages = result.error ? 1 : result.data?.meta?.totalPages ?? 1;
+  const items = result.error ? demoFallback("") : (result.data?.items.map(toGuide) ?? []);
+  const totalPages = result.error ? 1 : (result.data?.meta?.totalPages ?? 1);
   return (
     <section className="guide-list-page">
       {result.isLoading ? (
@@ -112,12 +118,7 @@ function BrowseResults() {
       {totalPages > 1 && (
         <nav className="pagination" aria-label="搜索结果分页">
           {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
-            <button
-              className={page === pageNumber ? "is-active" : ""}
-              key={pageNumber}
-              onClick={() => setPage(pageNumber)}
-              type="button"
-            >
+            <button className={page === pageNumber ? "is-active" : ""} key={pageNumber} onClick={() => setPage(pageNumber)} type="button">
               {pageNumber}
             </button>
           ))}

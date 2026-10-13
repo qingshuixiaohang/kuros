@@ -41,18 +41,30 @@ export function useOverlay(options: {
   useEffect(() => {
     if (!open) return;
     function getFocusableElements() {
-      return Array.from(document.querySelectorAll<HTMLElement>(
-        `${surfaceSelector} button:not([disabled]), ${surfaceSelector} input:not([disabled]), ${surfaceSelector} a[href], ${surfaceSelector} select, ${surfaceSelector} textarea`
-      ));
+      return Array.from(
+        document.querySelectorAll<HTMLElement>(
+          `${surfaceSelector} button:not([disabled]), ${surfaceSelector} input:not([disabled]), ${surfaceSelector} a[href], ${surfaceSelector} select, ${surfaceSelector} textarea`,
+        ),
+      );
     }
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") { event.preventDefault(); if (!blocked) onClose(); return; }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (!blocked) onClose();
+        return;
+      }
       if (event.key !== "Tab") return;
       const focusable = getFocusableElements();
-      const first = focusable[0]; const last = focusable.at(-1);
+      const first = focusable[0];
+      const last = focusable.at(-1);
       if (!first || !last) return;
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
