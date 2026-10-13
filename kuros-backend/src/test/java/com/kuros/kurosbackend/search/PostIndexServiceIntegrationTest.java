@@ -94,6 +94,8 @@ class PostIndexServiceIntegrationTest {
                 () -> "http://" + es.getHost() + ":" + es.getMappedPort(9200));
         // Feign 直连桩：authorName 回源走 UserDirectoryStub（...0001 → 潮声档案员）
         registry.add("app.feign.kuros-user.url", userDirectory::baseUrl);
+        // sec-01 A2 漏洞修复：内部共享密钥（与桩期望值同源）。漏配 → 桩 401 → 回源红。
+        registry.add("app.internal.token", () -> "test-internal-token");
     }
 
     @Autowired PostIndexService postIndexService;

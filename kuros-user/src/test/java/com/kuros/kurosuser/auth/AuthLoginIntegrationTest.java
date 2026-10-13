@@ -83,6 +83,12 @@ class AuthLoginIntegrationTest {
         registry.add("spring.datasource.password", () -> MYSQL_ROOT_PASSWORD);
         registry.add("spring.data.redis.host", () -> "127.0.0.1");
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+        // sec-01 A1 漏洞修复后显式声明 dev 固定验证码：主 application.properties 的默认值
+        // 已改为空（万能码不再默认送达），这里注入 123456 是为了继续验证 dev 便利路径——
+        // 即"显式配置了固定码的环境里，登录链路照旧可走通"。该断言现在由本类独家承担，
+        // 删掉这两行等于删掉这条回归防线（服务将拒绝任何验证码，登录全红）。
+        registry.add("app.auth.dev-code", () -> "123456");
+        registry.add("app.auth.dev-code-exposed", () -> "true");
     }
 
     @Autowired

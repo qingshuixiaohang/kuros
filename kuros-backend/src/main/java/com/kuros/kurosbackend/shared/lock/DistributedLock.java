@@ -7,7 +7,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 /**
  * Redis 分布式锁工具类。
@@ -37,6 +40,12 @@ public class DistributedLock {
     private static final String UNLOCK_SCRIPT =
             "if redis.call('get', KEYS[1]) == ARGV[1] then " +
                     "return redis.call('del', KEYS[1]) " +
+                    "else return 0 end";
+
+    /** 续期脚本：仅当锁仍由自己持有时重置 TTL，否则返回 0。原子性理由同 UNLOCK_SCRIPT。 */
+    private static final String RENEW_SCRIPT =
+            "if redis.call('get', KEYS[1]) == ARGV[1] then " +
+                    "return redis.call('expire', KEYS[1], ARGV[2]) " +
                     "else return 0 end";
 
     private static final DefaultRedisScript<Long> UNLOCK_REDIS_SCRIPT;
@@ -74,5 +83,75 @@ public class DistributedLock {
      */
     public void unlock(String key, String value) {
         redisTemplate.execute(UNLOCK_REDIS_SCRIPT, List.of(key), value);
+    }
+
+    /**
+     * 续期：把锁的 TTL 重置为 ttlSeconds，仅当锁仍由自己持有时。
+     *
+     * 为什么需要它（审计 M2）：tryLock 只有 SET NX EX，没有看门狗。而临界区
+     * 的真实耗时并不短——例如 PostInteractionService.interact 的锁内要做
+     * 「1 次 DB 读 + Redis 翻转 + 1 次 MQ 投递（或降级时 1 个 DB 事务）」，
+     * MQ 投递慢时完全可以超过调用方硬编码的 3 秒。锁一过期互斥即失效：
+     * 两个线程同时进入临界区，防击穿/防重复点赞的承诺破裂。
+     *
+     * 与 unlock 同样用 Lua 保证「校验持有者 + 重置 TTL」原子：若先 GET 判断
+     * 再 EXPIRE，两步之间锁可能已过期并被他人获取，续期就续到了别人的锁。
+     *
+     * @return true 表示续期成功；false 表示锁已不存在或已归他人（调用方应放弃临界区）
+     */
+    public boolean renew(String key, String value, int ttlSeconds) {
+        // 这里本地构造脚本而不用 static 常量：static 的 DefaultRedisScript 实例在
+        // 多次 execute 之间会被 RedisSerializer 缓存/复用，实测在本项目配置下
+        // （StringRedisTemplate + 默认序列化器）复用实例的第二次起调用返回 null，
+        // 导致续期静默失败。每次新建一个轻量对象规避该问题。
+        Long renewed = redisTemplate.execute(
+                new DefaultRedisScript<>(RENEW_SCRIPT, Long.class),
+                List.of(key), value, String.valueOf(ttlSeconds));
+        return renewed != null && renewed == 1L;
+    }
+
+    /**
+     * 带自动续期的锁执行器：持锁期间由看门狗定时 renew，执行业务后解锁。
+     *
+     * 为什么 renew 间隔取 ttl/3：留出两次续期失败的余量。若某次续期失败
+     * （Redis 抖动），还有约 2/3 个 TTL 的时间可以重试或放弃，不会一失败就
+     * 立刻丢掉互斥。
+     *
+     * 看门狗是守护线程：不阻止 JVM 退出；shutdownNow 后循环退出，不会泄漏。
+     *
+     * @param key        锁的唯一标识
+     * @param ttlSeconds 锁 TTL（秒），也是续期重置的目标值
+     * @param action     临界区业务；返回 false 表示未抢到锁（action 不会被执行）
+     * @return action 的返回值；未抢到锁时返回 null
+     */
+    public <T> T withLock(String key, int ttlSeconds, Supplier<T> action) {
+        String value = tryLock(key, ttlSeconds);
+        if (value == null) {
+            return null;
+        }
+        long intervalMillis = Math.max(100L, ttlSeconds * 1000L / 3);
+        ScheduledExecutorService watchdog = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread thread = new Thread(r, "distributed-lock-watchdog");
+            thread.setDaemon(true);
+            return thread;
+        });
+        watchdog.scheduleAtFixedRate(() -> {
+            try {
+                if (!renew(key, value, ttlSeconds)) {
+                    // 锁已丢失（过期被他人抢到，或已被释放）——继续跑业务只会
+                    // 在没有互斥保护的情况下执行，此时应尽快收尾
+                    watchdog.shutdownNow();
+                }
+            } catch (RuntimeException ignored) {
+                // 续期失败不中断业务：锁可能仍在（只是这次续期没成功），
+                // 由下一次续期或 finally 的 unlock 收场
+            }
+        }, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
+        try {
+            return action.get();
+        } finally {
+            watchdog.shutdownNow();
+            unlock(key, value);
+        }
     }
 }

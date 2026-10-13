@@ -107,9 +107,11 @@ jobs:
         uses: actions/checkout@v4
       - name: Validate Docker Compose configuration
         run: docker compose config --quiet
+      # 全栈打包模式必须 --profile full。sec-01 起还需注入内部共享密钥（两个服务同一值）：
+      # 不注入时 user 服务 fail-closed 拒绝全部 /internal/**，backend 的 Feign 回填
+      # 全部 401，冒烟脚本的跨服务断言（作者昵称回填）会红——这正是 fail-closed 的验收
       - name: Build and start the Compose stack
-        # compose 默认（开发模式）只起中间件；CI 冒烟验证的是完整打包栈，必须 --profile full
-        run: APP_AUTH_DEV_CODE=123456 APP_AUTH_DEV_CODE_EXPOSED=true docker compose --profile full up -d --build
+        run: APP_AUTH_DEV_CODE=123456 APP_AUTH_DEV_CODE_EXPOSED=true APP_INTERNAL_TOKEN=ci-internal-token docker compose --profile full up -d --build
       - name: Verify service health
         run: |
           # 切片 #9 起 8080 正门归 gateway，8090 是 backend 调试直连口：

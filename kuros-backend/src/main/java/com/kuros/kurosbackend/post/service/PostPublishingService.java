@@ -17,6 +17,7 @@ import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.post.repository.ContentTagRepository;
 import com.kuros.kurosbackend.media.repository.MediaAssetRepository;
 import com.kuros.kurosbackend.post.repository.PostMediaRepository;
+import com.kuros.kurosbackend.shared.cache.CacheInvalidationAfterCommit;
 import com.kuros.kurosbackend.shared.cache.CacheNames;
 import com.kuros.kurosbackend.shared.cache.TwoLevelCache;
 import io.micrometer.core.instrument.Counter;
@@ -92,10 +93,12 @@ public class PostPublishingService {
     }
 
     // 切片 #13：内容变更 → 显式驱逐两级缓存（L1+L2），替代原 @CacheEvict（注解只清 L1 Caffeine，清不掉 L2 Redis）。
-    // 驱逐时机：放在所有鉴权/校验/写入之后、末尾 findPublishedById 之前——
-    // ① ownedPost/validate/normalizeTags/mediaAssets 任一抛异常时事务回滚，不触发无谓的跨节点失效广播
-    //    （两级缓存后 evict 成本 = Redis DEL + pub/sub 广播，远贵于旧 L1-only，鉴权失败不该白花）；
-    // ② 仍先于 findPublishedById，避免它命中 L2 旧内容返回过期数据。
+    // 驱逐与回填时机（审计 H1）：必须延迟到事务提交后。Redis 是非事务资源，若在事务内
+    // evict + 让下面的 findPublishedById 回填，一旦 replaceMedia 之后 flush 失败导致回滚，
+    // L2 里残留的是从未提交的新内容、旧内容又已被清掉，只能等 TTL 过期——幽灵数据。
+    // 提交后再失效还顺带避免一次无谓的跨节点广播（回滚时 evict 成本纯属白花）。
+    // 返回值仍从事内读取：调用方要的是"更新后的内容"这个事实，不是缓存状态，
+    // 而事务内读到的就是即将提交的内容（同一事务内可见），语义等价且不必等提交。
     @Transactional
     public PostDetailResponse update(String postId, String authorId, CreatePostRequest request) {
         CommunityPost post = ownedPost(postId, authorId);
@@ -105,7 +108,7 @@ public class PostPublishingService {
         post.replaceTags(tagNames.stream().map(name -> tagRepository.findByName(name).orElseGet(() -> tagRepository.save(new ContentTag(name)))).toList());
         postRepository.save(post);
         replaceMedia(post.getId(), postMediaRepository.findByPostIdOrderBySortOrderAsc(post.getId()), mediaAssets(request.mediaAssetIds(), authorId, post.getId()));
-        twoLevelCache.evict(CacheNames.POST_DETAIL, postId);
+        CacheInvalidationAfterCommit.run(() -> twoLevelCache.evict(CacheNames.POST_DETAIL, postId));
         return postService.findPublishedById(post.getId());
     }
 
@@ -117,8 +120,9 @@ public class PostPublishingService {
             throw new ForbiddenException("只能管理自己的帖子");
         }
         // 内容删除 → 驱逐两级缓存（L1+L2），替代原 @CacheEvict（注解清不掉 L2 Redis）。
-        // 放在鉴权之后：不存在/未授权的请求直接抛异常回滚，不触发无谓的跨节点失效广播。
-        twoLevelCache.evict(CacheNames.POST_DETAIL, postId);
+        // 延迟到提交后（审计 H1）：回滚时帖子并未删除，缓存却已被清，读路径 miss 后
+        // 回源 DB 得到旧数据再回填——功能上能自愈，但白花一次跨节点失效广播。
+        CacheInvalidationAfterCommit.run(() -> twoLevelCache.evict(CacheNames.POST_DETAIL, postId));
         if (post.getStatus() != PostStatus.DELETED) {
             post.delete(LocalDateTime.now());
         }

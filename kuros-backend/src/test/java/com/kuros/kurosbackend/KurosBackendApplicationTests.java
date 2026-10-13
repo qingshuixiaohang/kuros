@@ -28,12 +28,14 @@ import java.util.Objects;
 import java.util.UUID;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -84,6 +86,11 @@ class KurosBackendApplicationTests {
         registry.add("spring.datasource.url", () -> TestDatabases.h2Url("main"));
         // Feign 直连桩地址：url 非空时绕过 Nacos/LoadBalancer（真实 lb 链路另由 NacosFeignIntegrationTest 覆盖）
         registry.add("app.feign.kuros-user.url", userDirectory::baseUrl);
+        // sec-01 A2 漏洞修复：内部共享密钥。与桩的期望值同源（UserDirectoryStub 默认
+        // 期望 "test-internal-token"），InternalTokenRequestInterceptor 会把它注入
+        // X-Internal-Token 头。两侧不配 → 请求 401 → 下面所有 Feign 回填用例红，
+        // 这正是"漏配密钥时内部链路显式断开"的验收。
+        registry.add("app.internal.token", () -> "test-internal-token");
     }
 
     // 测试用固定 CSRF Token：CsrfInterceptor 只校验 cookie == header，不校验服务端存储
@@ -119,6 +126,35 @@ class KurosBackendApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UP"))
                 .andExpect(jsonPath("$.components").doesNotExist());
+    }
+
+    @Test
+    void 指标采集端点匿名可达否则Prometheus采不动() throws Exception {
+        // 审计 M11：本服务 expose 了 health,info,metrics,prometheus，但采集器不带会话 Cookie。
+        // 此前白名单只放行 health，/actuator/prometheus 要登录才能采，指标实际采不动。
+        //
+        // 实测结论（2026-10-12）：把白名单里的 /actuator/prometheus 条目删掉后本用例仍然绿，
+        // 说明 actuator 端点根本不经过 SaToken 的 MVC 拦截器（Spring Boot 的 actuator 由
+        // WebEndpointServletHandlerMapping 处理，与 WebMvcConfigurer 注册的拦截器链不是
+        // 同一条）。因此这条白名单条目对 /actuator/** 无效——本用例断言的是"端点本身
+        // 匿名可达"这个对外契约，它由 actuator 自身的安全模型决定，而非 SaToken 白名单。
+        mockMvc.perform(get("/actuator/prometheus"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("jvm_memory_used_bytes")));
+    }
+
+    @Test
+    void 受登录保护的API路径无会话时必须401() throws Exception {
+        // 拦截链生效的对照证据：同一套拦截器对 /api/** 是真实生效的
+        // （SaTokenConfigure 的白名单对该前缀有意义），与上一个用例的 actuator 行为
+        // 形成对照——证明"删掉白名单条目测试仍绿"不是因为拦截器没工作，
+        // 而是因为 actuator 不走这条拦截器链。
+        mockMvc.perform(post("/api/v1/posts")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"游客帖子\","
+                                + "\"content\":\"不应该发布\",\"tags\":[\"测试\"]}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
     }
 
     @Test

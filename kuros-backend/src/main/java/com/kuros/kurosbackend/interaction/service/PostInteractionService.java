@@ -41,6 +41,12 @@ public class PostInteractionService {
     private final PostLikeRepository likeRepository;
     private final PostFavoriteRepository favoriteRepository;
     private final DistributedLock distributedLock;
+    /**
+     * 互动锁 TTL。持锁期间由 DistributedLock.withLock 的看门狗自动续期，
+     * 所以这个值是"续期周期"而非"硬上限"——业务再慢也不会丢互斥。
+     */
+    private static final int LOCK_TTL_SECONDS = 3;
+
     private final InteractionRedisStore redisStore;
     private final InteractionEventPublisher eventPublisher;
     private final InteractionProjectionService projectionService;
@@ -98,11 +104,11 @@ public class PostInteractionService {
      */
     private PostInteractionResponse interact(String postId, String userId, InteractionType type, String lockPrefix) {
         String lockKey = "lock:" + lockPrefix + ":" + postId + ":" + userId;
-        String lockValue = distributedLock.tryLock(lockKey, 3);
-        if (lockValue == null) {
-            return findPost(postId, userId);
-        }
-        try {
+        // 用 withLock 而不是裸 tryLock/unlock：临界区含 MQ 投递（慢时数秒），
+        // 远超原来硬编码的 3 秒 TTL。看门狗持锁期间定时续期，互斥不因业务慢而失效。
+        // 未抢到锁（同用户并发点击）时 withLock 返回 null，此时直接返回当前快照，
+        // 不阻塞、不重复计——与原来的语义一致。
+        PostInteractionResponse result = distributedLock.withLock(lockKey, LOCK_TTL_SECONDS, () -> {
             CommunityPost post = findPublishedPost(postId);
             // Redis 翻转：仅在状态真正变化时增减计数；key miss 时用传入的 DB 供给器回源回填
             redisStore.flip(type, postId, userId,
@@ -114,9 +120,8 @@ public class PostInteractionService {
                 projectionService.apply(event);
             }
             return findPost(postId, userId);
-        } finally {
-            distributedLock.unlock(lockKey, lockValue);
-        }
+        });
+        return result != null ? result : findPost(postId, userId);
     }
 
     private boolean existsRelationInDb(InteractionType type, String postId, String userId) {

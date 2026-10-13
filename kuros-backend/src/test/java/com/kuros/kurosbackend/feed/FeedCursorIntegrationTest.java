@@ -146,7 +146,7 @@ class FeedCursorIntegrationTest {
         CommunityPost post = CommunityPost.publish(
                 AUTHOR, PostType.GUIDE, "角色培养", title, "摘要", "内容", publishedAt);
         postRepository.save(post);
-        timelineStore.pushToTimelines(post.getId(), post.getPublishedAt(), List.of(USER_A));
+        timelineStore.pushToTimelines(post.getId(), post.getAuthorId(), post.getPublishedAt(), List.of(USER_A));
     }
 
     private List<String> collectAllByCursor(int limit) {

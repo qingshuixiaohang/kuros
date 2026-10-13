@@ -1,0 +1,22 @@
+-- 评论表补 author_id 索引（审计 M5 / C2）。
+--
+-- 为什么需要：CommunityCommentRepository.findByAuthorId(authorId, pageable)
+-- 是「我的评论」列表的查询路径，而 author_id 此前没有任何索引。
+--
+-- 实测证据（MySQL 8.0.46，comments 灌 20000 行，查询
+-- WHERE author_id = ? ORDER BY created_at DESC LIMIT 20）：
+--
+--   加索引前：type=ALL，rows=19995，Extra="Using where; Using filesort"
+--   加索引后：type=ref，rows=10，Extra="Backward index scan"
+--
+-- 即扫描行数从全表降到只读命中的 10 行，且排序由 filesort 变为索引反向扫描
+-- （created_at 已含在索引里，无需额外排序）。
+--
+-- 为什么是 (author_id, created_at) 而不是单列 author_id：
+-- 查询同时带 ORDER BY created_at DESC。把排序键放进索引，MySQL 可以直接
+-- 反向扫索引拿到有序结果，省掉一次 filesort。这与既有
+-- idx_comments_post_latest (post_id, status, created_at) 的设计一致。
+--
+-- 注：V10 删掉 users 表后 author_id 上的外键约束已不存在，此处只补普通索引。
+
+CREATE INDEX idx_comments_author_latest ON comments (author_id, created_at);

@@ -20,8 +20,12 @@ import java.util.List;
  * 用户摘要单元用 backend 侧独立定义的 UserBriefDto（字段与 kuros-user 的
  * UserBriefResponse 一致），避免跨工程编译依赖。
  *
- * 安全边界：/internal/** 在 kuros-user 侧不经会话鉴权（SaToken notMatch），
- * 依赖 compose 网络隔离——生产化前须在网关/服务网格层限制内部前缀仅集群内可达。
+ * 安全边界（sec-01 A2 漏洞修复后）：/internal/** 在 kuros-user 侧要求
+ * X-Internal-Token 共享密钥（不再零鉴权），由本包 InternalTokenFeignConfig 注册的
+ * InternalTokenRequestInterceptor 自动注入——客户端无需在每个方法上带 @RequestHeader。
+ * 密钥未配置时不加头，服务端 fail-closed 返回 401（宁可链路显式断开，也不静默放行）。
+ * 网络侧另有一层：compose 不再把 user 端口发布到宿主机 0.0.0.0（只绑 127.0.0.1），
+ * 内部调用走 compose 服务名。两层缺一不可——单靠任一层都留"配置写错就全裸"的口子。
  */
 @FeignClient(name = "kuros-user", url = "${app.feign.kuros-user.url:}")
 public interface UserDirectoryClient {

@@ -32,6 +32,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -92,8 +96,11 @@ public class CommunityPostService {
         // split-08：整页作者一次批量回填（Feign），避免逐帖单查的 N+1 跨服务调用
         Map<String, UserBriefDto> authors = userDirectory.findAuthors(
                 posts.getContent().stream().map(CommunityPost::getAuthorId).toList());
+        // M5/C1：整页媒体一次批量装载，避免逐帖单查的 DB 层 N+1
+        Map<String, List<PostMediaResponse>> mediaByPost = mediaFor(
+                posts.getContent().stream().map(CommunityPost::getId).toList());
         List<PostSummaryResponse> items = posts.getContent().stream()
-                .map(post -> toSummary(post, authors))
+                .map(post -> toSummary(post, authors, mediaByPost))
                 .toList();
         PageMeta meta = new PageMeta(normalizedPage, normalizedPageSize, posts.getTotalElements(), posts.getTotalPages());
         return new PageResult<>(items, meta);
@@ -191,8 +198,11 @@ public class CommunityPostService {
         // 整页作者一次批量回填（Feign），沿用 offset 版的 N+1 规避
         Map<String, UserBriefDto> authors = userDirectory.findAuthors(
                 page.stream().map(CommunityPost::getAuthorId).toList());
+        // M5/C1：整页媒体一次批量装载，与作者回填同理
+        Map<String, List<PostMediaResponse>> mediaByPost = mediaFor(
+                page.stream().map(CommunityPost::getId).toList());
         List<PostSummaryResponse> items = page.stream()
-                .map(post -> toSummary(post, authors))
+                .map(post -> toSummary(post, authors, mediaByPost))
                 .toList();
         String nextCursor = hasMore ? encodeCursor(sort, page.get(page.size() - 1)) : null;
         return new CursorPageResult<>(items, nextCursor, hasMore);
@@ -257,21 +267,46 @@ public class CommunityPostService {
         Pageable pageable = PageRequest.of(normalizedPage - 1, normalizedPageSize, Sort.by(Sort.Order.desc("publishedAt")));
         Page<CommunityPost> posts = postRepository.findByAuthorIdAndStatus(authorId, PostStatus.PUBLISHED, pageable);
         Map<String, UserBriefDto> authors = userDirectory.findAuthors(List.of(authorId));
+        // M5/C1：整页媒体一次批量装载
+        Map<String, List<PostMediaResponse>> mediaByPost = mediaFor(
+                posts.getContent().stream().map(CommunityPost::getId).toList());
         List<PostSummaryResponse> items = posts.getContent().stream()
-                .map(post -> toSummary(post, authors))
+                .map(post -> toSummary(post, authors, mediaByPost))
                 .toList();
         return new PageResult<>(items, new PageMeta(normalizedPage, normalizedPageSize, posts.getTotalElements(), posts.getTotalPages()));
     }
 
+    /**
+     * 按 id 批量构建摘要，只返回 PUBLISHED 状态的帖子（审计 M9 / D2）。
+     *
+     * 为什么必须按状态过滤：方法名承诺的是 Published。timeline ZSet 里的
+     * postId 不会随软删除而消失（删帖只改 status，不动 ZSet），
+     * findAllById 也能查到 DELETED 的行——只 filter null 的话软删帖会
+     * 漏进关注流，用户在自己的首页看到已删除内容。这正是原零断言测试
+     * 注释里记成"已知局限"的那个缺陷（FeedTimelineIntegrationTest
+     * .findFollowingFeed_filtersOutDeletedPosts 现在真正断言它）。
+     *
+     * 调用方：FeedService.findFollowingFeed / findFollowingFeedByCursor、
+     * ProfileService 收藏列表。三处都要求"只给用户看已发布内容"。
+     */
     public PageResult<PostSummaryResponse> findPublishedByIds(Page<String> ids) {
-        List<CommunityPost> posts = postRepository.findAllById(ids.getContent());
-        Map<String, CommunityPost> postsById = posts.stream().collect(Collectors.toMap(CommunityPost::getId, Function.identity()));
+        List<CommunityPost> all = postRepository.findAllById(ids.getContent());
+        // 先筛一次状态，后续的作者回填/媒体装载/组装都只处理已发布帖，
+        // 避免同一个 filter 条件在三个 stream 里重复
+        List<CommunityPost> posts = all.stream()
+                .filter(post -> post.getStatus() == PostStatus.PUBLISHED)
+                .toList();
+        Map<String, CommunityPost> postsById = posts.stream()
+                .collect(Collectors.toMap(CommunityPost::getId, Function.identity()));
         Map<String, UserBriefDto> authors = userDirectory.findAuthors(
                 posts.stream().map(CommunityPost::getAuthorId).toList());
+        // M5/C1：整页媒体一次批量装载
+        Map<String, List<PostMediaResponse>> mediaByPost = mediaFor(
+                posts.stream().map(CommunityPost::getId).toList());
         List<PostSummaryResponse> items = ids.getContent().stream()
                 .map(postsById::get)
                 .filter(java.util.Objects::nonNull)
-                .map(post -> toSummary(post, authors))
+                .map(post -> toSummary(post, authors, mediaByPost))
                 .toList();
         return new PageResult<>(items, new PageMeta(ids.getNumber() + 1, ids.getSize(), ids.getTotalElements(), ids.getTotalPages()));
     }
@@ -291,13 +326,23 @@ public class CommunityPostService {
         return Sort.by(Sort.Order.desc("publishedAt"));
     }
 
-    private PostSummaryResponse toSummary(CommunityPost post, Map<String, UserBriefDto> authors) {
-        List<PostMediaResponse> media = media(post.getId());
+    /**
+     * 组装摘要。媒体由调用方批量预取（见 {@link #mediaFor}），不在本方法内单帖查询——
+     * 那是 DB 层 N+1 的来源（审计 M5 / C1）。
+     */
+    private PostSummaryResponse toSummary(CommunityPost post, Map<String, UserBriefDto> authors,
+                                          Map<String, List<PostMediaResponse>> mediaByPost) {
+        List<PostMediaResponse> media = mediaByPost.getOrDefault(post.getId(), List.of());
         return new PostSummaryResponse(
                 post.getId(), post.getType(), post.getCategory(), post.getTitle(), post.getExcerpt(),
                 userDirectory.toAuthor(post.getAuthorId(), authors), post.getPublishedAt(), post.getViewCount(), post.getLikeCount(),
                 post.getFavoriteCount(), post.getCommentCount(), tagNames(post), coverUrl(media), media
         );
+    }
+
+    /** 单帖版（详情页等路径）：内部委托批量版，行为一致。 */
+    private PostSummaryResponse toSummary(CommunityPost post, Map<String, UserBriefDto> authors) {
+        return toSummary(post, authors, mediaFor(List.of(post.getId())));
     }
 
     /** 实体 → 内容缓存载体（不含 like/favorite 计数，计数解耦见 PostDetailContent 注释）。 */
@@ -327,21 +372,70 @@ public class CommunityPostService {
         return media.stream().findFirst().map(PostMediaResponse::url).orElse(null);
     }
 
-    private List<PostMediaResponse> media(String postId) {
-        List<PostMedia> associations = postMediaRepository.findByPostIdOrderBySortOrderAsc(postId);
+    /**
+     * 批量装载多帖的媒体（审计 M5 / C1：消除列表读路径的 DB 层 N+1）。
+     *
+     * 原实现对每帖调用 {@link #media(String)}，而它内部是
+     * 「findByPostIdOrderBySortOrderAsc + findAllById」两次查询——一页 50 帖
+     * = 1 列表 + 50×2 = 102 条 SQL（实测数字，见 PostListSqlCountIntegrationTest）。
+     * 项目在 split-08 专门消除了跨服务 Feign 的 N+1，DB 层却原样存在，
+     * 与 #13「读路径加固」的定位相悖。
+     *
+     * 批量版用两次查询覆盖整页：一次取全部关联（findByPostIdIn）、一次取全部资产
+     * （findAllById），再在内存里按 postId 分组。SQL 数从 O(页大小) 降为常数。
+     *
+     * 顺带修掉原实现的 O(n²)：它对每个 asset 都全量扫一遍 associations 来找
+     * sortOrder（filter().findFirst().orElseThrow()），且关联缺失时抛
+     * NoSuchElementException（会落到 M1 的"无通用异常处理"缺口上变成 500）。
+     * 这里先用一次遍历建 assetId → sortOrder 的 Map，缺失关联直接跳过。
+     */
+    private Map<String, List<PostMediaResponse>> mediaFor(Collection<String> postIds) {
+        if (postIds == null || postIds.isEmpty()) {
+            return Map.of();
+        }
+        List<PostMedia> associations = postMediaRepository.findByPostIdIn(postIds);
+        if (associations.isEmpty()) {
+            return Map.of();
+        }
         Map<String, MediaAsset> assets = mediaAssetRepository.findAllById(
-                        associations.stream().map(PostMedia::getAssetId).toList()
-                ).stream()
+                        associations.stream().map(PostMedia::getAssetId).distinct().toList())
+                .stream()
                 .collect(Collectors.toMap(MediaAsset::getId, Function.identity()));
-        return associations.stream()
-                .map(association -> assets.get(association.getAssetId()))
-                .filter(java.util.Objects::nonNull)
-                .map(asset -> new PostMediaResponse(
-                        asset.getId(), publicBaseUrl + "/media/" + asset.getStorageKey(),
-                        associations.stream().filter(item -> item.getAssetId().equals(asset.getId())).findFirst().orElseThrow().getSortOrder(),
-                        associations.stream().filter(item -> item.getAssetId().equals(asset.getId())).findFirst().orElseThrow().getSortOrder() == 0
-                ))
-                .toList();
+
+        // 一次遍历建立 (postId, assetId) → sortOrder，避免嵌套 filter 的 O(n²)
+        Map<String, Integer> sortOrderByKey = new HashMap<>();
+        for (PostMedia association : associations) {
+            sortOrderByKey.put(association.getPostId() + ":" + association.getAssetId(),
+                    association.getSortOrder());
+        }
+
+        Map<String, List<PostMediaResponse>> result = new HashMap<>();
+        for (PostMedia association : associations) {
+            MediaAsset asset = assets.get(association.getAssetId());
+            if (asset == null) {
+                // 关联指向的资产不存在（数据不一致）：跳过而非抛异常。
+                // 一个坏关联不该让整页帖子 500。
+                continue;
+            }
+            Integer sortOrder = sortOrderByKey.get(association.getPostId() + ":" + association.getAssetId());
+            if (sortOrder == null) {
+                continue;
+            }
+            result.computeIfAbsent(association.getPostId(), key -> new ArrayList<>())
+                    .add(new PostMediaResponse(
+                            asset.getId(), publicBaseUrl + "/media/" + asset.getStorageKey(),
+                            sortOrder, sortOrder == 0));
+        }
+        // 保持每帖内部按 sortOrder 升序（与原实现的 OrderBy 语义一致）
+        result.replaceAll((key, value) -> value.stream()
+                .sorted(Comparator.comparingInt(PostMediaResponse::sortOrder))
+                .toList());
+        return result;
+    }
+
+    /** 单帖版：委托批量版，保证两条路径的行为完全一致。 */
+    private List<PostMediaResponse> media(String postId) {
+        return mediaFor(List.of(postId)).getOrDefault(postId, List.of());
     }
 
     private String blankToNull(String value) {

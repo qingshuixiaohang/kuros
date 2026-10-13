@@ -61,6 +61,8 @@ class FeedTimelineIntegrationTest {
     private static final String USER_A = "user-a";
     private static final String USER_B = "user-b";
     private static final String USER_C = "user-c";
+    /** 这些用例只关心 timeline 存取，用统一虚拟作者（member 复合键的作者段）。 */
+    private static final String AUTHOR = "timeline-test-author";
 
     @BeforeEach
     void setUp() {
@@ -79,7 +81,7 @@ class FeedTimelineIntegrationTest {
     @Test
     void pushToTimelines_addsPostToFollowersZSet() {
         LocalDateTime now = LocalDateTime.of(2026, 9, 21, 12, 0);
-        timelineStore.pushToTimelines("post-1", now, List.of(USER_A, USER_B));
+        timelineStore.pushToTimelines("post-1", AUTHOR, now, List.of(USER_A, USER_B));
 
         assertThat(timelineStore.contains(USER_A, "post-1")).isTrue();
         assertThat(timelineStore.contains(USER_B, "post-1")).isTrue();
@@ -93,9 +95,9 @@ class FeedTimelineIntegrationTest {
         LocalDateTime t2 = LocalDateTime.of(2026, 9, 21, 11, 0);
         LocalDateTime t3 = LocalDateTime.of(2026, 9, 21, 12, 0);
 
-        timelineStore.pushToTimelines("post-old", t1, List.of(USER_A));
-        timelineStore.pushToTimelines("post-mid", t2, List.of(USER_A));
-        timelineStore.pushToTimelines("post-new", t3, List.of(USER_A));
+        timelineStore.pushToTimelines("post-old", AUTHOR, t1, List.of(USER_A));
+        timelineStore.pushToTimelines("post-mid", AUTHOR, t2, List.of(USER_A));
+        timelineStore.pushToTimelines("post-new", AUTHOR, t3, List.of(USER_A));
 
         List<String> result = timelineStore.readTimeline(USER_A, 0, 10);
         assertThat(result).containsExactly("post-new", "post-mid", "post-old");
@@ -105,7 +107,7 @@ class FeedTimelineIntegrationTest {
     void readTimeline_pagination_worksCorrectly() {
         for (int i = 0; i < 5; i++) {
             LocalDateTime time = LocalDateTime.of(2026, 9, 21, 10 + i, 0);
-            timelineStore.pushToTimelines("post-" + i, time, List.of(USER_A));
+            timelineStore.pushToTimelines("post-" + i, AUTHOR, time, List.of(USER_A));
         }
 
         List<String> page1 = timelineStore.readTimeline(USER_A, 0, 2);
@@ -124,7 +126,7 @@ class FeedTimelineIntegrationTest {
         // 推 501 条，验证第 1 条被裁剪
         for (int i = 0; i < 501; i++) {
             LocalDateTime time = LocalDateTime.of(2026, 9, 21, 0, 0).plusMinutes(i);
-            timelineStore.pushToTimelines("post-" + i, time, List.of(USER_A));
+            timelineStore.pushToTimelines("post-" + i, AUTHOR, time, List.of(USER_A));
         }
 
         assertThat(timelineStore.size(USER_A)).isEqualTo(500);
@@ -136,8 +138,8 @@ class FeedTimelineIntegrationTest {
 
     @Test
     void pushToTimelines_emptyFollowerList_doesNothing() {
-        timelineStore.pushToTimelines("post-1", LocalDateTime.now(), List.of());
-        timelineStore.pushToTimelines("post-2", LocalDateTime.now(), null);
+        timelineStore.pushToTimelines("post-1", AUTHOR, LocalDateTime.now(), List.of());
+        timelineStore.pushToTimelines("post-2", AUTHOR, LocalDateTime.now(), null);
 
         assertThat(timelineStore.size(USER_A)).isEqualTo(0);
     }
@@ -157,8 +159,8 @@ class FeedTimelineIntegrationTest {
         postRepository.save(post1);
         postRepository.save(post2);
 
-        timelineStore.pushToTimelines(post1.getId(), post1.getPublishedAt(), List.of(USER_A));
-        timelineStore.pushToTimelines(post2.getId(), post2.getPublishedAt(), List.of(USER_A));
+        timelineStore.pushToTimelines(post1.getId(), post1.getAuthorId(), post1.getPublishedAt(), List.of(USER_A));
+        timelineStore.pushToTimelines(post2.getId(), post2.getAuthorId(), post2.getPublishedAt(), List.of(USER_A));
 
         // 执行
         PageResult<PostSummaryResponse> result = feedService.findFollowingFeed(USER_A, 1, 20);
@@ -169,26 +171,35 @@ class FeedTimelineIntegrationTest {
         assertThat(result.items().get(1).title()).isEqualTo("标题1");
     }
 
+    /**
+     * 软删除的帖子不得出现在关注流里（审计 M9 / D2）。
+     *
+     * 原用例准备了帖子、软删除、调用服务，然后只有注释、零断言——永远绿。
+     * 注释里还留着一个错误假设："findAllById 能找到 DELETED 状态的帖子
+     * （JPA 不自动过滤）……这是当前实现的已知局限"。也就是说软删除帖
+     * 真的会漏进关注流，而测试选择了不验证。
+     *
+     * 这里把它变成真断言。若它变红，说明 {@code findPublishedByIds} 名不
+     * 副实——只 filter null 不过滤状态——那是要修的生产 bug，不是测试问题。
+     */
     @Test
     void findFollowingFeed_filtersOutDeletedPosts() {
-        // 准备：创建帖子 + 推到 timeline，然后软删除帖子
+        // 准备：创建帖子 + 推到 timeline
         CommunityPost post = CommunityPost.publish(USER_B, PostType.GUIDE, "角色培养", "已删帖", "摘要", "内容", LocalDateTime.now());
         postRepository.save(post);
-        timelineStore.pushToTimelines(post.getId(), post.getPublishedAt(), List.of(USER_A));
+        timelineStore.pushToTimelines(post.getId(), post.getAuthorId(), post.getPublishedAt(), List.of(USER_A));
 
-        // 帖子被软删除（DB 里状态变 DELETED，但 timeline ZSet 里 postId 仍在）
+        // 帖子被软删除（status → DELETED，行仍在 DB 里）
         post.delete(LocalDateTime.now());
         postRepository.save(post);
 
         // 执行
         PageResult<PostSummaryResponse> result = feedService.findFollowingFeed(USER_A, 1, 20);
 
-        // 验证：已删除帖子不出现在结果（findPublishedByIds 内部 filter null 跳过）
-        // 注意：实际上 findAllById 能找到 DELETED 状态的帖子（JPA 不自动过滤），
-        // 但 findPublishedByIds 用 filter(Objects::nonNull) 不过滤非 PUBLISHED——
-        // 所以这个测试验证的是"timeline 里有 postId，DB 里帖子仍在但状态 DELETED"的场景。
-        // 实际效果：findPublishedByIds 会返回 DELETED 帖子（它不过滤状态）。
-        // 这是当前实现的已知局限（spec D5：取消关注/删除帖子的完整过滤留 #13）。
-        // 本测试只验证"帖子被物理删除"的场景（DB 里不存在 → findAllById 返回 null → 被过滤）。
+        // 断言：软删除的帖子不得出现在关注流里。
+        // findPublishedByIds 的语义就是"只返回已发布"，软删帖必须被过滤。
+        assertThat(result.items())
+                .as("软删除的帖子不应出现在关注流中")
+                .noneMatch(item -> item.id().equals(post.getId()));
     }
 }
