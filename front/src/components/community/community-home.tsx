@@ -10,7 +10,7 @@ import { CommunityFollowButton } from "@/components/community/community-follow-b
 import { CommunityHeroCarousel, CommunityImageCarousel } from "@/components/community/community-carousel";
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
-import { ApiError, favoritePost, fetchFollowingFeedByCursor, fetchMyProfile, fetchPostInteractionsBatch, fetchPosts, likePost, unfavoritePost, unlikePost, type PostInteraction } from "@/lib/api";
+import { ApiError, favoritePost, fetchFollowingFeedByCursor, fetchMyProfile, fetchPostInteractionsBatch, fetchPosts, likePost, unfavoritePost, unlikePost } from "@/lib/api";
 import { guides, newsItems } from "@/lib/mock";
 import { DEMO_AUTHOR_ID_BY_NAME, toGuide } from "@/lib/post-view";
 import type { Guide } from "@/types/community";
