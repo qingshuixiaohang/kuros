@@ -35,6 +35,8 @@ jobs:
         run: npm ci
       - name: Lint
         run: npm run lint
+      - name: Type check
+        run: npx tsc --noEmit
       - name: Format check
         run: npm run format:check
       - name: Unit tests
