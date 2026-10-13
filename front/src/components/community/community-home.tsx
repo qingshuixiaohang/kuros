@@ -10,7 +10,7 @@ import { CommunityFollowButton } from "@/components/community/community-follow-b
 import { CommunityHeroCarousel, CommunityImageCarousel } from "@/components/community/community-carousel";
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
-import { ApiError, favoritePost, fetchFollowingFeedByCursor, fetchMyProfile, fetchPostInteractions, fetchPosts, likePost, unfavoritePost, unlikePost, type PostInteraction } from "@/lib/api";
+import { ApiError, favoritePost, fetchFollowingFeedByCursor, fetchMyProfile, fetchPostInteractionsBatch, fetchPosts, likePost, unfavoritePost, unlikePost, type PostInteraction } from "@/lib/api";
 import { guides, newsItems } from "@/lib/mock";
 import { DEMO_AUTHOR_ID_BY_NAME, toGuide } from "@/lib/post-view";
 import type { Guide } from "@/types/community";
@@ -71,18 +71,18 @@ function PostMedia({ guide, href }: { guide: Guide; href: string }) {
   }
   return <CommunityImageCarousel className="post-media post-media-carousel" href={href} images={sources.slice(0, 6).map((src) => ({ alt: `${guide.title}帖子配图`, src }))} label={`${guide.title}帖子配图轮播`} />;
 }
-function PostCard({ guide }: { guide: Guide }) {
+function PostCard({ guide, interaction: initialInteraction }: { guide: Guide; interaction?: { liked: boolean; favorited: boolean } | null }) {
   const { liked, bookmarked, toggleLike, toggleBookmark, notify, requestLogin } = useCommunityDemo();
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const postId = postIdBySlug[guide.id] ?? (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(guide.id) ? guide.id : undefined);
-  const [interaction, setInteraction] = useState<PostInteraction | null>(null);
-  useEffect(() => {
-    if (!postId) return;
-    let active = true;
-    fetchPostInteractions(postId).then((result) => { if (active) setInteraction(result); }).catch(() => { /* The home feed remains usable with its seeded data. */ });
-    return () => { active = false; };
-  }, [postId]);
+  // H-2：互动状态由 Feed 一次批量拉取后传下来，不再每卡自己发请求。
+  // 原来的实现是每个 PostCard 各发一次 /posts/{id}/interactions，
+  // 一屏 20 帖 = 21 个请求（浏览器 6 条并发，分 4 批完成）。
+  // initialInteraction 为 null/undefined 时（游客、或批量请求失败）
+  // 回退到本地 demo 状态，与原降级语义一致。
+  const [interaction, setInteraction] = useState<PostInteraction | null>(
+    initialInteraction ? { postId: postId ?? "", likeCount: 0, favoriteCount: 0, ...initialInteraction } : null);
   const isBookmarked = interaction?.favorited ?? bookmarked.includes(guide.id);
   function change(kind: "like" | "favorite") {
     requestLogin(() => {
@@ -149,6 +149,9 @@ function Feed({ query }: { query: string }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const requestKey = tab + "::" + query + "::" + reloadKey;
   const sort = tab === "recommend" ? "hot" : "latest";
+  /* H-2：整页互动状态一次批量拉取（原来是每个 PostCard 各发一次，20 帖 = 21 请求）。
+     key 用 requestKey：tab/query/重试变化时重新拉，与列表数据同生命周期。 */
+  const [interactionStates, setInteractionStates] = useState<Map<string, { liked: boolean; favorited: boolean }>>(new Map());
   useEffect(() => {
     let active = true;
     /* slice-12: following tab → /api/v1/feed/following (Redis ZSet timeline); recommend/latest → GET /api/v1/posts */
@@ -162,6 +165,14 @@ function Feed({ query }: { query: string }) {
       setApiUnavailable(false);
       setFeedIssue(null);
       setLoadedKey(requestKey);
+      // H-2：列表到位后一次批量拉整页互动状态，替代原先每卡一次请求。
+      // 失败不阻断渲染——PostCard 会回退到本地 demo 状态（与原降级一致）。
+      const ids = posts.map((post) => post.id);
+      if (ids.length) {
+        fetchPostInteractionsBatch(ids)
+          .then((states) => { if (active) setInteractionStates(states); })
+          .catch(() => { if (active) setInteractionStates(new Map()); });
+      }
     }).catch((error) => {
       if (!active) return;
       if (tab === "following") {
@@ -203,7 +214,7 @@ function Feed({ query }: { query: string }) {
       ? <><p>登录后查看关注的创作者动态</p><button className="secondary-button" onClick={() => requestLogin()} type="button">去登录</button></>
       : <><p>关注流加载失败，请稍后重试。</p><button className="secondary-button" onClick={() => setReloadKey((key) => key + 1)} type="button">重新加载</button></>}</div>
     : <div className="empty-state"><p>{tab === "following" ? "还没有关注的创作者。去推荐页看看吧。" : "没有找到相关帖子，换个关键词试试。"}</p>{tab === "following" && <Link className="secondary-button" href="/">返回推荐页</Link>}</div>;
-  return <section className="feed" id="feed" aria-label="社区内容流"><Banner /><div className="feed-tabs">{tabs.map((item) => <button className={tab === item.key ? "is-active" : ""} key={item.key} onClick={() => router.push(item.href)} type="button">{item.label}</button>)}</div>{loading ? <div className="feed-status">正在整理漂泊者的最新内容…</div> : visible.length ? <>{visible.map((guide) => <PostCard guide={guide} key={guide.id} />)}{tab === "following" && (hasMore ? <button className="feed-load-more" disabled={loadingMore} onClick={loadMore} type="button">{loadingMore ? "正在加载更多…" : "加载更多"}</button> : <p className="feed-end-note">已经到底啦，关注的动态都看完了。</p>)}</> : emptyState}{apiUnavailable && tab !== "following" && <ApiFallbackNote onRetry={() => setReloadKey((key) => key + 1)} />}</section>;
+  return <section className="feed" id="feed" aria-label="社区内容流"><Banner /><div className="feed-tabs">{tabs.map((item) => <button className={tab === item.key ? "is-active" : ""} key={item.key} onClick={() => router.push(item.href)} type="button">{item.label}</button>)}</div>{loading ? <div className="feed-status">正在整理漂泊者的最新内容…</div> : visible.length ? <>{visible.map((guide) => <PostCard guide={guide} key={guide.id} interaction={interactionStates.get(guide.id) ?? null} />)}{tab === "following" && (hasMore ? <button className="feed-load-more" disabled={loadingMore} onClick={loadMore} type="button">{loadingMore ? "正在加载更多…" : "加载更多"}</button> : <p className="feed-end-note">已经到底啦，关注的动态都看完了。</p>)}</> : emptyState}{apiUnavailable && tab !== "following" && <ApiFallbackNote onRetry={() => setReloadKey((key) => key + 1)} />}</section>;
 }
 export function RightRail() {
   const [tab, setTab] = useState<"recommend" | "news">("recommend");

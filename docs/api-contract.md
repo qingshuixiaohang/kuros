@@ -87,6 +87,7 @@
 | POST | `/posts/{id}/comments` | 创建评论或一级回复 |
 | DELETE | `/posts/{id}/comments/{commentId}` | 删除当前用户自己的评论并保留占位 |
 | GET | `/posts/{id}/interactions` | 查询当前用户点赞/收藏状态与计数 |
+| GET | `/interactions/batch-states?ids=a,b,c` | 批量查询当前用户对多帖的赞/藏状态（H-2：首页 Feed N+1 消除，游客返回全 0） |
 | POST/DELETE | `/posts/{id}/interactions/like` | 点赞/取消点赞 |
 | POST/DELETE | `/posts/{id}/interactions/favorite` | 收藏/取消收藏 |
 | GET/POST/DELETE | `/users/{targetUserId}/follow` | 查询、关注或取消关注作者 |

@@ -18,6 +18,11 @@ import com.kuros.kurosbackend.shared.lock.DistributedLock;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 /**
  * 帖子互动服务（切片 #11 改造）：点赞/收藏写路径由「同步写 MySQL」改为「Redis 计数前置 + RocketMQ 异步落库」。
  *
@@ -80,6 +85,52 @@ public class PostInteractionService {
         boolean favorited = userId != null && redisStore.readState(InteractionKind.FAVORITE, postId, userId,
                 () -> favoriteRepository.existsById(new PostFavoriteId(userId, postId)));
         return new PostInteractionResponse(postId, likeCount, favoriteCount, liked, favorited);
+    }
+
+    /**
+     * 批量读互动**关系状态**（前端审计 H-2：首页 Feed N+1 消除）。
+     *
+     * 为什么刻意不返回计数：列表接口（/api/v1/posts）早已返回
+     * likeCount/favoriteCount，卡片上的计数不需要额外请求。N+1 只发生在
+     * "当前用户是否已赞/已藏"这个 per-user 状态上——它无法从列表响应推导，
+     * 必须单独查。所以这里只查关系，计数让列表响应提供，两边不重复返回
+     * 同一个值（重复即诱发"哪个才是真相"的问题）。
+     *
+     * 未登录直接全 false：游客没有关系状态，查 DB 也是空结果，
+     * 但省掉两次 IN 查询（且避免 null userId 传进查询）。
+     *
+     * @param postIds 帖子 id 列表（一页的量，通常 ≤ 20）
+     * @param userId  当前用户 id，未登录传 null
+     * @return postId → {liked, favorited}；每个输入的 postId 都有条目
+     *         （无关系的帖子是 {false, false}），调用方不必再判空
+     */
+    @Transactional(readOnly = true)
+    public Map<String, boolean[]> findStatesFor(Collection<String> postIds, String userId) {
+        if (postIds == null || postIds.isEmpty()) {
+            return Map.of();
+        }
+        List<String> distinctIds = postIds.stream().distinct().toList();
+        Map<String, boolean[]> states = new HashMap<>();
+        for (String postId : distinctIds) {
+            states.put(postId, new boolean[]{false, false});
+        }
+        if (userId == null) {
+            return states;
+        }
+        // 两次常数查询覆盖整页，与帖子数无关（这是消除 N+1 的硬指标）
+        for (String postId : likeRepository.findLikedPostIds(userId, distinctIds)) {
+            boolean[] state = states.get(postId);
+            if (state != null) {
+                state[0] = true;
+            }
+        }
+        for (String postId : favoriteRepository.findFavoritedPostIds(userId, distinctIds)) {
+            boolean[] state = states.get(postId);
+            if (state != null) {
+                state[1] = true;
+            }
+        }
+        return states;
     }
 
     public PostInteractionResponse like(String postId, String userId) {

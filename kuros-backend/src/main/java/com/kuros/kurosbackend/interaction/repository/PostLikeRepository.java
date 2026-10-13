@@ -6,6 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
+import java.util.List;
+
 public interface PostLikeRepository extends JpaRepository<PostLike, PostLikeId> {
 
     /**
@@ -19,4 +22,15 @@ public interface PostLikeRepository extends JpaRepository<PostLike, PostLikeId> 
      */
     @Query("select count(l) from PostLike l where l.postId = :postId")
     long countByPostId(@Param("postId") String postId);
+
+    /**
+     * 批量查某用户对一批帖子的点赞关系（首页 Feed N+1 消除，审计 H-2）。
+     *
+     * 为什么必须批量：首页一屏 20 帖，逐帖查「当前用户是否已赞」就是 20 次
+     * 查询（浏览器还有 6 条并发上限，实际分 4 批完成）。而列表接口早已返回
+     * likeCount/favoriteCount，卡片计数不需要额外请求——N+1 只发生在这个
+     * per-user 关系状态上。一次 IN 查询把它压成常数。
+     */
+    @Query("select l.postId from PostLike l where l.userId = :userId and l.postId in :postIds")
+    List<String> findLikedPostIds(@Param("userId") String userId, @Param("postIds") Collection<String> postIds);
 }

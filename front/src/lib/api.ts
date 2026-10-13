@@ -295,6 +295,29 @@ export function fetchPostInteractions(postId: string) {
   return request<PostInteraction>(`/api/v1/posts/${encodeURIComponent(postId)}/interactions`);
 }
 
+/**
+ * 批量读「当前用户对一批帖子的赞/藏状态」（H-2：首页 Feed N+1 消除）。
+ *
+ * 为什么不用 N 次 fetchPostInteractions：一屏 20 帖 = 21 个请求，浏览器
+ * HTTP/1.1 只有 6 条并发，实际分 4 批才完成，首屏被拖慢。而列表接口早已
+ * 返回 likeCount/favoriteCount，卡片计数不需要额外请求——N+1 只发生在
+ * "当前用户是否已赞/已藏"这个 per-user 状态上，一次批量查询即可覆盖。
+ *
+ * 返回 Map 而非数组：调用方按 postId 查自己的状态，O(1)，不必先建索引。
+ * 未登录时后端返回全 0（游客没有关系状态），此处照样返回全 false——
+ * 与 fetchPostInteractions 的未登录语义保持一致。
+ */
+export async function fetchPostInteractionsBatch(postIds: string[]): Promise<Map<string, { liked: boolean; favorited: boolean }>> {
+  if (postIds.length === 0) return new Map();
+  const envelope = await requestEnvelope<Record<string, [number, number]>>(
+    `/api/v1/interactions/batch-states?ids=${encodeURIComponent(postIds.join(","))}`);
+  const result = new Map<string, { liked: boolean; favorited: boolean }>();
+  for (const [postId, state] of Object.entries(envelope?.data ?? {})) {
+    result.set(postId, { liked: state[0] === 1, favorited: state[1] === 1 });
+  }
+  return result;
+}
+
 export function likePost(postId: string) {
   return ensureCsrfToken().then(() => request<PostInteraction>(`/api/v1/posts/${encodeURIComponent(postId)}/interactions/like`, { method: "POST" }));
 }
