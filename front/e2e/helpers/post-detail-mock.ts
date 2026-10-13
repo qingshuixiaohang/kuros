@@ -43,10 +43,6 @@ export async function mockPostDetail(page: Page) {
     route.fulfill({ status: 200, headers: { "set-cookie": "XSRF-TOKEN=test-csrf-token; Path=/" }, json: { code: "SUCCESS", data: null } }),
   );
   await page.route(`**/api/v1/posts/${DETAIL_POST_ID}`, (route) => route.fulfill({ json: { data: detailPost } }));
-  await page.route("**/api/v1/comments**", (route) =>
-    route.fulfill({ json: { data: [], meta: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } } }),
-  );
-  await page.route("**/api/v1/interactions/batch-states**", (route) =>
-    route.fulfill({ json: { code: "SUCCESS", data: { [DETAIL_POST_ID]: [0, 0] } } }),
-  );
+  await page.route("**/api/v1/comments**", (route) => route.fulfill({ json: { data: [], meta: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } } }));
+  await page.route("**/api/v1/interactions/batch-states**", (route) => route.fulfill({ json: { code: "SUCCESS", data: { [DETAIL_POST_ID]: [0, 0] } } }));
 }

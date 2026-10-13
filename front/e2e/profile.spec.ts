@@ -39,8 +39,8 @@ const following = { id: "user-200", nickname: "今汐的留声机", avatarUrl: n
 const fan = { id: "user-300", nickname: "无音区夜行者", avatarUrl: null, bio: "深塔低配研究中", postCount: 4, likeCount: 126 };
 
 async function mockMyProfileApi(page: Page) {
-  await page.route("http://localhost:8080/api/v1/auth/me", (route) => route.fulfill({ json: { data: user } }));
-  await page.route("http://localhost:8080/api/v1/users/me/profile?*", (route) =>
+  await page.route("**/api/v1/auth/me", (route) => route.fulfill({ json: { data: user } }));
+  await page.route("**/api/v1/users/me/profile?*", (route) =>
     route.fulfill({
       json: {
         data: {
@@ -122,8 +122,8 @@ test("个人中心五个分区都能通过公开 URL 切换并展示对应内容
 
 test("个人中心桌面操作可以进入编辑页并删除帖子", async ({ page }) => {
   await mockMyProfileApi(page);
-  await page.route("http://localhost:8080/api/v1/auth/csrf", (route) => route.fulfill({ status: 204 }));
-  await page.route("http://localhost:8080/api/v1/posts/10000000-0000-0000-0000-000000000001", (route) => {
+  await page.route("**/api/v1/auth/csrf", (route) => route.fulfill({ status: 204 }));
+  await page.route("**/api/v1/posts/10000000-0000-0000-0000-000000000001", (route) => {
     if (route.request().method() === "DELETE") return route.fulfill({ status: 204 });
     return route.continue();
   });
@@ -139,10 +139,10 @@ test("个人中心桌面操作可以进入编辑页并删除帖子", async ({ pa
 });
 
 test("公开个人中心桌面端展示资料和帖子且没有横向滚动", async ({ page }) => {
-  await page.route("http://localhost:8080/api/v1/users/public-user", (route) =>
+  await page.route("**/api/v1/users/public-user", (route) =>
     route.fulfill({ json: { data: { id: "public-user", nickname: "今汐的留声机", avatarUrl: null, bio: "记录鸣潮实战", postCount: 1, likeCount: 88 } } }),
   );
-  await page.route("http://localhost:8080/api/v1/users/public-user/posts?*", (route) => route.fulfill({ json: { data: [post], meta: pageMeta } }));
+  await page.route("**/api/v1/users/public-user/posts?*", (route) => route.fulfill({ json: { data: [post], meta: pageMeta } }));
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/users/public-user");
 
@@ -181,7 +181,7 @@ for (const viewport of [
 }
 
 test("游客进入个人中心时看到登录引导而不是空白资料页", async ({ page }) => {
-  await page.route("http://localhost:8080/api/v1/auth/me", (route) => route.fulfill({ status: 401, json: { message: "未登录" } }));
+  await page.route("**/api/v1/auth/me", (route) => route.fulfill({ status: 401, json: { message: "未登录" } }));
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/profile");
 

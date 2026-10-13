@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 const postUrl = "/guides/changli-team";
 
 test("帖子详情可以轮播查看本地演示中的全部配图", async ({ page }) => {
-  await page.route("http://localhost:8080/api/v1/posts/10000000-0000-0000-0000-000000000001", (route) => route.abort());
+  await page.route("**/api/v1/posts/10000000-0000-0000-0000-000000000001", (route) => route.abort());
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(postUrl);
 
@@ -15,7 +15,7 @@ test("帖子详情可以轮播查看本地演示中的全部配图", async ({ pa
 });
 
 test("帖子详情桌面端保留两侧 sticky 阅读辅助栏与帖子目录", async ({ page }) => {
-  await page.route("http://localhost:8080/api/v1/posts/10000000-0000-0000-0000-000000000001", (route) =>
+  await page.route("**/api/v1/posts/10000000-0000-0000-0000-000000000001", (route) =>
     route.fulfill({
       json: {
         data: {
@@ -86,7 +86,7 @@ test("帖子详情移动端没有页面级横向滚动并保留互动操作条",
 });
 
 test("帖子详情可以渲染混合 Markdown，并且不为无标题正文生成失效目录", async ({ page }) => {
-  await page.route("http://localhost:8080/api/v1/posts/plain-markdown", (route) =>
+  await page.route("**/api/v1/posts/plain-markdown", (route) =>
     route.fulfill({
       json: {
         data: {

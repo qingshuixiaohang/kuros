@@ -81,7 +81,7 @@ test("工具箱页面使用对应的主题图标素材", async ({ page }) => {
 });
 
 test("首页内容流在有配图时展示可访问的帖子媒体", async ({ page }) => {
-  await page.route("http://localhost:8080/api/v1/posts?*", async (route) => {
+  await page.route("**/api/v1/posts?*", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -115,7 +115,7 @@ test("首页内容流在有配图时展示可访问的帖子媒体", async ({ pa
 });
 
 test("首页多图帖子以宫格缩略图展示并新标签打开帖子", async ({ page }) => {
-  await page.route("http://localhost:8080/api/v1/posts?*", (route) => route.abort());
+  await page.route("**/api/v1/posts?*", (route) => route.abort());
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/");
 
@@ -157,7 +157,7 @@ test("帖子详情页分享会将帖子地址写入剪贴板", async ({ page }) 
       },
     });
   });
-  await page.route("http://localhost:8080/api/v1/posts/10000000-0000-0000-0000-000000000001", (route) =>
+  await page.route("**/api/v1/posts/10000000-0000-0000-0000-000000000001", (route) =>
     route.fulfill({
       json: {
         data: {
