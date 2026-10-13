@@ -8,7 +8,8 @@ import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { CommunityPageFrame } from "@/components/community/community-pages";
-import { createPost, deleteImage, fetchPost, updatePost, uploadImage } from "@/lib/api";
+import { deleteImage, fetchPost, uploadImage } from "@/lib/api";
+import { usePublishPostMutation } from "@/lib/community-queries";
 import { MarkdownArticle } from "./markdown";
 
 const publishFormSchema = z.object({
@@ -342,7 +343,7 @@ function PublishPageContent() {
           .filter(Boolean),
         mediaAssetIds: postMedia.map((media) => media.assetId),
       } as const;
-      const post = editPostId ? await updatePost(editPostId, input) : await createPost(input);
+      const post = await publishMutation.mutateAsync(input);
       try {
         window.localStorage.removeItem(publishDraftKey);
       } catch {
@@ -366,6 +367,8 @@ function PublishPageContent() {
     }
     void publish(values);
   }
+
+  const publishMutation = usePublishPostMutation(editPostId ?? undefined);
 
   // 会话恢复未完成时先渲染加载态（架构巡检 #7）：否则已登录用户在恢复的
   // 几秒内会先闪现"登录后才能编辑"再翻转，观感像 bug

@@ -1,6 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createComment,
+  createPost,
   deleteComment,
   favoritePost,
   fetchComments,
@@ -13,6 +14,7 @@ import {
   unfavoritePost,
   unfollowUser,
   unlikePost,
+  updatePost,
 } from "@/lib/api";
 
 export function useCommunityPostQuery(options: {
@@ -139,6 +141,28 @@ export function useUserFollowQuery(targetUserId?: string, enabled = true) {
       return result.followed === true;
     },
     enabled: Boolean(targetUserId) && enabled,
+  });
+}
+
+/**
+ * 发布/更新帖子 mutation（H-12 第五类写操作）。
+ *
+ * 这类写操作和点赞收藏不同：成功后是 router.push 跳到详情页，不在原地
+ * 更新视图。所以它的价值不在"当前页同步"，而在**让列表缓存失效**——
+ * 否则发完帖回首页，新帖不会出现（社区列表的缓存 key 从没被 invalidate
+ * 过，staleTime 内一直用旧数据）。详情页的 post-interactions 一并失效，
+ * 因为新帖的互动状态也要按"未赞"重新取。
+ */
+export function usePublishPostMutation(editPostId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { type: "GUIDE" | "GENERAL"; category: string; title: string; content: string; tags: string[]; mediaAssetIds: string[] }) =>
+      editPostId ? updatePost(editPostId, input) : createPost(input),
+    onSuccess: (post) => {
+      queryClient.invalidateQueries({ queryKey: ["community-posts"] });
+      queryClient.invalidateQueries({ queryKey: ["search-posts"] });
+      queryClient.invalidateQueries({ queryKey: ["post-interactions", post.id] });
+    },
   });
 }
 
