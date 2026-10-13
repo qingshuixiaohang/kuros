@@ -32,3 +32,4 @@
 | #12 | [12-feed-timeline.md](./12-feed-timeline.md) | Feed 流：Redis ZSet Timeline + Push-on-publish 关注流（Pipeline 批量扇出） |
 | #13 | [13-read-path-hardening.md](./13-read-path-hardening.md) | 读路径加固：两级缓存（L1 Caffeine + L2 Redis）+ 互斥锁防击穿 + 空值哨兵 + pub/sub 跨节点失效 + keyset 游标分页（计数与缓存解耦） |
 | #14 | [14-fulltext-search-cdc.md](./14-fulltext-search-cdc.md) | 全文检索 + CDC：Elasticsearch ik 中文分词替代 MySQL LIKE + Canal 订阅 binlog 经 RocketMQ 做增量索引（回源组装/幂等 upsert/逻辑删可逆/index alias 零停机重建/ES 软依赖降级） |
+| — | [15-security-hardening-and-test-honesty.md](./15-security-hardening-and-test-honesty.md) | 安全加固 + 测试诚实性 + 读路径性能：改前红改后绿纪律、缓存失效延迟到提交后、锁看门狗续期、计数对账、N+1 消除（102→3 SQL）、索引收益实测（19995→10 行）、把恒绿假测试改成真测试并抓到 3 个被掩盖的真 bug |
