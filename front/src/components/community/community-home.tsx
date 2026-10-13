@@ -60,6 +60,9 @@ const bannerSlides = [
 function Banner() { return <CommunityHeroCarousel label="社区头图轮播" slides={bannerSlides} />; }
 const postIdBySlug: Record<string, string> = { "changli-team": "10000000-0000-0000-0000-000000000001", "tower-24": "10000000-0000-0000-0000-000000000002", "camellya-echo": "10000000-0000-0000-0000-000000000003", "new-player-route": "10000000-0000-0000-0000-000000000004" };
 function feedCount(value: number) { return value >= 10000 ? (value / 10000).toFixed(1).replace(/\.0$/, "") + "w" : value >= 1000 ? (value / 1000).toFixed(1).replace(/\.0$/, "") + "k" : String(value); }
+/** guide.likes 是列表响应里的字符串计数（如 "5"），批量互动状态只给 liked/favorited，
+ *  卡片显示的计数要拼回 PostInteraction，故在此解析为 number。 */
+function parseLikeCount(value: string) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
 function PostMedia({ guide, href }: { guide: Guide; href: string }) {
   const sources = guide.mediaUrls ?? [];
   if (!sources.length) return null;
@@ -79,10 +82,19 @@ function PostCard({ guide, interaction: initialInteraction }: { guide: Guide; in
   // H-2：互动状态由 Feed 一次批量拉取后传下来，不再每卡自己发请求。
   // 原来的实现是每个 PostCard 各发一次 /posts/{id}/interactions，
   // 一屏 20 帖 = 21 个请求（浏览器 6 条并发，分 4 批完成）。
-  // initialInteraction 为 null/undefined 时（游客、或批量请求失败）
-  // 回退到本地 demo 状态，与原降级语义一致。
-  const [interaction, setInteraction] = useState<PostInteraction | null>(
-    initialInteraction ? { postId: postId ?? "", likeCount: 0, favoriteCount: 0, ...initialInteraction } : null);
+  //
+  // 计数与状态分离：批量接口只返回 liked/favorited（列表响应已带 likeCount，
+  // 两边重复返回会诱发"哪个才是真相"），所以卡片显示的计数始终取自
+  // guide.likes（列表数据），initialInteraction 只提供"当前用户赞过没有"。
+  //
+  // 为什么不能把 initialInteraction 塞进 useState：批量状态是异步到达的，
+  // prop 从 null 变成 {liked:true} 时 useState 的初始值不会重新求值——
+  // 卡片会永远停在挂载那一刻的状态（这正是"首页显示未赞"的直接原因）。
+  // 故本地 state 只存"本次操作的覆盖"，基础值每次渲染都从 prop 派生。
+  const [override, setOverride] = useState<{ liked?: boolean; favorited?: boolean } | null>(null);
+  const interaction = initialInteraction
+    ? { postId: postId ?? "", likeCount: parseLikeCount(guide.likes), favoriteCount: 0, ...initialInteraction, ...override }
+    : null;
   const isBookmarked = interaction?.favorited ?? bookmarked.includes(guide.id);
   function change(kind: "like" | "favorite") {
     requestLogin(() => {
@@ -92,7 +104,9 @@ function PostCard({ guide, interaction: initialInteraction }: { guide: Guide; in
       }
       const action = kind === "like" ? (interaction.liked ? unlikePost : likePost) : (interaction.favorited ? unfavoritePost : favoritePost);
       void action(postId).then((result) => {
-        setInteraction(result);
+        // 只覆盖状态位：计数由列表重取刷新（invalidate 后 guide.likes 变新值），
+        // 在这里叠加 result.likeCount 会让它和列表数据打架
+        setOverride({ liked: result.liked, favorited: result.favorited });
         if (kind === "like") toggleLike(guide.id); else toggleBookmark(guide.id);
       }).catch((error) => notify(error instanceof Error ? error.message : "操作失败，请稍后重试"));
     });
@@ -149,9 +163,22 @@ function Feed({ query }: { query: string }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const requestKey = tab + "::" + query + "::" + reloadKey;
   const sort = tab === "recommend" ? "hot" : "latest";
-  /* H-2：整页互动状态一次批量拉取（原来是每个 PostCard 各发一次，20 帖 = 21 请求）。
-     key 用 requestKey：tab/query/重试变化时重新拉，与列表数据同生命周期。 */
-  const [interactionStates, setInteractionStates] = useState<Map<string, { liked: boolean; favorited: boolean }>>(new Map());
+  /* H-2/H-1：整页互动状态走 react-query（key 含 requestKey），
+     这样点赞 mutation 的 invalidateQueries 能让它重新拉取——
+     原先是 useState + useEffect，invalidate 叫不到它，首页点赞后
+     卡片计数停留在旧值（写后读不一致的一条路径）。 */
+  const interactionStatesQuery = useQuery({
+    queryKey: ["feed-interaction-states", requestKey, items.map((guide) => guide.id).join(",")],
+    queryFn: async () => {
+      const ids = items.map((guide) => guide.id).filter((id) => /^[0-9a-f-]{36}$/i.test(id));
+      if (!ids.length) return new Map<string, { liked: boolean; favorited: boolean }>();
+      return fetchPostInteractionsBatch(ids);
+    },
+    enabled: items.length > 0 && items.some((guide) => /^[0-9a-f-]{36}$/i.test(guide.id)),
+    retry: false,
+    staleTime: 30_000,
+  });
+  const interactionStates = interactionStatesQuery.data ?? new Map<string, { liked: boolean; favorited: boolean }>();
   useEffect(() => {
     let active = true;
     /* slice-12: following tab → /api/v1/feed/following (Redis ZSet timeline); recommend/latest → GET /api/v1/posts */
@@ -165,14 +192,6 @@ function Feed({ query }: { query: string }) {
       setApiUnavailable(false);
       setFeedIssue(null);
       setLoadedKey(requestKey);
-      // H-2：列表到位后一次批量拉整页互动状态，替代原先每卡一次请求。
-      // 失败不阻断渲染——PostCard 会回退到本地 demo 状态（与原降级一致）。
-      const ids = posts.map((post) => post.id);
-      if (ids.length) {
-        fetchPostInteractionsBatch(ids)
-          .then((states) => { if (active) setInteractionStates(states); })
-          .catch(() => { if (active) setInteractionStates(new Map()); });
-      }
     }).catch((error) => {
       if (!active) return;
       if (tab === "following") {

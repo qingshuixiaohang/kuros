@@ -21,10 +21,14 @@ import { expect, test, type Page } from "@playwright/test";
 
 const POST_COUNT = 12;
 
-/** 造 POST_COUNT 条帖子，id 可预测。 */
+/**
+ * 帖子 id 用真实 UUID：首页的批量互动状态查询只对 UUID id 生效
+ * （Feed 里用 UUID 正则判断"这是后端帖子"）。用非 UUID 的 id 会让
+ * 整条批量链路静默不跑——那正是本 spec 要验证的链路。
+ */
 function posts(count: number) {
   return Array.from({ length: count }, (_, index) => ({
-    id: `n-plus-one-${index}`,
+    id: `99999999-9999-9999-9999-${String(index).padStart(12, "0")}`,
     type: "GUIDE",
     category: "配队攻略",
     title: `请求计数测试帖 ${index}`,

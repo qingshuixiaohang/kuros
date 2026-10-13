@@ -7,9 +7,10 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
 import { CommunityImageCarousel } from "@/components/community/community-carousel";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
+import { useLikeMutation, usePostInteractionsQuery } from "@/lib/community-queries";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
 import { useCommunityDemo } from "@/components/community/community-interactions";
-import { ApiError, createComment, deleteComment, favoritePost, fetchComments, fetchPost, fetchPostInteractions, likePost, unfavoritePost, unlikePost, type ApiComment, type PostInteraction, type ReportTargetType } from "@/lib/api";
+import { ApiError, createComment, deleteComment, favoritePost, fetchComments, fetchPost, unfavoritePost, type ApiComment, type PostInteraction, type ReportTargetType } from "@/lib/api";
 import { guides } from "@/lib/mock";
 import { DEMO_COVER_BY_SLUG, DEMO_POST_ID_BY_SLUG, extractMarkdownImages , formatPublishedAt } from "@/lib/post-view";
 import { parseMarkdownHeading, renderMarkdown, sectionIdForTitle } from "./markdown";
@@ -80,30 +81,46 @@ function scrollToElement(element: HTMLElement | null) {
 
 function PostReactionRail({ guide, postId }: { guide: Guide; postId: string }) {
   const { requestLogin, notify } = useCommunityDemo();
-  const [interaction, setInteraction] = useState<PostInteraction>({ postId, likeCount: parseCount(guide.likes), favoriteCount: 0, liked: false, favorited: false });
-  const [loading, setLoading] = useState(false);
-  useEffect(() => {
-    let active = true;
-    fetchPostInteractions(postId).then((result) => { if (active) setInteraction(result); }).catch(() => { /* Keep the local guide counts when the API is unavailable. */ });
-    return () => { active = false; };
-  }, [postId]);
+  // H-1/H-3：读走 react-query（key ["post-interactions", postId]），写走 mutation。
+  // 原实现是本地 useState + useEffect fetch，key 不进缓存——于是首页点赞后
+  // 进详情页拿到的是后端旧值（两份 state 各说各话）。统一到同一份缓存后，
+  // mutation 的 onSuccess invalidate 会让两侧一起重取。
+  const interactionsQuery = usePostInteractionsQuery(postId);
+  const likeMutation = useLikeMutation(postId);
+  const interaction: PostInteraction = interactionsQuery.data ?? {
+    postId,
+    likeCount: parseCount(guide.likes),
+    favoriteCount: 0,
+    liked: false,
+    favorited: false,
+  };
+  // 收藏仍走原有手写路径（本次改造范围只到点赞，收藏的 mutation 留作下一步）
+  const [favorite, setFavorite] = useState<PostInteraction | null>(null);
+  const display = favorite ?? interaction;
+  const loading = likeMutation.isPending;
   async function change(kind: "like" | "favorite") {
     if (loading) return;
-    setLoading(true);
+    if (kind === "favorite") {
+      try {
+        const next = display.favorited ? await unfavoritePost(postId) : await favoritePost(postId);
+        setFavorite(next);
+      } catch (error) {
+        notify(error instanceof Error ? error.message : "操作失败，请稍后重试");
+      }
+      return;
+    }
+    // 点赞：mutation 的 onSuccess 已负责 invalidate，这里只处理错误提示
     try {
-      const next = kind === "like"
-        ? (interaction.liked ? await unlikePost(postId) : await likePost(postId))
-        : (interaction.favorited ? await unfavoritePost(postId) : await favoritePost(postId));
-      setInteraction(next);
+      await likeMutation.mutateAsync(display.liked ? "unlike" : "like");
     } catch (error) {
       notify(error instanceof Error ? error.message : "操作失败，请稍后重试");
-    } finally { setLoading(false); }
+    }
   }
   function protect(action: () => void) { requestLogin(action); }
   return <aside className="post-reaction-rail" aria-label="帖子互动">
     <button type="button" onClick={() => scrollToElement(document.getElementById("comments"))} aria-label={"查看 " + guide.replies + " 条评论"}><MessageCircle size={26} /><span>{guide.replies}</span></button>
-    <button className={interaction.liked ? "is-active" : ""} disabled={loading} type="button" onClick={() => protect(() => { void change("like"); })} aria-label={interaction.liked ? "取消点赞" : "点赞"}><Heart fill={interaction.liked ? "currentColor" : "none"} size={27} /><span>{interaction.likeCount}</span></button>
-    <button className={interaction.favorited ? "is-active is-bookmarked" : ""} disabled={loading} type="button" onClick={() => protect(() => { void change("favorite"); })} aria-label={interaction.favorited ? "取消收藏" : "收藏"}><Bookmark fill={interaction.favorited ? "currentColor" : "none"} size={27} /><span>{interaction.favorited ? "已藏" : "收藏"}</span></button>
+    <button className={display.liked ? "is-active" : ""} disabled={loading} type="button" onClick={() => protect(() => { void change("like"); })} aria-label={display.liked ? "取消点赞" : "点赞"}><Heart fill={display.liked ? "currentColor" : "none"} size={27} /><span>{display.likeCount}</span></button>
+    <button className={display.favorited ? "is-active is-bookmarked" : ""} disabled={loading} type="button" onClick={() => protect(() => { void change("favorite"); })} aria-label={display.favorited ? "取消收藏" : "收藏"}><Bookmark fill={display.favorited ? "currentColor" : "none"} size={27} /><span>{display.favorited ? "已藏" : "收藏"}</span></button>
   </aside>;
 }
 
