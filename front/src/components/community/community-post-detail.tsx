@@ -19,10 +19,17 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
 import { CommunityImageCarousel } from "@/components/community/community-carousel";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
-import { useFavoriteMutation, useLikeMutation, usePostInteractionsQuery } from "@/lib/community-queries";
+import {
+  useCommentsQuery,
+  useCreateCommentMutation,
+  useDeleteCommentMutation,
+  useFavoriteMutation,
+  useLikeMutation,
+  usePostInteractionsQuery,
+} from "@/lib/community-queries";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
 import { useCommunityDemo } from "@/components/community/community-interactions";
-import { ApiError, createComment, deleteComment, fetchComments, fetchPost, type ApiComment, type PostInteraction, type ReportTargetType } from "@/lib/api";
+import { ApiError, fetchPost, type ApiComment, type PostInteraction, type ReportTargetType } from "@/lib/api";
 import { guides } from "@/lib/mock";
 import { DEMO_COVER_BY_SLUG, DEMO_POST_ID_BY_SLUG, extractMarkdownImages, formatPublishedAt } from "@/lib/post-view";
 import { parseMarkdownHeading, renderMarkdown, sectionIdForTitle } from "./markdown";
@@ -350,57 +357,40 @@ function CommentComposer({
 }
 
 function PostComments({ postId, authorName, onReport }: { postId: string; authorName: string; onReport: (commentId: string) => void }) {
-  // 评论不再预置假种子（架构巡检 #9）：加载中显示状态行、失败显示错误，
-  // 绝不拿 3 条假评论冒充真实讨论
-  const [comments, setComments] = useState<CommentItem[]>([]);
-  const [totalItems, setTotalItems] = useState(0);
+  // 排序 state 必须先声明——下面的 useCommentsQuery 依赖它
   const [onlyAuthor, setOnlyAuthor] = useState(false);
   const [sortNewest, setSortNewest] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [apiError, setApiError] = useState("");
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const { loggedIn, user, requestLogin, notify } = useCommunityDemo();
 
-  useEffect(() => {
-    let active = true;
-    fetchComments(postId, { page: 1, pageSize: 20, sort: sortNewest ? "latest" : "hot" })
-      .then((result) => {
-        if (!active) return;
-        setComments(result.items.map((comment, index) => commentFromApi(comment, authorName, index)));
-        setTotalItems(result.meta?.totalItems ?? result.items.length);
-        setApiError("");
-      })
-      .catch(() => {
-        if (active) setApiError("评论加载失败，请稍后重试。");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [authorName, postId, sortNewest]);
+  // 评论读走 react-query：发评论后 invalidate 会触发重取，排序和分页
+  // 由服务端决定（本地 unshift 在"最热"排序下位置就是错的）
+  const commentsQuery = useCommentsQuery({ postId, sort: sortNewest ? "latest" : "hot" });
+  const createMutation = useCreateCommentMutation(postId);
+  const deleteMutation = useDeleteCommentMutation(postId);
+  const comments = useMemo(
+    () => (commentsQuery.data?.items ?? []).map((comment, index) => commentFromApi(comment, authorName, index)),
+    [commentsQuery.data, authorName],
+  );
+  const totalItems = commentsQuery.data?.totalItems ?? 0;
+  const loading = commentsQuery.isPending;
+  const apiError = commentsQuery.isError ? "评论加载失败，请稍后重试。" : "";
 
   const visibleComments = useMemo(() => (onlyAuthor ? comments.filter((comment) => comment.authorComment) : comments), [comments, onlyAuthor]);
 
   async function submitComment(content: string, parentId: string | null) {
     try {
-      const comment = await createComment(postId, content, parentId);
-      setComments((current) => [commentFromApi(comment, authorName, current.length), ...current]);
-      setTotalItems((current) => current + 1);
+      await createMutation.mutateAsync({ content, parentId });
       setReplyTo(null);
-      setApiError("");
       notify(parentId ? "回复已发布" : "评论已发布");
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : "评论发布失败，请稍后重试");
-      notify("评论发布失败，请稍后重试");
+      notify(error instanceof Error ? error.message : "评论发布失败，请稍后重试");
     }
   }
 
   async function removeComment(commentId: string) {
     try {
-      await deleteComment(postId, commentId);
-      setComments((current) => current.map((comment) => (comment.id === commentId ? { ...comment, content: "该评论已删除", deleted: true } : comment)));
+      await deleteMutation.mutateAsync(commentId);
       notify("评论已删除");
     } catch (error) {
       notify(error instanceof Error ? error.message : "删除失败，请稍后重试");

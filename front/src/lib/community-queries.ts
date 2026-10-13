@@ -1,5 +1,16 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { favoritePost, fetchPostInteractions, fetchPostPage, likePost, searchPosts, unfavoritePost, unlikePost } from "@/lib/api";
+import {
+  createComment,
+  deleteComment,
+  favoritePost,
+  fetchComments,
+  fetchPostInteractions,
+  fetchPostPage,
+  likePost,
+  searchPosts,
+  unfavoritePost,
+  unlikePost,
+} from "@/lib/api";
 
 export function useCommunityPostQuery(options: {
   category?: string;
@@ -76,6 +87,47 @@ export function usePostInteractionsQuery(postId: string | undefined) {
  * 乐观更新要处理回滚，复杂度更高而收益有限。真要做，下一步是
  * setQueryData 预置 liked + 计数 ±1，失败时 invalidate 拉回真相。
  */
+export function useCommentsQuery(options: { postId: string; sort: "latest" | "hot"; pageSize?: number }) {
+  const { postId, sort, pageSize = 20 } = options;
+  return useQuery({
+    queryKey: ["post-comments", postId, sort, pageSize],
+    queryFn: async () => {
+      const result = await fetchComments(postId, { page: 1, pageSize, sort });
+      return { items: result.items, totalItems: result.meta?.totalItems ?? result.items.length };
+    },
+    enabled: Boolean(postId),
+  });
+}
+
+/**
+ * 发评论 mutation（H-12 第三类写操作）。
+ *
+ * 为什么不像原来那样把返回的评论 unshift 进本地 state：评论区有"最热/最新"
+ * 两种排序，本地插入在"最热"下位置就是错的（新评论的赞数是 0，未必排在
+ * 前面），而且翻页后的 totalItems 也只是本地 +1。重取一次，让服务端的排序
+ * 和分页说话——这也是 useCommentsQuery 读路径存在的意义。
+ */
+export function useCreateCommentMutation(postId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { content: string; parentId: string | null }) => createComment(postId, input.content, input.parentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["post-comments", postId] });
+    },
+  });
+}
+
+/** 删评论 mutation：与发布共用同一失效 key。 */
+export function useDeleteCommentMutation(postId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (commentId: string) => deleteComment(postId, commentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["post-comments", postId] });
+    },
+  });
+}
+
 export function useLikeMutation(postId: string) {
   const queryClient = useQueryClient();
   return useMutation({
