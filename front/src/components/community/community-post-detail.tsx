@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { autoUpdate, flip, FloatingFocusManager, FloatingPortal, offset, shift, useClick, useDismiss, useFloating, useInteractions, useRole } from "@floating-ui/react";
 import { AtSign, ArrowLeft, Bookmark, Clock3, Eye, Flag, Heart, ImagePlus, MessageCircle, Share2, Smile, ThumbsUp } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
 import { CommunityImageCarousel } from "@/components/community/community-carousel";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";

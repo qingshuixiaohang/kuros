@@ -13,7 +13,7 @@ export function CommunityFollowButton({ targetUserId, fallbackKey, className = "
     let active = true;
     fetchUserFollow(targetUserId).then((result) => { if (active) setFollow(result); }).catch(() => { if (active) notify("关注状态获取失败，请稍后刷新。"); });
     return () => { active = false; };
-  }, [loggedIn, targetUserId]);
+  }, [loggedIn, targetUserId, notify]);
 
   const isFollowed = loggedIn && targetUserId ? follow?.followed === true : followed.includes(fallbackKey);
   function toggle() {
