@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { ArrowLeft, Check, Flag, RotateCw, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
 import { useCommunityDemo } from "@/components/community/community-interactions";
-import { ApiError, fetchAdminReports, handleReport, type ApiReport, type ReportStatus } from "@/lib/api";
+import { type ReportStatus } from "@/lib/api";
+import { useAdminReportsQuery, useHandleReportMutation } from "@/lib/community-queries";
 
 const filters: Array<{ value?: ReportStatus; label: string }> = [
   { label: "全部" },
@@ -19,47 +20,31 @@ const statusLabels = { PENDING: "待处理", CONFIRMED: "已确认", REJECTED: "
 export function CommunityAdminReportsPage() {
   const { loggedIn, user, notify, requestLogin } = useCommunityDemo();
   const [filter, setFilter] = useState<ReportStatus | undefined>("PENDING");
-  const [reports, setReports] = useState<ApiReport[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [error, setError] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [note, setNote] = useState("");
 
-  useEffect(() => {
-    if (!loggedIn || user?.role !== "ADMIN") return;
-    fetchAdminReports(filter)
-      .then((result) => setReports(result))
-      .catch((requestError) => {
-        setError(requestError instanceof ApiError && requestError.status === 403 ? "当前账号没有管理员权限。" : "举报列表加载失败，请稍后重试");
-      })
-      .finally(() => setLoading(false));
-  }, [filter, loggedIn, refreshKey, user?.role]);
+  // 举报列表读走 react-query：queryKey 带 filter，切 tab 就是换 key，
+  // 不再需要 refreshKey 这种手动 force-refresh 的手段
+  const isAdmin = loggedIn && user?.role === "ADMIN";
+  const reportsQuery = useAdminReportsQuery({ status: filter, enabled: isAdmin });
+  const handleMutation = useHandleReportMutation({ status: filter });
+  const reports = reportsQuery.data ?? [];
+  const loading = reportsQuery.isPending;
+  const error = reportsQuery.isError ? "举报列表加载失败，请稍后重试" : "";
 
   function openLogin() {
     requestLogin(() => undefined);
   }
 
   function selectFilter(value: ReportStatus | undefined) {
-    setLoading(true);
-    setError("");
     setFilter(value);
-  }
-
-  function refresh() {
-    setLoading(true);
-    setError("");
-    setRefreshKey((current) => current + 1);
   }
 
   async function process(reportId: string, action: "CONFIRM" | "REJECT") {
     try {
-      await handleReport(reportId, action, note);
-      setReports((current) =>
-        current.map((report) =>
-          report.id === reportId ? { ...report, status: action === "CONFIRM" ? "CONFIRMED" : "REJECTED", handlingNote: note || null } : report,
-        ),
-      );
+      // 不本地 map 改 status：当前过滤 tab 是 PENDING，改完它还会留在列表里，
+      // 用户看到"已确认"混在待处理队列。invalidate 让服务端按真相重取
+      await handleMutation.mutateAsync({ reportId, action, note });
       setActiveId(null);
       setNote("");
       notify(action === "CONFIRM" ? "举报已确认，内容已处置。" : "举报已驳回。");
@@ -111,7 +96,7 @@ export function CommunityAdminReportsPage() {
             <h1>举报审核台</h1>
             <p>处理玩家反馈，维护鸣潮社区的讨论秩序。</p>
           </div>
-          <button className="secondary-button" disabled={loading} type="button" onClick={refresh}>
+          <button className="secondary-button" disabled={loading} type="button" onClick={() => void reportsQuery.refetch()}>
             <RotateCw size={15} />
             刷新
           </button>

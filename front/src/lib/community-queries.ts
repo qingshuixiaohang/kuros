@@ -4,17 +4,20 @@ import {
   createPost,
   deleteComment,
   favoritePost,
+  fetchAdminReports,
   fetchComments,
   fetchPostInteractions,
   fetchPostPage,
   fetchUserFollow,
   followUser,
+  handleReport,
   likePost,
   searchPosts,
   unfavoritePost,
   unfollowUser,
   unlikePost,
   updatePost,
+  type ReportStatus,
 } from "@/lib/api";
 
 export function useCommunityPostQuery(options: {
@@ -162,6 +165,34 @@ export function usePublishPostMutation(editPostId?: string) {
       queryClient.invalidateQueries({ queryKey: ["community-posts"] });
       queryClient.invalidateQueries({ queryKey: ["search-posts"] });
       queryClient.invalidateQueries({ queryKey: ["post-interactions", post.id] });
+    },
+  });
+}
+
+/**
+ * 管理端举报列表（H-12 第六类）。
+ *
+ * queryKey 带 status：处理完一条举报后 invalidate 同一个 key，列表按服务端
+ * 真相重取。原来靠本地 map 把 status 改成 CONFIRMED/REJECTED，但当前过滤
+ * tab 是 PENDING，那条被改状态的记录**还留在列表里**——用户看到"已确认"
+ * 的条目混在待处理队列中，而服务端其实已经把它过滤掉了。
+ */
+export function useAdminReportsQuery(options: { status?: ReportStatus; enabled: boolean }) {
+  const { status, enabled } = options;
+  return useQuery({
+    queryKey: ["admin-reports", status ?? "ALL"],
+    queryFn: async () => fetchAdminReports(status),
+    enabled,
+  });
+}
+
+/** 处理举报 mutation：确认或驳回。onSuccess 让管理端列表重取。 */
+export function useHandleReportMutation(options: { status?: ReportStatus }) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { reportId: string; action: "CONFIRM" | "REJECT"; note: string }) => handleReport(input.reportId, input.action, input.note),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-reports", options.status ?? "ALL"] });
     },
   });
 }
