@@ -183,6 +183,16 @@ public class TwoLevelCache {
      * 3. 广播失效消息——让「其他节点」准实时清掉各自仍持有的 L1（否则要等 L1 短 TTL 到期）。
      * pub/sub 可能丢消息（Redis 瞬断），此时 L1 短 TTL（10s，见 CacheConfig）作为兜底上界自然收敛。
      */
+    /**
+     * 本类的 catch 块统一把异常对象作为日志的最后一个参数传入，而不是
+     * {@code e.getMessage()}。SLF4J 见到末尾是 Throwable 会自动附上完整
+     * 栈——缓存故障排查时能看到的只有这些 warn 行，丢栈就等于丢掉异常
+     * 类型和调用路径，只剩一句不知道从哪来的 message。
+     *
+     * 注意因此不要在消息末尾再放 {@code ": {}"} 占位符：那会打印异常的
+     * toString（{@code java.lang.RuntimeException: xxx}），和 SLF4J 追加
+     * 的栈重复。
+     */
     public void evict(String cacheName, String key) {
         if (!enabled) {
             return;
@@ -191,7 +201,7 @@ public class TwoLevelCache {
         try {
             redis.delete(l2Key(cacheName, key));
         } catch (RuntimeException e) {
-            log.warn("L2 缓存删除失败 cacheName={} key={}: {}", cacheName, key, e.getMessage());
+            log.warn("L2 缓存删除失败 cacheName={} key={}", cacheName, key, e);
         }
         publishEviction(cacheName, key);
     }
@@ -215,7 +225,7 @@ public class TwoLevelCache {
         try {
             redis.convertAndSend(evictChannel(cacheName), key);
         } catch (RuntimeException e) {
-            log.warn("缓存失效广播失败 cacheName={} key={}: {}", cacheName, key, e.getMessage());
+            log.warn("缓存失效广播失败 cacheName={} key={}", cacheName, key, e);
         }
     }
 
@@ -291,7 +301,7 @@ public class TwoLevelCache {
             return distributedLock.tryLock(lockKey, lockTtlSeconds);
         } catch (RuntimeException e) {
             // Redis 故障：抢锁失败不应阻断读，返回 null 让调用方走自旋→降级直查 DB
-            log.warn("缓存重建锁获取失败，降级为直查 lockKey={}: {}", lockKey, e.getMessage());
+            log.warn("缓存重建锁获取失败，降级为直查 lockKey={}", lockKey, e);
             return null;
         }
     }
@@ -300,7 +310,7 @@ public class TwoLevelCache {
         try {
             distributedLock.unlock(lockKey, token);
         } catch (RuntimeException e) {
-            log.warn("缓存重建锁释放失败（将随 TTL 自动过期）lockKey={}: {}", lockKey, e.getMessage());
+            log.warn("缓存重建锁释放失败（将随 TTL 自动过期）lockKey={}", lockKey, e);
         }
     }
 
@@ -346,7 +356,7 @@ public class TwoLevelCache {
             return L2Result.hit(MAPPER.readValue(json, type));
         } catch (RuntimeException | IOException e) {
             // Redis 不可达或旧结构反序列化失败 → 降级为 miss，请求继续走 DB（缓存不阻断读）
-            log.warn("L2 缓存读取/反序列化失败 key={}: {}", l2Key, e.getMessage());
+            log.warn("L2 缓存读取/反序列化失败 key={}", l2Key, e);
             return L2Result.miss();
         }
     }
@@ -355,7 +365,7 @@ public class TwoLevelCache {
         try {
             redis.opsForValue().set(l2Key, MAPPER.writeValueAsString(value), l2Ttl);
         } catch (RuntimeException | IOException e) {
-            log.warn("L2 缓存写入/序列化失败 key={}: {}", l2Key, e.getMessage());
+            log.warn("L2 缓存写入/序列化失败 key={}", l2Key, e);
         }
     }
 
@@ -364,7 +374,7 @@ public class TwoLevelCache {
         try {
             redis.opsForValue().set(l2Key, NULL_SENTINEL, sentinelTtl);
         } catch (RuntimeException e) {
-            log.warn("空值哨兵写入失败 key={}: {}", l2Key, e.getMessage());
+            log.warn("空值哨兵写入失败 key={}", l2Key, e);
         }
     }
 
