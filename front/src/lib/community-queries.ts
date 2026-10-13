@@ -6,9 +6,12 @@ import {
   fetchComments,
   fetchPostInteractions,
   fetchPostPage,
+  fetchUserFollow,
+  followUser,
   likePost,
   searchPosts,
   unfavoritePost,
+  unfollowUser,
   unlikePost,
 } from "@/lib/api";
 
@@ -124,6 +127,35 @@ export function useDeleteCommentMutation(postId: string) {
     mutationFn: (commentId: string) => deleteComment(postId, commentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["post-comments", postId] });
+    },
+  });
+}
+
+export function useUserFollowQuery(targetUserId?: string, enabled = true) {
+  return useQuery({
+    queryKey: ["user-follow", targetUserId ?? ""],
+    queryFn: async () => {
+      const result = await fetchUserFollow(targetUserId as string);
+      return result.followed === true;
+    },
+    enabled: Boolean(targetUserId) && enabled,
+  });
+}
+
+/**
+ * 关注/取关 mutation（H-12 第四类写操作）。
+ *
+ * 与点赞/收藏同一套思路：写成功后 invalidate 关注状态，让页面上所有
+ * 指向同一用户的关注按钮一起重取。原来靠 setFollow(result) 只更新当前
+ * 这一个按钮实例，同一个用户在别处出现时还是旧值。
+ */
+export function useFollowUserMutation(targetUserId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (next: "follow" | "unfollow") => (next === "follow" ? followUser(targetUserId as string) : unfollowUser(targetUserId as string)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-follow", targetUserId ?? ""] });
+      queryClient.invalidateQueries({ queryKey: ["feed-interaction-states"] });
     },
   });
 }

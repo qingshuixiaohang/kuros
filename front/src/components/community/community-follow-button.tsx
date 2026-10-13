@@ -1,40 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { fetchUserFollow, followUser, unfollowUser, type UserFollow } from "@/lib/api";
+import { useUserFollowQuery, useFollowUserMutation } from "@/lib/community-queries";
 import { useCommunityDemo } from "@/components/community/community-interactions";
 
 export function CommunityFollowButton({ targetUserId, fallbackKey, className = "" }: { targetUserId?: string; fallbackKey: string; className?: string }) {
   const { loggedIn, followed, requestLogin, toggleFollow, notify } = useCommunityDemo();
-  const [follow, setFollow] = useState<UserFollow | null>(null);
+  // 关注状态读走 react-query：写成功后 invalidate，页面上指向同一用户的
+  // 所有按钮实例一起重取（原来 setFollow(result) 只更新当前这一个实例）
+  const followQuery = useUserFollowQuery(targetUserId, loggedIn);
+  const followMutation = useFollowUserMutation(targetUserId);
 
-  useEffect(() => {
-    if (!loggedIn || !targetUserId) return;
-    let active = true;
-    fetchUserFollow(targetUserId)
-      .then((result) => {
-        if (active) setFollow(result);
-      })
-      .catch(() => {
-        if (active) notify("关注状态获取失败，请稍后刷新。");
-      });
-    return () => {
-      active = false;
-    };
-  }, [loggedIn, targetUserId, notify]);
+  const isFollowed = loggedIn && targetUserId ? followQuery.data === true : followed.includes(fallbackKey);
 
-  const isFollowed = loggedIn && targetUserId ? follow?.followed === true : followed.includes(fallbackKey);
   function toggle() {
     requestLogin(() => {
       if (!targetUserId) {
         toggleFollow(fallbackKey);
         return;
       }
-      void (isFollowed ? unfollowUser(targetUserId) : followUser(targetUserId))
-        .then((result) => {
-          setFollow(result);
-          toggleFollow(fallbackKey);
-        })
+      void followMutation
+        .mutateAsync(isFollowed ? "unfollow" : "follow")
         .catch((error) => notify(error instanceof Error ? error.message : "关注操作失败，请稍后重试"));
     });
   }
