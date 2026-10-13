@@ -15,10 +15,11 @@ const basePost: ApiPost = {
   title: "长离焚火队",
   excerpt: "摘要",
   content: "正文",
-  author: { id: "user-1", nickname: "潮声档案员", avatarUrl: null },
+  author: { id: "user-1", nickname: "潮声档案员", avatarUrl: null, bio: "记录鸣潮实战" },
   publishedAt: "2026-10-01T10:24:00",
   viewCount: 1200,
   likeCount: 88,
+  favoriteCount: 12,
   commentCount: 3,
   tags: ["配队", "长离"],
 };
@@ -76,13 +77,16 @@ describe("toGuide 的字段格式化", () => {
 describe("searchItemToGuide", () => {
   const searchItem: PostSearchItem = {
     id: "10000000-0000-0000-0000-000000000002",
+    type: "GENERAL",
     category: "心得",
     title: "声骸词条选择",
     excerpt: "摘要",
+    authorId: "10000000-0000-0000-0000-000000000005",
     authorName: "漂泊者",
     publishedAt: "2026-10-02T08:00:00",
     viewCount: 800,
     likeCount: 20,
+    favoriteCount: 4,
     commentCount: 1,
     tags: ["声骸"],
   };
@@ -93,8 +97,12 @@ describe("searchItemToGuide", () => {
     expect(guide.authorMark).toBe("漂");
   });
 
-  test("authorName 为空时 authorMark 兜底为「漂」", () => {
-    expect(searchItemToGuide({ ...searchItem, authorName: undefined }).authorMark).toBe("漂");
+  test("authorName 为空串时 authorMark 兜底为「漂」", () => {
+    // 类型上 authorName 是必填 string，所以这里测的是空串——生产代码的
+    // `?.slice(0, 1) || "漂"` 对空串同样要能兜住（slice(0,1) 返回 ""，
+    // 空串是 falsy，所以走 || 分支）
+    expect(searchItemToGuide({ ...searchItem, authorName: "" }).authorMark).toBe("漂");
+    expect(searchItemToGuide({ ...searchItem, authorName: "" }).author).toBe("");
   });
 
   test("搜索结果不返回配图（避免为图片再回一趟 DB）", () => {
