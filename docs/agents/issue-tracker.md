@@ -39,6 +39,7 @@
 | 后端高危面：Flyway 新迁移、shared/ 公共类、鉴权/拦截器配置 | 上行之外必须实际跑受影响的测试类（H2+Testcontainers，需 Docker Desktop 开着） | 这类错误影响所有调用方，是 CI 红灯的最大来源 |
 | 依赖/构建配置（pom.xml、package.json、compose.yml、ci.yml、Dockerfile） | `mvnw test-compile` 或前端 build，加 `docker compose config --quiet`；compose.yml 大改尽量本地起一次栈 | 配置错误最贵（构建跑到一半才炸），值得多花几分钟 |
 | 极小改动（单文件几行、无逻辑分支） | 可以什么都不跑，直接推送；如属重要路径，推送后补一次定向验证 | 本地验证的价值是省"红一轮再修"的往返，改动越小越不值得本地跑 |
+| 前端测试工具链（新增 vitest/prettier/eslint 规则、改 vitest.config） | `npm run test` + `npm run format:check` + `npx tsc --noEmit`，并跑一次 `next build` | 工具链改动影响的是**所有**文件的判定结果，不跑一遍就不知道之前绿的还绿不绿；配置类错误（如 prettier 的 endOfLine 与 core.autocrlf 打架）只在全量 check 时才暴露 |
 
 ## 常用命令
 
