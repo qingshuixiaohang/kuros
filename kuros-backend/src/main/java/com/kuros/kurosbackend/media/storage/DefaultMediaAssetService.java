@@ -13,6 +13,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -32,6 +36,8 @@ import java.util.UUID;
  */
 @Service
 public class DefaultMediaAssetService implements MediaAssetService {
+
+    private static final Logger log = LoggerFactory.getLogger(DefaultMediaAssetService.class);
 
     private static final long MAX_SIZE = 10 * 1024 * 1024;
     private static final Map<String, String> EXTENSIONS = Map.of(
@@ -128,16 +134,43 @@ public class DefaultMediaAssetService implements MediaAssetService {
     /**
      * 清理过期的临时图片（上传后未关联帖子的孤儿文件）。
      * 定时任务调用（后续 XXL-JOB 切片会接入）。
+     *
+     * 为什么逐项 try/catch 而不是整批一个事务（可靠性加固）：
+     * 原实现把 delete 循环包在方法里，任何一个文件删除失败就抛出方法，
+     * 整批剩余文件这次都不处理——下次定时任务还会在同一个位置崩，
+     * 清理永远跑不完。而孤儿文件是持续产生的，跑不完就意味着无限堆积。
+     *
+     * 失败项保持 TEMPORARY 而不是 markDeleted：delete 失败了物理文件还在，
+     * 标成 DELETED 会让它再也进不了清理范围，成为永久孤儿。保持原状态
+     * 等下次重试才是可自愈的。
+     *
+     * 返回值语义：实际成功删除的文件数。全部失败返回 0 而不抛异常——
+     * 清理是 best-effort 的后台任务，存储整体不可用是它要处理的正常
+     * 故障，不该让定时任务框架判定作业本身失败。
      */
     @Override
     public int cleanupTemporaryAssets(LocalDateTime cutoff) {
         List<MediaAsset> expired = mediaAssetRepository.findByStatusAndCreatedAtBefore(MediaAssetStatus.TEMPORARY, cutoff);
-        for (MediaAsset asset : expired) {
-            storageStrategy.delete(asset.getStorageKey());
-            asset.markDeleted();
+        if (expired.isEmpty()) {
+            return 0;
         }
-        mediaAssetRepository.saveAll(expired);
-        return expired.size();
+        List<MediaAsset> cleaned = new ArrayList<>();
+        for (MediaAsset asset : expired) {
+            try {
+                storageStrategy.delete(asset.getStorageKey());
+            } catch (RuntimeException exception) {
+                // 单个文件失败只跳过它，不中断整批；保持 TEMPORARY 等下次重试
+                log.warn("临时图片清理跳过（下次重试）：storageKey={}，原因={}",
+                        asset.getStorageKey(), exception.getMessage());
+                continue;
+            }
+            asset.markDeleted();
+            cleaned.add(asset);
+        }
+        if (!cleaned.isEmpty()) {
+            mediaAssetRepository.saveAll(cleaned);
+        }
+        return cleaned.size();
     }
 
     // ==================== 私有方法：文件校验 ====================
