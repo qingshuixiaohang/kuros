@@ -34,3 +34,4 @@
 | #14 | [14-fulltext-search-cdc.md](./14-fulltext-search-cdc.md) | 全文检索 + CDC：Elasticsearch ik 中文分词替代 MySQL LIKE + Canal 订阅 binlog 经 RocketMQ 做增量索引（回源组装/幂等 upsert/逻辑删可逆/index alias 零停机重建/ES 软依赖降级） |
 | — | [15-security-hardening-and-test-honesty.md](./15-security-hardening-and-test-honesty.md) | 安全加固 + 测试诚实性 + 读路径性能：改前红改后绿纪律、缓存失效延迟到提交后、锁看门狗续期、计数对账、N+1 消除（102→3 SQL）、索引收益实测（19995→10 行）、把恒绿假测试改成真测试并抓到 3 个被掩盖的真 bug |
 | — | [16-frontend-mutation-layer.md](./16-frontend-mutation-layer.md) | 前端 mutation 层全量化（1 处 → 10 处）：六类写操作的私有真相源问题、useState(prop) 不跟随异步变化、本地插入破坏服务端排序、本地改状态撞上服务端过滤、invalidate 的作用域是缓存 key 不是组件、enabled 条件的静默失败 |
+| — | [17-test-baseline-cleanup.md](./17-test-baseline-cleanup.md) | 测试基线清洗（e2e 3 红灯 → 0，后端 168 零失败）：环境缺失伪装成测试失败、长期红灯污染回归基线、被两层 mock 夹住掩盖的鉴权白名单遗漏（游客首页 401）、vitest 单测层从零到 31 例、format:check 接入 CI |
