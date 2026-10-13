@@ -5,7 +5,7 @@ import { ArrowLeft, Check, Flag, RotateCw, X } from "lucide-react";
 import { useState } from "react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
 import { useCommunityDemo } from "@/components/community/community-interactions";
-import { type ReportStatus } from "@/lib/api";
+import { ApiError, type ReportStatus } from "@/lib/api";
 import { useAdminReportsQuery, useHandleReportMutation } from "@/lib/community-queries";
 
 const filters: Array<{ value?: ReportStatus; label: string }> = [
@@ -30,7 +30,13 @@ export function CommunityAdminReportsPage() {
   const handleMutation = useHandleReportMutation({ status: filter });
   const reports = reportsQuery.data ?? [];
   const loading = reportsQuery.isPending;
-  const error = reportsQuery.isError ? "举报列表加载失败，请稍后重试" : "";
+  // 403 要有专属文案：管理端最常见的失败就是"登录了但不是管理员"，
+  // 通用错误提示会让用户以为自己网断了。ApiError 带 status，这里判一下
+  const error = reportsQuery.isError
+    ? reportsQuery.error instanceof ApiError && reportsQuery.error.status === 403
+      ? "当前账号没有管理员权限。"
+      : "举报列表加载失败，请稍后重试"
+    : "";
 
   function openLogin() {
     requestLogin(() => undefined);
