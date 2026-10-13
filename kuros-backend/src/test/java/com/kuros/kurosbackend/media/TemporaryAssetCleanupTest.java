@@ -18,6 +18,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -32,18 +33,18 @@ import static org.mockito.Mockito.when;
  *
  * 原实现的三个问题（见 DefaultMediaAssetService.cleanupTemporaryAssets）：
  * 1. 单点失败中断整批：N 个过期文件删到第 k 个时存储抖动抛异常，后
- *    N-k 个这次不处理；下次重跑还会在同一个位置崩——清理永远跑不完。
+ *    N-k 个这次不处理；下次定时任务还会在同一个位置崩——清理永远跑不完。
  * 2. saveAll 在循环外：中途抛异常时，前 k-1 个「物理文件已删但 DB 状态
  *    未改」与后 N-k 个「完全没处理」两种状态混在一起，且无法区分。
- * 3. 失败文件的处理方式不明：若在 delete 失败后仍 markDeleted，物理文件
- *    还在但 DB 说已删 → 永久孤儿文件，永远不会再被清理。
+ * 3. 失败项若仍 markDeleted，物理文件还在但 DB 说已删 → 永久孤儿文件，
+ *    永远不会再被清理。
  *
  * 修复后的契约：
  * - 每个文件独立 try/catch：单个失败只跳过它，继续处理其余
  * - delete 失败的文件**保持 TEMPORARY**（不 markDeleted），等下次重试
- * - 返回值 = 实际成功处理的文件数；全部失败返回 0 而不抛异常——
- *   清理是 best-effort 的后台任务，存储整体不可用不该让定时任务框架
- *   判定作业本身失败
+ * - 返回值 = 实际成功删除的文件数；全部失败返回 0 而不抛异常——
+ *   清理是 best-effort 的后台任务，存储整体不可用是它要处理的正常
+ *   故障，不该让定时任务框架判定作业本身失败
  *
  * 测试选型：纯 Mockito 单元测试而非 @SpringBootTest。被测方法只依赖
  * repository 与 storageStrategy 两个协作者，都不需要 Spring 装配；
@@ -101,14 +102,14 @@ class TemporaryAssetCleanupTest {
         when(mediaAssetRepository.findByStatusAndCreatedAtBefore(MediaAssetStatus.TEMPORARY, CUTOFF))
                 .thenReturn(assets);
 
-        // 只让第 2 个失败（按 storageKey 精确匹配），其余走默认空行为。
+        // 只让第 2 个失败，其余走默认空行为。
         // 必须显式给默认行为：Mockito 严格模式会把"未被 stub 的调用"当
         // 作 stub 写错而报 PotentialStubbingProblem，即使那正是我们要的
         // "其他文件正常删除"语义。
         doThrow(new RuntimeException("存储暂时不可用"))
                 .when(storageStrategy).delete("orphan-1.png");
-        org.mockito.Mockito.doNothing().when(storageStrategy).delete("orphan-0.png");
-        org.mockito.Mockito.doNothing().when(storageStrategy).delete("orphan-2.png");
+        doNothing().when(storageStrategy).delete("orphan-0.png");
+        doNothing().when(storageStrategy).delete("orphan-2.png");
 
         int cleaned = service.cleanupTemporaryAssets(CUTOFF);
 
@@ -144,7 +145,6 @@ class TemporaryAssetCleanupTest {
         when(mediaAssetRepository.findByStatusAndCreatedAtBefore(MediaAssetStatus.TEMPORARY, CUTOFF))
                 .thenReturn(assets);
 
-        // 全部失败：用 anyString 覆盖所有 delete 调用
         doThrow(new RuntimeException("MinIO 完全不可达"))
                 .when(storageStrategy).delete(anyString());
 
