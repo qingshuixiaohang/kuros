@@ -60,6 +60,7 @@ public class SaTokenConfigure implements WebMvcConfigurer {
                     "/api/v1/users/*",         // 公开用户资料（单段通配，/users/me/profile 两段不在内，仍需登录）
                     "/api/v1/users/*/posts",   // 用户发布的帖子
                     "/api/v1/characters/**",   // 角色图鉴（PR #57）：游戏资料只读，游客可浏览
+                    "/api/v1/interactions/batch-states", // H-2 首页批量互动状态：游客首屏就要拉，缺这条整个首页对未登录用户 401
                     "/media/**",               // 上传图片的静态资源访问
                     // 注意：不要在这里加 /actuator/** 的白名单条目。实测（2026-10-12）
                     // actuator 端点由 WebEndpointServletHandlerMapping 处理，不经过本
