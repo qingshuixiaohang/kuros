@@ -1,4 +1,4 @@
-# 16 · 前端 mutation 层全量化：从 1 处到 10 处
+# 16 · 前端 mutation 层全量化：从 1 处到 8 处
 
 > 批次：前端审计 E / H-12
 > 提交范围：`dfd7b23` → `dd093ce`（7 个提交）
@@ -17,7 +17,9 @@
 
 **Action**：每类写操作配一对 hook——读走 `useQuery`（key 按资源命名），写走 `useMutation`（`onSuccess` invalidate 同一个 key）。关键判断是**哪些 key 该被失效**：点赞收藏失效互动状态 + 三个列表 key；发布失效两个列表 key + 新帖的互动状态；举报失效带过滤条件的管理端 key。
 
-**Result**：mutation 从 1 处 → 10 处，`await <api 写函数>` 直调归零。写后读一致性有了 e2e 钉住（`write-read-consistency.spec.ts` 5 用例）。
+**Result**：mutation hook 从 1 处 → 7 处（净增 6：点赞/收藏/评论×2/关注/发布/举报处理），`await <api 写函数>` 直调从 6 处降到 0 处。写后读一致性有了 e2e 钉住（`write-read-consistency.spec.ts` 5 用例）。
+
+> **数字勘误（code-review Spec 轴，见 `.scratch/code-review-spec-axis.md`）**：本段原写"1 处 → 10 处"，实数是我在数 `useMutation(` 的出现次数（7 个 hook 各出现两次：定义 + 调用），不是 hook 数。同批审查还发现"直调归零"当时的断言漏了 `createReport`（举报提交），该缺口已在 `348003a` 补上。
 
 ## 三、六个真 bug（按价值排序）
 
@@ -90,7 +92,7 @@ void mutation.mutate(next as "like").then(...)  // .then 取不到
 
 判断标准：**改造的收益是"少几行 useState"，风险是"弄坏降级路径"**，不成比例。mutation 层的 invalidate 已经能作用到它依赖的批量状态查询，主要矛盾解决了。
 
-**H-9 六页 mock 接真数据没做**。后端只有帖子域端点，news/echoes/creations/tools 四页需要先建新端点——那是后端任务，不是前端重构能单独推进的。
+**H-9 的 mock 页接真数据没做**。审计时记的是"六页"，实际只剩五页——`characters-page.tsx` 已由 PR #57 接真 API。剩下 news/echoes/creations/tools 四页需要后端先建端点，那是后端任务，不是前端重构能单独推进的。
 
 ## 六、面试可讲的点
 

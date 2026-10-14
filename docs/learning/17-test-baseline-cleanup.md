@@ -24,7 +24,7 @@
 3. 跑后端全量测试，把 2 个失败查到底
 4. 给前端补 vitest 单测层，并把 format:check 和单测接进 CI
 
-**Result**：e2e **95 passed / 0 failed**（这套测试第一次真正零红灯）；后端全量 **168 测试零失败**；vitest 31 个单测；CI 前端 job 从 2 步扩到 4 步。
+**Result**：e2e **95 passed / 0 failed**（这套测试第一次真正零红灯）；后端全量 **168 测试零失败**；vitest 39 个单测；CI 前端 job 从 2 步扩到 5 步（lint → tsc → format:check → 单测 → build）。
 
 ## 三、挖出的真 bug：游客打开首页会 401
 
@@ -57,9 +57,9 @@ RED 验证：临时移除白名单条目，2 个用例立刻回到 401；加回�
 
 **判断标准**：一个测试失败时，必须能说出"这是代码错了还是环境缺了"。答不出来就是测试本身有问题。
 
-### 单测层：vitest 31 例
+### 单测层：vitest 39 例
 
-三个文件，覆盖的都是"纯函数 + 零单测"的部分：
+四个文件，覆盖的都是"纯函数 + 零单测"的部分（第四个是 `348003a` 之后补的 search-highlight）：
 
 | 文件 | 用例 | 重点 |
 |---|---|---|
@@ -99,7 +99,7 @@ const mutation = kind === "like" ? likeMutation : favoriteMutation;  // TS 推�
 
 **首页 Feed 没迁 react-query**（连续两轮的同一个结论）。它有复杂的降级语义：following tab 走 Redis ZSet cursor 分页，其他 tab 走 posts 接口，失败时 following 报错、其他降级到 mock。迁 infiniteQuery 会丢掉这套逻辑，而它是全仓最脆弱的组件且无测试护航。mutation 层的 invalidate 已经能作用到它依赖的批量状态查询，主要矛盾解决了。
 
-**H-9 六页 mock 接真数据**仍卡在后端没有对应端点。
+**H-9 的 mock 页接真数据**仍卡在后端没有对应端点（审计记的"六页"实为五页，characters 已由 PR #57 接入）。
 
 ## 八、面试可讲的点
 
