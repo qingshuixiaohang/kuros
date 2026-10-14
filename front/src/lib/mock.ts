@@ -1,4 +1,4 @@
-import type { Character, EchoSet, Guide, NewsItem, ToolItem } from "@/types/community";
+import type { Character, Guide, NewsItem, ToolItem } from "@/types/community";
 
 export const guides: Guide[] = [
   {
@@ -208,44 +208,5 @@ export const characters: Character[] = [
       { name: "共鸣协奏", type: "共鸣技能", description: "释放导电波，提升附近队友攻击力。" },
       { name: "雷霆之绊", type: "共鸣解放", description: "召唤雷电连锁，对范围内敌人造成导电伤害并降低防御。" },
     ],
-  },
-];
-
-export const echoSets: EchoSet[] = [
-  {
-    id: "floating-stars",
-    name: "浮星祛暗",
-    effect: "湮灭伤害提升",
-    location: "荒石高地 / 无音区",
-    role: "输出",
-    description: "适合围绕湮灭伤害展开的主输出构筑。",
-    guideId: "changli-team",
-  },
-  {
-    id: "thunder",
-    name: "彻空冥雷",
-    effect: "导电伤害提升",
-    location: "虎口矿场 / 归墟港市",
-    role: "输出",
-    description: "以导电伤害为核心的输出向套装。",
-    guideId: "tower-24",
-  },
-  {
-    id: "light-cloud",
-    name: "轻云出月",
-    effect: "共鸣解放增益",
-    location: "瑝珑各地",
-    role: "协同",
-    description: "给轮切队提供稳定的共鸣解放增益。",
-    guideId: "camellya-echo",
-  },
-  {
-    id: "hidden-light",
-    name: "隐世回光",
-    effect: "治疗效果与协同",
-    location: "云陵谷 / 乘霄山",
-    role: "治疗",
-    description: "适合治疗与协同角色的功能性选择。",
-    guideId: "new-player-route",
   },
 ];

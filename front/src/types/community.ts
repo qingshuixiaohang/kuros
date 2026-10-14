@@ -79,13 +79,3 @@ export interface Character {
   attributes: CharacterAttributes;
   skills: CharacterSkill[];
 }
-
-export interface EchoSet {
-  id: string;
-  name: string;
-  effect: string;
-  location: string;
-  role: "输出" | "协同" | "治疗";
-  description: string;
-  guideId: string;
-}
