@@ -241,6 +241,21 @@ export function useFollowUserMutation(targetUserId?: string) {
   });
 }
 
+/**
+ * 点赞与收藏共用的一套失效集合。
+ *
+ * 抽出来的理由不只是少写四行：这两个 mutation 改的是**同一个资源**（一帖的
+ * 互动状态），失效集合就必须始终一致。各写一份的话，将来给点赞加一个失效
+ * key 而忘了收藏，两个按钮就会出现不同的新鲜度——而这类不一致没有任何
+ * 测试会报错，只会表现成"有时候数据是旧的"。
+ */
+function invalidatePostInteractionViews(queryClient: ReturnType<typeof useQueryClient>, postId: string) {
+  queryClient.invalidateQueries({ queryKey: ["post-interactions", postId] });
+  queryClient.invalidateQueries({ queryKey: ["community-posts"] });
+  queryClient.invalidateQueries({ queryKey: ["search-posts"] });
+  queryClient.invalidateQueries({ queryKey: ["feed-interaction-states"] });
+}
+
 export function useLikeMutation(postId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -248,10 +263,7 @@ export function useLikeMutation(postId: string) {
     onSuccess: () => {
       // 本帖互动状态 + 所有列表查询一起失效：首页/搜索/关注流的卡片
       // 都会在下一次渲染前重取，不再有"一头新一头旧"
-      queryClient.invalidateQueries({ queryKey: ["post-interactions", postId] });
-      queryClient.invalidateQueries({ queryKey: ["community-posts"] });
-      queryClient.invalidateQueries({ queryKey: ["search-posts"] });
-      queryClient.invalidateQueries({ queryKey: ["feed-interaction-states"] });
+      invalidatePostInteractionViews(queryClient, postId);
     },
   });
 }
@@ -266,11 +278,7 @@ export function useFavoriteMutation(postId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (next: "favorite" | "unfavorite") => (next === "favorite" ? favoritePost(postId) : unfavoritePost(postId)),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["post-interactions", postId] });
-      queryClient.invalidateQueries({ queryKey: ["community-posts"] });
-      queryClient.invalidateQueries({ queryKey: ["search-posts"] });
-      queryClient.invalidateQueries({ queryKey: ["feed-interaction-states"] });
-    },
+    // 与 useLikeMutation 共用同一套失效集合——两者改的是同一个资源
+    onSuccess: () => invalidatePostInteractionViews(queryClient, postId),
   });
 }
