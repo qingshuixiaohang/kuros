@@ -5,14 +5,16 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CommunityPageFrame, PageHeader } from "@/components/community/community-pages";
 import { useCommunityDemo } from "@/components/community/community-interactions";
-import { newsItems } from "@/lib/mock";
+import { useNewsDetailQuery, useNewsListQuery } from "@/lib/community-queries";
 
 export function NewsPage() {
   const params = useSearchParams();
   const [category, setCategory] = useState(params.get("category") ?? "全部");
   const { requestLogin, notify } = useCommunityDemo();
   const tabs = ["全部", "版本前瞻", "官方公告", "活动资讯"];
-  const visible = newsItems.filter((item) => category === "全部" || item.category === category);
+  // 资讯接真 API（H-9）：此前是 mock.ts 的硬编码数组，改内容要改代码发版
+  const newsQuery = useNewsListQuery(category);
+  const visible = newsQuery.data?.items ?? [];
   return (
     <CommunityPageFrame activeNav="news">
       <PageHeader
@@ -34,8 +36,11 @@ export function NewsPage() {
         ))}
       </div>
       <section className="news-page-list">
+        {newsQuery.isPending ? <p className="admin-empty">正在整理资讯…</p> : null}
+        {newsQuery.isError ? <p className="admin-empty">资讯加载失败，请稍后重试。</p> : null}
+        {!newsQuery.isPending && !newsQuery.isError && visible.length === 0 ? <p className="admin-empty">当前分类下没有资讯。</p> : null}
         {visible.map((item) => (
-          <Link href={"/news/" + item.id} key={item.id}>
+          <Link href={"/news/" + item.slug} key={item.slug}>
             <article>
               <time>{item.date}</time>
               <div>
@@ -53,8 +58,11 @@ export function NewsPage() {
 }
 
 export function NewsDetailPage({ id }: { id: string }) {
-  // 未知 id 不再回退到第一条资讯冒充（架构巡检 #2 同模式）
-  const item = newsItems.find((entry) => entry.id === id);
+  // id 即 slug（对外契约用 slug，不用内部 UUID）
+  // 未知/未发布 slug 不再回退到第一条资讯冒充（架构巡检 #2 同模式）——
+  // 接真 API 后这条由后端 NEWS_NOT_FOUND 保证，前端只需把失败态显示出来
+  const newsQuery = useNewsDetailQuery(id);
+  const item = newsQuery.data;
   const { notify } = useCommunityDemo();
   if (!item)
     return (

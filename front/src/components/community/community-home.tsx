@@ -35,8 +35,8 @@ import { CommunityHeroCarousel, CommunityImageCarousel } from "@/components/comm
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
 import { ApiError, fetchFollowingFeedByCursor, fetchMyProfile, fetchPostInteractionsBatch, fetchPosts } from "@/lib/api";
-import { useFavoriteMutation, useLikeMutation } from "@/lib/community-queries";
-import { guides, newsItems } from "@/lib/mock";
+import { useFavoriteMutation, useLikeMutation, useNewsListQuery } from "@/lib/community-queries";
+import { guides } from "@/lib/mock";
 import { DEMO_AUTHOR_ID_BY_NAME, toGuide } from "@/lib/post-view";
 import type { Guide } from "@/types/community";
 
@@ -645,8 +645,10 @@ function Feed({ query }: { query: string }) {
 }
 export function RightRail() {
   const [tab, setTab] = useState<"recommend" | "news">("recommend");
-  const items =
-    tab === "recommend" ? newsItems.slice(0, 5) : newsItems.filter((item) => item.category === "官方公告" || item.category === "版本前瞻").slice(0, 5);
+  // 资讯 tab 接真 API（H-9）：右栏是 newsItems 的第三处消费点，前两处
+  // （/news 列表、资讯详情）改了之后漏了它，表现为过滤用例里旧标题仍在 DOM 里
+  const newsRailQuery = useNewsListQuery("全部");
+  const items = (newsRailQuery.data?.items ?? []).slice(0, 5);
   // 热门话题：聚合真实帖子标签（库街区右栏话题卡同款：缩略图 + 帖子数）
   const hotTopics = useQuery({
     queryKey: ["hot-topics"],
@@ -690,7 +692,7 @@ export function RightRail() {
                   ? { kind: "activity", label: "活动" }
                   : { kind: "info", label: "资讯" };
             return (
-              <Link className="ranking-item" href={"/news/" + item.id} key={item.id}>
+              <Link className="ranking-item" href={"/news/" + item.slug} key={item.slug}>
                 <span className={"news-chip news-chip--" + chip.kind}>{chip.label}</span>
                 <span className="ranking-title">{item.title}</span>
               </Link>

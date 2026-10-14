@@ -209,6 +209,35 @@ export async function fetchCharacterPage(
   return { items: envelope?.data ?? [], meta: envelope?.meta };
 }
 
+export type ApiNews = {
+  id: string;
+  slug: string;
+  title: string;
+  category: string;
+  summary: string;
+  date: string;
+  hot: boolean;
+  content: string[];
+};
+
+/**
+ * 资讯列表（前端审计 H-9）。此前读 mock.ts 的 newsItems 硬编码数组，
+ * 改资讯要改前端代码发版；现在由后端维护。
+ */
+export async function fetchNewsPage(options: { category?: string; page?: number; pageSize?: number } = {}) {
+  const params = new URLSearchParams();
+  params.set("page", String(options.page ?? 1));
+  params.set("pageSize", String(options.pageSize ?? 20));
+  if (options.category && options.category !== "全部") params.set("category", options.category);
+  const envelope = await requestEnvelope<ApiNews[]>("/api/v1/news?" + params.toString());
+  return { items: envelope?.data ?? [], meta: envelope?.meta };
+}
+
+export async function fetchNews(slug: string) {
+  const envelope = await requestEnvelope<ApiNews>("/api/v1/news/" + encodeURIComponent(slug));
+  return envelope?.data;
+}
+
 export function fetchCharacter(slug: string) {
   return request<ApiCharacter>("/api/v1/characters/" + encodeURIComponent(slug));
 }

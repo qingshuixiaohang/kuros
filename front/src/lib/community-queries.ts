@@ -7,6 +7,8 @@ import {
   favoritePost,
   fetchAdminReports,
   fetchComments,
+  fetchNews,
+  fetchNewsPage,
   fetchPostInteractions,
   fetchPostPage,
   fetchUserFollow,
@@ -217,6 +219,37 @@ export function useCreateReportMutation() {
       // 审核台应出现这条。缺这个失效，staleTime 内审核台看不到新举报
       queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
     },
+  });
+}
+
+/**
+ * 资讯列表查询（前端审计 H-9）。
+ *
+ * 资讯是低频公开内容，staleTime 给到 5 分钟——没必要每次进 /news 都打一次
+ * 接口。按 category 分 key，切 tab 就是换 key。
+ */
+export function useNewsListQuery(category: string) {
+  return useQuery({
+    queryKey: ["news-list", category],
+    queryFn: async () => {
+      const result = await fetchNewsPage({ category });
+      return { items: result.items, meta: result.meta };
+    },
+    // 与帖子列表一致：切分类时保留上一批数据，避免列表瞬间清空造成的闪烁。
+    // 注意这会让旧分类的内容在新数据到达前多停留一瞬，所以列表页要能显示
+    // "正在加载" 而不是把它当成最终结果
+    placeholderData: keepPreviousData,
+    staleTime: 300_000,
+  });
+}
+
+/** 资讯详情查询。 */
+export function useNewsDetailQuery(slug: string) {
+  return useQuery({
+    queryKey: ["news-detail", slug],
+    queryFn: async () => await fetchNews(slug),
+    enabled: Boolean(slug),
+    retry: false,
   });
 }
 
