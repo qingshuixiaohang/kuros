@@ -1,4 +1,4 @@
-import type { Character, Guide, NewsItem, ToolItem } from "@/types/community";
+import type { Character, Guide, ToolItem } from "@/types/community";
 
 export const guides: Guide[] = [
   {
@@ -64,84 +64,6 @@ export const guides: Guide[] = [
     likes: "8.6k",
     tags: ["新手", "开荒", "资源规划"],
     mediaUrls: ["/art/修-心灵海 男漂地图.webp", "/art/修-优诺 唤取动画.webp", "/art/修-千咲  唤取动画.webp"],
-  },
-];
-
-export const newsItems: NewsItem[] = [
-  {
-    id: "version-preview",
-    rank: 1,
-    title: "鸣潮 2.4 版本前瞻特别节目总结",
-    hot: true,
-    category: "版本前瞻",
-    date: "2025 / 09 / 13",
-    summary: "新区域、角色体验和版本活动的重点信息已经整理完毕。",
-    content: ["本次前瞻围绕新版本的探索节奏、限时活动和角色试玩展开。", "建议先完成版本主线，再根据自身资源安排角色与武器的养成优先级。"],
-  },
-  {
-    id: "character-analysis",
-    rank: 2,
-    title: "新角色技能与定位分析",
-    hot: true,
-    category: "版本前瞻",
-    date: "2025 / 09 / 12",
-    summary: "从技能循环与队伍位置快速理解新角色的使用方向。",
-    content: ["新角色更适合在稳定轮切队中发挥优势，机制重点在于技能衔接。", "具体配队仍需结合实装后的数值与实战环境进行确认。"],
-  },
-  {
-    id: "maintenance",
-    rank: 3,
-    title: "2.4 版本更新时间公告",
-    hot: true,
-    category: "官方公告",
-    date: "2025 / 09 / 11",
-    summary: "版本维护时间、补偿说明和更新方式一览。",
-    content: ["维护期间无法登录游戏，请提前完成未结算的挑战内容。", "更新完成后可通过邮件领取对应补偿。"],
-  },
-  {
-    id: "official-note",
-    rank: 4,
-    title: "官方：关于近期问题的说明",
-    category: "官方公告",
-    date: "2025 / 09 / 10",
-    summary: "针对已收集的问题给出处理进度与后续安排。",
-    content: ["开发团队正在持续确认反馈情况，并会在后续公告同步处理进度。"],
-  },
-  {
-    id: "creator-event",
-    rank: 5,
-    title: "玩家创作征集活动开启",
-    category: "活动资讯",
-    date: "2025 / 09 / 09",
-    summary: "攻略、绘画与视频创作者均可参与本期主题征集。",
-    content: ["请在投稿时使用指定标签，并确保作品为原创内容。"],
-  },
-  {
-    id: "next-week",
-    rank: 6,
-    title: "鸣潮线下展会参展情报",
-    category: "活动资讯",
-    date: "2025 / 09 / 08",
-    summary: "展会时间、现场内容与预约信息已经开放。",
-    content: ["具体参与方式请以主办方后续说明为准。"],
-  },
-  {
-    id: "version-review",
-    rank: 7,
-    title: "2.3 版本内容回顾",
-    category: "社区资讯",
-    date: "2025 / 09 / 07",
-    summary: "社区整理了上一版本的重点内容与玩家讨论。",
-    content: ["本篇回顾聚焦版本活动、常见攻略方向与实战体验。"],
-  },
-  {
-    id: "community-rules",
-    rank: 8,
-    title: "社区版规与友好交流倡议",
-    category: "社区资讯",
-    date: "2025 / 09 / 06",
-    summary: "一起维护清晰、友好且有帮助的讨论环境。",
-    content: ["请尊重每位创作者和玩家，共同建设社区内容。"],
   },
 ];
 

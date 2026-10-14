@@ -28,17 +28,6 @@ export interface Guide {
   highlight?: Record<string, string[]>;
 }
 
-export interface NewsItem {
-  id: string;
-  rank: number;
-  title: string;
-  hot?: boolean;
-  category: "版本前瞻" | "官方公告" | "活动资讯" | "社区资讯";
-  date: string;
-  summary: string;
-  content: string[];
-}
-
 export interface ToolItem {
   slug: "calculator" | "echo" | "team-builder";
   title: string;
