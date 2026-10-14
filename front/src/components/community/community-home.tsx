@@ -363,11 +363,13 @@ function PostCard({ guide, interaction: initialInteraction }: { guide: Guide; in
   // 为什么不能把 initialInteraction 塞进 useState：批量状态是异步到达的，
   // prop 从 null 变成 {liked:true} 时 useState 的初始值不会重新求值——
   // 卡片会永远停在挂载那一刻的状态（这正是"首页显示未赞"的直接原因）。
-  // 故本地 state 只存"本次操作的覆盖"，基础值每次渲染都从 prop 派生。
-  const [override, setOverride] = useState<{ liked?: boolean; favorited?: boolean } | null>(null);
-  const interaction = initialInteraction
-    ? { postId: postId ?? "", likeCount: parseLikeCount(guide.likes), favoriteCount: 0, ...initialInteraction, ...override }
-    : null;
+  //
+  // 也不再用"本地 override 覆盖 prop"：那只是把同一个 bug 从「挂载时冻结」
+  // 降级为「每次操作后冻结」——override 写进去后没有清除路径，invalidate
+  // 重取拿到的新 initialInteraction 会被旧 override 压住，用户在别处点赞
+  // 后本页卡片仍显示旧值。mutation 的 onSuccess 已经 invalidate 了
+  // feed-interaction-states，重取足以驱动 UI，本地不需要第二份真相。
+  const interaction = initialInteraction ? { postId: postId ?? "", likeCount: parseLikeCount(guide.likes), favoriteCount: 0, ...initialInteraction } : null;
   const isBookmarked = interaction?.favorited ?? bookmarked.includes(guide.id);
   const likeMutation = useLikeMutation(postId ?? "");
   const favoriteMutation = useFavoriteMutation(postId ?? "");
@@ -382,11 +384,10 @@ function PostCard({ guide, interaction: initialInteraction }: { guide: Guide; in
       // 去详情页时读到的是新值，不再"首页收藏了、详情页显示未收藏"
       // 两个 mutation 的变量类型不同，分开写而不是塞进同一个联合变量——
       // TS 会把联合推断成 never，then 也就取不到
-      const settled =
-        kind === "like"
-          ? await likeMutation.mutateAsync(interaction.liked ? "unlike" : "like")
-          : await favoriteMutation.mutateAsync(interaction.favorited ? "unfavorite" : "favorite");
-      setOverride({ liked: settled.liked, favorited: settled.favorited });
+      // 只发请求，不写本地状态：onSuccess 的 invalidate 会让批量状态重取，
+      // 新值经 initialInteraction 流回本卡片
+      if (kind === "like") await likeMutation.mutateAsync(interaction.liked ? "unlike" : "like");
+      else await favoriteMutation.mutateAsync(interaction.favorited ? "unfavorite" : "favorite");
     });
   }
   const isLiked = interaction?.liked ?? liked.includes(guide.id);

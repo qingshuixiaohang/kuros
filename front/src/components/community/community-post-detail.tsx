@@ -374,7 +374,10 @@ function PostComments({ postId, authorName, onReport }: { postId: string; author
   );
   const totalItems = commentsQuery.data?.totalItems ?? 0;
   const loading = commentsQuery.isPending;
-  const apiError = commentsQuery.isError ? "评论加载失败，请稍后重试。" : "";
+  // 读失败和写失败共用这一个错误位：原实现里 submitComment 的 catch 会
+  // setApiError，迁到 mutation 时只留下了 notify，内联错误行从此不再亮。
+  // 这里把 createMutation.isError 也接进来，两种失败都能看到。
+  const apiError = commentsQuery.isError ? "评论加载失败，请稍后重试。" : createMutation.isError ? "评论发布失败，请稍后重试。" : "";
 
   const visibleComments = useMemo(() => (onlyAuthor ? comments.filter((comment) => comment.authorComment) : comments), [comments, onlyAuthor]);
 
@@ -384,6 +387,9 @@ function PostComments({ postId, authorName, onReport }: { postId: string; author
       setReplyTo(null);
       notify(parentId ? "回复已发布" : "评论已发布");
     } catch (error) {
+      // 内联错误位要跟着亮：只弹 toast 的话，提示 2.6s 后就消失了，
+      // 用户看不到"为什么没发出去"，而评论框里的内容还在，容易重复提交。
+      // createMutation.isError 驱动同一个 apiError，读失败也走这里。
       notify(error instanceof Error ? error.message : "评论发布失败，请稍后重试");
     }
   }

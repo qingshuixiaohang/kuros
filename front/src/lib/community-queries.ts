@@ -2,6 +2,7 @@ import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClie
 import {
   createComment,
   createPost,
+  createReport,
   deleteComment,
   favoritePost,
   fetchAdminReports,
@@ -17,7 +18,9 @@ import {
   unfollowUser,
   unlikePost,
   updatePost,
+  type ReportReason,
   type ReportStatus,
+  type ReportTargetType,
 } from "@/lib/api";
 
 export function useCommunityPostQuery(options: {
@@ -104,6 +107,9 @@ export function useCommentsQuery(options: { postId: string; sort: "latest" | "ho
       return { items: result.items, totalItems: result.meta?.totalItems ?? result.items.length };
     },
     enabled: Boolean(postId),
+    // 与同文件的 useSearchPostsQuery / usePostInteractionsQuery 一致：
+    // 失败要立即冒泡给 UI。默认重试 3 次会让评论区白转三个周期才显示错误
+    retry: false,
   });
 }
 
@@ -162,8 +168,11 @@ export function usePublishPostMutation(editPostId?: string) {
     mutationFn: (input: { type: "GUIDE" | "GENERAL"; category: string; title: string; content: string; tags: string[]; mediaAssetIds: string[] }) =>
       editPostId ? updatePost(editPostId, input) : createPost(input),
     onSuccess: (post) => {
+      // hot-topics 也在失效集合里：首页右栏热门话题按标签聚合，新帖的标签
+      // 应该有机会进入 top-5。漏了它，发完帖回首页右栏在 staleTime 内还是旧榜
       queryClient.invalidateQueries({ queryKey: ["community-posts"] });
       queryClient.invalidateQueries({ queryKey: ["search-posts"] });
+      queryClient.invalidateQueries({ queryKey: ["hot-topics"] });
       queryClient.invalidateQueries({ queryKey: ["post-interactions", post.id] });
     },
   });
@@ -197,6 +206,20 @@ export function useHandleReportMutation(options: { status?: ReportStatus }) {
   });
 }
 
+/** 提交举报 mutation（H-12 第七类写操作，补上"直调归零"的缺口）。 */
+export function useCreateReportMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { targetType: ReportTargetType; targetId: string; reason: ReportReason }) =>
+      createReport(input.targetType, input.targetId, input.reason),
+    onSuccess: () => {
+      // 管理端的举报列表要能看到新举报——游客/普通用户提交后，管理员刷新
+      // 审核台应出现这条。缺这个失效，staleTime 内审核台看不到新举报
+      queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
+    },
+  });
+}
+
 /**
  * 关注/取关 mutation（H-12 第四类写操作）。
  *
@@ -209,8 +232,11 @@ export function useFollowUserMutation(targetUserId?: string) {
   return useMutation({
     mutationFn: (next: "follow" | "unfollow") => (next === "follow" ? followUser(targetUserId as string) : unfollowUser(targetUserId as string)),
     onSuccess: () => {
+      // 只失效这一个 key。曾经也 invalidate 了 feed-interaction-states，
+      // 但那个查询返回的是 liked/favorited，关注写操作不改它的内容——
+      // 多打一次批量请求纯属噪音。失效集合要按"这个写操作会影响哪些读"
+      // 推导，不是把邻居的 key 抄一遍。
       queryClient.invalidateQueries({ queryKey: ["user-follow", targetUserId ?? ""] });
-      queryClient.invalidateQueries({ queryKey: ["feed-interaction-states"] });
     },
   });
 }

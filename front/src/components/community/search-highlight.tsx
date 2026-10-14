@@ -47,15 +47,5 @@ export function parseHighlightFragments(fragments?: string[], fallback = ""): Ar
 
 export function HighlightText({ fragments, fallback }: { fragments?: string[]; fallback: string }) {
   const segments = parseHighlightFragments(fragments, fallback);
-  return (
-    <>
-      {segments.map((segment, index) =>
-        segment.marked ? (
-          <mark key={index}>{segment.text}</mark>
-        ) : (
-          <span key={index}>{segment.text}</span>
-        ),
-      )}
-    </>
-  );
+  return <>{segments.map((segment, index) => (segment.marked ? <mark key={index}>{segment.text}</mark> : <span key={index}>{segment.text}</span>))}</>;
 }

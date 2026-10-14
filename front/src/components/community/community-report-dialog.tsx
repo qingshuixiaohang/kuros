@@ -2,7 +2,8 @@
 
 import { Flag, X } from "lucide-react";
 import { useRef, useState, type FormEvent } from "react";
-import { ApiError, createReport, type ReportReason, type ReportTargetType } from "@/lib/api";
+import { ApiError, type ReportReason, type ReportTargetType } from "@/lib/api";
+import { useCreateReportMutation } from "@/lib/community-queries";
 import { useOverlay } from "@/hooks/use-overlay";
 import { useCommunityDemo } from "@/components/community/community-interactions";
 
@@ -27,18 +28,21 @@ export function CommunityReportDialog({
   const { notify } = useCommunityDemo();
   const closeRef = useRef<HTMLButtonElement>(null);
   const [reason, setReason] = useState<ReportReason>("SPAM");
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // 提交走 mutation（H-12 第七类）：invalidate 管理端举报列表，
+  // 否则审核台在 staleTime 内看不到刚提交的这条。isPending 取代原来的
+  // 手写 submitting state
+  const reportMutation = useCreateReportMutation();
+  const submitting = reportMutation.isPending;
   // 浮层行为与登录框同源（useOverlay）：Esc 可关但提交中守卫、焦点陷阱、初始聚焦；
   // 遮罩不绑定点击关闭——与登录框同一防误触策略，避免丢掉已选理由
   useOverlay({ open: true, onClose, surfaceSelector: ".report-dialog", initialFocusRef: closeRef, blocked: submitting });
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmitting(true);
     setError("");
     try {
-      await createReport(targetType, targetId, reason);
+      await reportMutation.mutateAsync({ targetType, targetId, reason });
       notify("举报已提交，感谢你帮助维护社区秩序。");
       onSuccess();
     } catch (requestError) {
@@ -49,8 +53,6 @@ export function CommunityReportDialog({
             ? requestError.message
             : "举报失败，请稍后重试";
       setError(message);
-    } finally {
-      setSubmitting(false);
     }
   }
 
