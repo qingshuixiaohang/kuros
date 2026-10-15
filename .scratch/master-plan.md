@@ -17,9 +17,18 @@
 
 已完成域：characters（PR #57）、news、echoes。剩余：**tools（工具箱）、creations（同人创作）**。
 
-**基线数字**：e2e 106 passed / 0 failed、vitest 39/39、tsc 0 error、eslint 0 warning、format:check 全绿；
-后端 NewsApiIntegrationTest 4/4、EchoApiIntegrationTest 5/5、KurosBackendApplicationTests 38/38、
-InteractionBatchStateIntegrationTest 8/8。
+**基线数字**（2026-10-15 实跑核对，非引用文档）：
+- 前端 e2e **106** 例 / 13 spec（`playwright test --list` 实测；HANDOFF 的「68」是过时数，retro #17 的「95」是当时快照）
+- vitest **39/39**（实测）
+- 后端 **221 个 `@Test`** / 33 个测试类（`grep -rn '@Test'` 实测；retro #17 的「168」是当时快照，之后新增了 EchoApi、CharacterCatalog、缓存/锁/游标等类）
+- tsc 0 error、eslint 0 warning、format:check 全绿
+- 定向回归：NewsApiIntegrationTest 4/4、EchoApiIntegrationTest 5/5、KurosBackendApplicationTests 38/38、
+  InteractionBatchStateIntegrationTest 8/8
+
+**版本事实**（2026-10-15 从 `node_modules` 实测）：前端是 **Next.js 16.3.5 + React 19.2.8**。
+接手简报与 HANDOFF 写的「Next.js 19」/「Next.js 15」都不对，以 package.json 为准。
+
+**Flyway 跳号确认**：V8 不存在（V1-V7、V9-V14），master-plan 历史记录里的 L1 条目已核实。
 
 **模式样板**（新域照抄这个形状）：`git show 4b0641d`（后端域）+ `git show 260d35f`（前端接入）。
 
