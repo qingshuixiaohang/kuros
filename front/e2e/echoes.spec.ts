@@ -82,6 +82,46 @@ test("声骸列表展示后端返回的套装", async ({ page }) => {
   await expect(page.getByText("已收录 4 套")).toBeVisible();
 });
 
+test("声骸列表加载和空结果消息作为 status 播报", async ({ page }) => {
+  let releaseResponse!: () => void;
+  const responseGate = new Promise<void>((resolve) => {
+    releaseResponse = resolve;
+  });
+  await page.route("**/api/v1/echoes**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() !== "GET" || url.pathname !== "/api/v1/echoes") {
+      await route.continue();
+      return;
+    }
+
+    await responseGate;
+    await route.fulfill({ json: { ...ECHO_LIST, data: [], meta: { ...ECHO_LIST.meta, totalItems: 0 } } });
+  });
+
+  await page.goto("/echoes");
+  const status = page.getByRole("status");
+  await expect(status).toHaveText("正在整理声骸图鉴…");
+  releaseResponse();
+  await expect(status).toHaveText("没有找到匹配的声骸。");
+});
+
+test("声骸列表加载失败消息作为 status 播报", async ({ page }) => {
+  await page.route("**/api/v1/echoes**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() !== "GET" || url.pathname !== "/api/v1/echoes") {
+      await route.continue();
+      return;
+    }
+
+    await route.fulfill({ status: 500, body: "boom" });
+  });
+
+  await page.goto("/echoes");
+  await expect(page.getByRole("status")).toHaveText("声骸图鉴加载失败，请稍后重试。", { timeout: 15_000 });
+});
+
 test("声骸列表视角 tab 只换显示列，不过滤数据", async ({ page }) => {
   await mockEchoes(page);
   await page.goto("/echoes");
