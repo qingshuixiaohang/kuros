@@ -29,9 +29,9 @@ export function EchoesPage() {
         }
       />
       <div className="echo-toolbar">
-        <div>
+        <div aria-label="声骸展示视角" role="group">
           {VIEW_TABS.map((item) => (
-            <button className={mode === item ? "is-active" : ""} key={item} onClick={() => setMode(item)} type="button">
+            <button aria-pressed={mode === item} className={mode === item ? "is-active" : ""} key={item} onClick={() => setMode(item)} type="button">
               {item}
             </button>
           ))}
