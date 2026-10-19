@@ -125,7 +125,9 @@ export function GuidesApiPage() {
         {visibleItems.length ? (
           visibleItems.map((guide) => <GuideListItem guide={guide} key={guide.id} />)
         ) : (
-          <p className="empty-state">没有找到匹配的攻略。</p>
+          <p className="empty-state" role="status">
+            没有找到匹配的攻略。
+          </p>
         )}
         {apiUnavailable && <ApiFallbackNote onRetry={result.refetch} />}
         {totalPages > 1 && (
