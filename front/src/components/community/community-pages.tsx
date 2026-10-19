@@ -3,7 +3,8 @@ import Link from "next/link";
 import { ChevronRight, Eye, Heart, MessageSquare, MoveRight, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { HighlightText } from "@/components/community/search-highlight";
-import { RightRail, Sidebar, TopNavigation, useCommunityDrawer } from "@/components/community/community-home";
+import { RightRail } from "@/components/community/community-home";
+import { Sidebar, TopNavigation, useCommunityDrawer } from "@/components/community/community-navigation";
 import { guides } from "@/lib/mock";
 
 /**
