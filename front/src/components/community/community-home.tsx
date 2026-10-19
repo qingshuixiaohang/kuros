@@ -808,7 +808,7 @@ function HomeContent() {
       )}
       <div className="page-grid">
         <Sidebar />
-        <div className="main-column">
+        <div className="main-column" id="main-content" tabIndex={-1}>
           <Feed query={query} />
         </div>
         <RightRail />

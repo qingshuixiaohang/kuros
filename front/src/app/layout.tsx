@@ -20,6 +20,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="zh-CN" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} ${logoDisplay.variable}`}>
       <body>
+        <a className="skip-link" href="#main-content">
+          跳到主要内容
+        </a>
         <CommunityProvider>{children}</CommunityProvider>
       </body>
     </html>
