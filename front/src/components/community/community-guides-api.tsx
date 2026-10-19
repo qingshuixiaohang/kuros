@@ -95,9 +95,15 @@ export function GuidesApiPage() {
         }
       />
       <div className="filter-bar">
-        <div className="filter-tabs">
+        <div className="filter-tabs" role="group" aria-label="攻略分类筛选">
           {categories.map((item) => (
-            <button className={category === item ? "is-active" : ""} key={item} onClick={() => changeCategory(item)} type="button">
+            <button
+              aria-pressed={category === item}
+              className={category === item ? "is-active" : ""}
+              key={item}
+              onClick={() => changeCategory(item)}
+              type="button"
+            >
               {item}
             </button>
           ))}
