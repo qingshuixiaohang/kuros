@@ -37,3 +37,4 @@
 | — | [17-test-baseline-cleanup.md](./17-test-baseline-cleanup.md) | 测试基线清洗（e2e 3 红灯 → 0，后端 168 零失败）：环境缺失伪装成测试失败、长期红灯污染回归基线、被两层 mock 夹住掩盖的鉴权白名单遗漏（游客首页 401）、vitest 单测层从零到 39 例、tsc/format:check/vitest 接入 CI |
 | — | [18-community-navigation-extraction.md](./18-community-navigation-extraction.md) | 前端社区壳层拆分：把共享侧栏、顶栏、路由选中态与移动抽屉焦点管理移到独立客户端模块；两处消费点保持行为一致 |
 | — | [19-community-feed-extraction.md](./19-community-feed-extraction.md) | 前端社区内容流拆分：将 Banner、Feed 查询状态、帖子卡片和媒体渲染迁到独立模块，首页仅负责页面组合 |
+| — | [20-community-channel-drawer.md](./20-community-channel-drawer.md) | 前端导航复用：让首页与子页面共用频道抽屉和焦点生命周期 |
