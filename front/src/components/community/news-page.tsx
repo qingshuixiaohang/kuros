@@ -28,9 +28,9 @@ export function NewsPage() {
           </button>
         }
       />
-      <div className="news-page-tabs">
+      <div aria-label="资讯分类筛选" className="news-page-tabs" role="group">
         {tabs.map((item) => (
-          <button className={category === item ? "is-active" : ""} key={item} onClick={() => setCategory(item)} type="button">
+          <button aria-pressed={category === item} className={category === item ? "is-active" : ""} key={item} onClick={() => setCategory(item)} type="button">
             {item}
           </button>
         ))}
