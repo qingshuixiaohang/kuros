@@ -107,7 +107,7 @@ export function CharactersPage() {
         </div>
       ) : items.length === 0 ? (
         <div className="empty-state">
-          <p>没有找到符合条件的角色。</p>
+          <p role="status">没有找到符合条件的角色。</p>
         </div>
       ) : (
         <>
