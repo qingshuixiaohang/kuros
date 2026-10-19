@@ -36,3 +36,4 @@
 | — | [16-frontend-mutation-layer.md](./16-frontend-mutation-layer.md) | 前端 mutation 层全量化（1 处 → 7 处）：六类写操作的私有真相源问题、useState(prop) 不跟随异步变化、本地插入破坏服务端排序、本地改状态撞上服务端过滤、invalidate 的作用域是缓存 key 不是组件、enabled 条件的静默失败 |
 | — | [17-test-baseline-cleanup.md](./17-test-baseline-cleanup.md) | 测试基线清洗（e2e 3 红灯 → 0，后端 168 零失败）：环境缺失伪装成测试失败、长期红灯污染回归基线、被两层 mock 夹住掩盖的鉴权白名单遗漏（游客首页 401）、vitest 单测层从零到 39 例、tsc/format:check/vitest 接入 CI |
 | — | [18-team-builder-real-character-api.md](./18-team-builder-real-character-api.md) | 配队模拟器接入游戏角色图鉴：仅在目标路由请求真实目录、显式加载/失败重试/空状态、Playwright 页面边界验证 |
+| — | [19-creations-post-catalog.md](./19-creations-post-catalog.md) | 同人创作页复用已发布帖子目录：精确内容分类、媒体映射、无图卡片、React Query 重试策略范围与 Playwright 页面边界测试 |
