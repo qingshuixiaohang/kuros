@@ -44,6 +44,7 @@ public final class UserDirectoryStub implements AutoCloseable {
      * （跨服务无法共享常量，改名必须同步——该机制唯一的脆弱点）。
      */
     private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
+    private static final String REQUEST_ID_HEADER = "X-Request-Id";
 
     /** 4 个种子用户：id → {nickname, avatarUrl(null), bio}，与 kuros-user V2__user_seed.sql 一致。 */
     private static final Map<String, String[]> SEED_USERS = seedUsers();
@@ -70,6 +71,7 @@ public final class UserDirectoryStub implements AutoCloseable {
 
     /** 最近一次请求携带的 X-Internal-Token（供断言 Feign 确实带了头，null = 没带）。 */
     private final AtomicReference<String> lastSeenInternalToken = new AtomicReference<>();
+    private final AtomicReference<String> lastSeenRequestId = new AtomicReference<>();
 
     /**
      * 期望的 X-Internal-Token 值。默认非空（"test-internal-token"）——与
@@ -121,6 +123,10 @@ public final class UserDirectoryStub implements AutoCloseable {
         return lastSeenInternalToken.get();
     }
 
+    public String lastSeenRequestId() {
+        return lastSeenRequestId.get();
+    }
+
     /**
      * 内部令牌校验（sec-01 A2 漏洞修复的服务端镜像）。
      * 与 kuros-user 的 InternalTokenInterceptor 同语义：未配置期望值（空）时
@@ -146,6 +152,7 @@ public final class UserDirectoryStub implements AutoCloseable {
 
     /** GET /internal/v1/users/batch?ids=a&ids=b：按输入顺序返回命中项，未知 id 跳过。 */
     private void handleBatch(HttpExchange exchange) throws IOException {
+        lastSeenRequestId.set(exchange.getRequestHeaders().getFirst(REQUEST_ID_HEADER));
         if (rejectIfBadInternalToken(exchange) || rejectIfUnhealthy(exchange)) {
             return;
         }
@@ -173,6 +180,7 @@ public final class UserDirectoryStub implements AutoCloseable {
      * 且这两个 id 都是种子用户，本地能查到其帖子统计，正好验证"跨服务用户 + 本地内容"的组合。
      */
     private void handleFollow(HttpExchange exchange) throws IOException {
+        lastSeenRequestId.set(exchange.getRequestHeaders().getFirst(REQUEST_ID_HEADER));
         if (rejectIfBadInternalToken(exchange) || rejectIfUnhealthy(exchange)) {
             return;
         }

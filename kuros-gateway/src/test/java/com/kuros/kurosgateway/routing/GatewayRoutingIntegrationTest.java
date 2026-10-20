@@ -92,6 +92,25 @@ class GatewayRoutingIntegrationTest {
     }
 
     @Test
+    void 为下游和响应生成同一个请求ID并覆盖客户端输入() throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
+        HttpRequest request = HttpRequest.newBuilder(
+                        URI.create(gatewayBase() + "/api/v1/posts/request-id"))
+                .header("X-Request-Id", "attacker-controlled-id")
+                .GET().build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        String responseId = response.headers().firstValue("X-Request-Id").orElse("");
+        assertTrue(responseId.matches("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"),
+                "Gateway 必须生成 canonical UUID");
+        assertTrue(!"attacker-controlled-id".equals(responseId), "不得信任客户端传入的关联 ID");
+        assertEquals(responseId, stub.lastRequestId(), "Gateway 响应与下游必须使用同一个请求 ID");
+    }
+
+    @Test
     void post请求体经网关原样转发且状态码透传() throws Exception {
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
