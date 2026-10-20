@@ -30,12 +30,12 @@
 
 ## 验收标准
 
-- [ ] Gateway 集成测试覆盖输入伪造 ID 被覆盖、下游与响应 ID 一致、格式为 UUID。
-- [ ] backend 和 user 测试覆盖合法/缺失/非法 ID 的选择、MDC 作用域与异常后清理。
-- [ ] Feign HTTP 桩收到与当前请求 MDC 一致的 `X-Request-Id`；无 MDC 时没有该头。
-- [ ] 三服务日志配置可输出 requestId 字段，不改其他日志字段或泄露 query/header。
-- [ ] Gateway/backend/user 定向测试通过，三工程编译通过。
-- [ ] 全量 CI 通过，变更范围内无 API/body、授权或路由回归。
+- [x] Gateway 集成测试覆盖输入伪造 ID 被覆盖、下游与响应 ID 一致、格式为 UUID。
+- [x] backend 和 user 测试覆盖合法/缺失/非法 ID 的选择、MDC 作用域与异常后清理。
+- [x] Feign HTTP 桩收到与当前请求 MDC 一致的 `X-Request-Id`；无 MDC 时没有该头。
+- [x] 三服务日志配置可输出 requestId 字段，不改其他日志字段或泄露 query/header。
+- [x] Gateway/backend/user 定向测试通过，三工程编译通过。
+- [x] 全量 CI 通过，变更范围内无 API/body、授权或路由回归。
 
 ## 验证计划
 
