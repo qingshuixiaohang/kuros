@@ -125,7 +125,9 @@ export function GuidesApiPage() {
             <option value="hot">热门内容</option>
           </select>
         </label>
-        <span className="result-count">{result.isLoading ? "正在同步内容…" : "共 " + totalItems + " 篇"}</span>
+        <span className="result-count" role={result.isLoading ? "status" : undefined}>
+          {result.isLoading ? "正在同步内容…" : "共 " + totalItems + " 篇"}
+        </span>
       </div>
       <section className="guide-list-page">
         {visibleItems.length ? (
