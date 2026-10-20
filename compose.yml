@@ -62,7 +62,10 @@ services:
   # - API: http://localhost:9000（后端 SDK 连接用）
   # - Console: http://localhost:9001（浏览器管理界面，可登录查看所有文件）
   minio:
-    image: quay.io/minio/minio:latest
+    image: kuros-minio:RELEASE.2025-10-15T17-29-55Z
+    build:
+      context: ./docker/minio
+      dockerfile: Dockerfile
     restart: unless-stopped
     environment:
       MINIO_ROOT_USER: ${APP_STORAGE_MINIO_ACCESS_KEY:-minioadmin}
@@ -75,8 +78,7 @@ services:
     volumes:
       - kuros_minio_data:/data
     healthcheck:
-      # mc 是 MinIO 自带的命令行工具，检查服务是否就绪
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9000/minio/health/ready || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
