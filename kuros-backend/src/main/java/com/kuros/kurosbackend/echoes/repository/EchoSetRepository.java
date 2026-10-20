@@ -10,8 +10,8 @@ import java.util.Optional;
 public interface EchoSetRepository extends JpaRepository<EchoSet, String> {
 
     /**
-     * 列表查询：只取 enabled，按 sort_order 稳定排序（同分再按 name，
-     * 保证排序是确定的——分页游走时顺序不能漂）。
+     * 列表查询：只取 enabled，按 sort_order、name、id 稳定排序，
+     * 保证分页游走时顺序确定。
      */
     Page<EchoSet> findByEnabledTrue(Pageable pageable);
 

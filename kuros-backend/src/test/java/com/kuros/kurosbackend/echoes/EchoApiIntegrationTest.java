@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -38,6 +39,9 @@ class EchoApiIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     @Test
     void 游客可读声骸列表且只返回已上线条目() throws Exception {
         mockMvc.perform(get("/api/v1/echoes"))
@@ -46,6 +50,25 @@ class EchoApiIntegrationTest {
                 .andExpect(jsonPath("$.data[0].slug").value("floating-stars"))
                 .andExpect(jsonPath("$.data[1].slug").value("thunder"))
                 .andExpect(jsonPath("$.meta.totalItems").value(4));
+    }
+
+    @Test
+    void 声骸列表按排序值和名称稳定排序() throws Exception {
+        jdbcTemplate.update("""
+                INSERT INTO echo_sets
+                    (id, slug, name, effect, location, role, description, guide_slug, sort_order, enabled, created_at, updated_at)
+                VALUES
+                    ('70000000-0000-0000-0000-000000000003', 'sort-a2', '甲排序', '效果', '位置', '输出', '描述', NULL, 5, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                    ('70000000-0000-0000-0000-000000000002', 'sort-a', '甲排序', '效果', '位置', '输出', '描述', NULL, 5, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                    ('70000000-0000-0000-0000-000000000001', 'sort-z', '乙排序', '效果', '位置', '输出', '描述', NULL, 5, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """);
+
+        mockMvc.perform(get("/api/v1/echoes").param("pageSize", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].slug").value("sort-a"))
+                .andExpect(jsonPath("$.data[1].slug").value("sort-a2"))
+                .andExpect(jsonPath("$.data[2].slug").value("sort-z"))
+                .andExpect(jsonPath("$.data[3].slug").value("floating-stars"));
     }
 
     @Test

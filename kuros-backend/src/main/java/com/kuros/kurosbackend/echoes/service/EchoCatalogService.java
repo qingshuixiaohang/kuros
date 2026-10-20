@@ -8,6 +8,7 @@ import com.kuros.kurosbackend.shared.api.PageResult;
 import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,7 +30,8 @@ public class EchoCatalogService {
     public PageResult<EchoResponse> findVisible(int page, int pageSize, String role) {
         int safePage = Math.max(page, 1);
         int safeSize = Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE);
-        Pageable pageable = PageRequest.of(safePage - 1, safeSize);
+        Pageable pageable = PageRequest.of(safePage - 1, safeSize,
+                Sort.by(Sort.Order.asc("sortOrder"), Sort.Order.asc("name"), Sort.Order.asc("id")));
 
         var result = role == null || role.isBlank()
                 ? repository.findByEnabledTrue(pageable)

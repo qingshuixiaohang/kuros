@@ -64,6 +64,7 @@ test("同人列表按 API 分类展示作品并链接到对应帖子详情", asy
     });
   });
   await page.route("**/api/v1/posts/creation-1", (route) => route.fulfill({ json: { data: posts[0] } }));
+  await page.route("**/api/v1/posts/creation-2", (route) => route.fulfill({ json: { data: posts[1] } }));
 
   await page.goto("/creations");
 
@@ -75,9 +76,9 @@ test("同人列表按 API 分类展示作品并链接到对应帖子详情", asy
   const imageSrc = await list.getByRole("img", { name: "API 星炬插画创作预览" }).getAttribute("src");
   expect(new URL(imageSrc!, "http://localhost").searchParams.get("url")).toBe("/art/修-守岸人 唤取动画.webp");
   await expect(list.getByText("API 配队攻略")).toHaveCount(0);
-  await list.getByRole("link", { name: /API 星炬插画/ }).click();
-  await expect(page).toHaveURL(/\/guides\/creation-1$/);
-  await expect(page.getByRole("heading", { level: 1, name: "API 星炬插画" })).toBeVisible();
+  await list.getByRole("link", { name: /API 无配图短篇/ }).click();
+  await expect(page).toHaveURL(/\/guides\/creation-2$/);
+  await expect(page.getByRole("heading", { level: 1, name: "API 无配图短篇" })).toBeVisible();
   expect(new URL(requestedUrl).searchParams.get("category")).toBe("同人");
   expect(new URL(requestedUrl).searchParams.get("page")).toBe("1");
   expect(new URL(requestedUrl).searchParams.get("pageSize")).toBe("20");
