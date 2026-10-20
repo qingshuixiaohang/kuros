@@ -9,8 +9,8 @@
 
 - 前端 H-9 的 tools、creations 页面已完成真 API 接入；news、echoes、characters 也已接真实 API。依据学习复盘 #18、#19 与后续社区拆分复盘。
 - Batch A–E 中的安全、缓存/锁、读路径、测试基线和前端 mutation 核心项已有后续实现记录（学习复盘 #15–#22）；逐项结论应以复盘与当前代码为准。
-- B3 定期互动计数校准正通过 [PR #140](https://github.com/qingshuixiaohang/kuros/pull/140) 实现，关联 [Issue #139](https://github.com/qingshuixiaohang/kuros/issues/139)。PR 已推送，尚未合并；GitHub Actions 是手动触发，目前该提交尚无 CI run。
-- 本机针对该切片的定向单测 5/5、后端 `test-compile` 通过；Testcontainers 集成测试被 `UserDirectoryStub` 的 JDK loopback pipe 初始化阻断，未进入 Docker。不得把它记录成集成测试通过。
+- B3 定期互动计数校准正通过 [PR #140](https://github.com/qingshuixiaohang/kuros/pull/140) 实现，关联 [Issue #139](https://github.com/qingshuixiaohang/kuros/issues/139)。PR 已推送，尚未合并；CI 手动 run `39408664347` 已结束失败：前端、Gateway 通过，Backend 与 Compose 因重复 V10 migration 失败，已顺延至 V15；user service 因 Maven Central 未能下载 Maven 3.9.16 失败。修复提交需重跑全量 CI。
+- 本机针对该切片的定向单测 5/5、后端 `test-compile` 通过；Testcontainers 集成测试被 `UserDirectoryStub` 的 JDK loopback pipe 初始化阻断，未进入 Docker。CI 的首次 Compose 启动确认 duplicate V10 migration；另一 user service job 因 Maven Central 未能下载 Maven 3.9.16 失败，需修复后重跑确认。不得把集成验证记录为通过。
 - 有明确记录但仍延期的架构方向：Feed 高粉作者推拉混合（复盘 #15）。Batch F 的 M14/M15 与 tracing/logback 项需要基于当前代码重新核验，不能直接沿用下方旧审计表当作未修复结论。
 - 当前不宣称项目 100% 完成。先完成 PR #140 的 CI/合并，再对上述延期项逐项确认是否仍适用、是否进入正式范围；只有所有已确认的范围项验收关闭后才更新为完成。
 

@@ -20,6 +20,7 @@
 - `mvnw -Dtest=InteractionCountReconciliationJobTest,DistributedLockOwnershipTest test`：5/5 通过。
 - `mvnw -DskipTests test-compile`：通过。
 - `InteractionCountReconcileIntegrationTest` 的分页修复、异步投影等待和 ABA 集成用例已编译；本机执行被既有 `UserDirectoryStub` 静态初始化中的 JDK loopback pipe 限制阻断，尚未进入 Testcontainers。提权后 Docker Desktop 可访问（29.8.2），该失败与 Docker 镜像或 daemon 无关；CI 需运行这些集成用例。
+- 首次全量 CI run `39408664347` 在 Compose 启动时发现两个版本为 V10 的迁移：既有 `V10__drop_user_domain_tables.sql` 与本次新增迁移冲突。新列迁移顺延到 V15；修复后的 CI 尚待重跑。另一个 user service job 因 Maven Central 下载 Maven 3.9.16 失败，与本次改动无关。
 
 ## 复盘
 
@@ -27,3 +28,4 @@
 - 计数值本身不能充当并发版本；ABA 变化会让值比较 CAS 误判为无变化。新增公共版本字段时，需要让所有写路径推进它，并防止普通 ORM 保存覆盖它。
 - 看门狗续期返回失败和抛出异常都代表任务不能继续假设持有互斥。长任务应接收 ownership 信号，并在安全边界停止。
 - Docker 预检要区分 CLI 对 Docker Desktop 命名管道的访问权限与 daemon 是否启动；本机 Loopback 限制则应从 Testcontainers 前置桩的启动栈中确认。
+- 不能只按 migration 目录中已知的主序列分配版本；服务拆分留下的迁移也占用全局版本号。提交前应对完整迁移目录检查重复版本，并以应用启动/Compose CI 验证 packaged artifact 的最终迁移解析。
