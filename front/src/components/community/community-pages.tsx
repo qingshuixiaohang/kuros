@@ -49,7 +49,9 @@ function FrameContent({ children, query, onQueryChange, hideSidebar = false, hid
       )}
       <div className={"page-grid " + (hideSidebar && hideRail ? "page-grid--focused" : "")}>
         {!hideSidebar && <Sidebar />}
-        <div className="main-column page-content">{children}</div>
+        <div className="main-column page-content" id="main-content" tabIndex={-1}>
+          {children}
+        </div>
         {!hideRail && <RightRail />}
       </div>
     </main>
