@@ -42,3 +42,4 @@
 | — | [22-community-channel-drawer.md](./22-community-channel-drawer.md) | 前端导航复用：让首页与子页面共用频道抽屉和焦点生命周期 |
 | — | [23-minio-ci-compose.md](./23-minio-ci-compose.md) | MinIO 源码构建、Compose/Testcontainers 共用镜像与 user dev profile 全栈验收 |
 | — | [24-periodic-interaction-count-reconciliation.md](./24-periodic-interaction-count-reconciliation.md) | 定期校准数据库互动计数：保留 Redis 实时值、版本条件写、keyset 扫描与锁丢失停止 |
+| — | [25-post-interaction-read-boundary.md](./25-post-interaction-read-boundary.md) | 帖子详情互动计数读端口：解除 post→interaction 具体实现依赖，并保留惰性数据库基线与实时计数语义 |

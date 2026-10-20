@@ -19,8 +19,6 @@ import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.media.repository.MediaAssetRepository;
 import com.kuros.kurosbackend.post.repository.PostMediaRepository;
-import com.kuros.kurosbackend.interaction.event.InteractionKind;
-import com.kuros.kurosbackend.interaction.redis.InteractionRedisStore;
 import com.kuros.kurosbackend.user.client.UserBriefDto;
 import com.kuros.kurosbackend.user.client.UserDirectoryFacade;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,7 +52,7 @@ public class CommunityPostService {
     private final MediaAssetRepository mediaAssetRepository;
     private final UserDirectoryFacade userDirectory;
     private final TwoLevelCache twoLevelCache;
-    private final InteractionRedisStore interactionRedisStore;
+    private final PostInteractionCountReader interactionCountReader;
     private final String publicBaseUrl;
 
     public CommunityPostService(
@@ -63,7 +61,7 @@ public class CommunityPostService {
             MediaAssetRepository mediaAssetRepository,
             UserDirectoryFacade userDirectory,
             TwoLevelCache twoLevelCache,
-            InteractionRedisStore interactionRedisStore,
+            PostInteractionCountReader interactionCountReader,
             @Value("${app.storage.public-base-url:http://localhost:8080}") String publicBaseUrl
     ) {
         this.postRepository = postRepository;
@@ -71,7 +69,7 @@ public class CommunityPostService {
         this.mediaAssetRepository = mediaAssetRepository;
         this.userDirectory = userDirectory;
         this.twoLevelCache = twoLevelCache;
-        this.interactionRedisStore = interactionRedisStore;
+        this.interactionCountReader = interactionCountReader;
         this.publicBaseUrl = publicBaseUrl.replaceAll("/$", "");
     }
 
@@ -143,11 +141,10 @@ public class CommunityPostService {
         }
 
         // 计数解耦：不进缓存，每次从 #11 实时 Redis 源读；Redis 计数键 miss 时用 DB 冗余列回填基线
-        long likeCount = interactionRedisStore.readCount(InteractionKind.LIKE, id,
-                () -> { CommunityPost p = lazyPost.get(); return p == null ? 0L : p.getLikeCount(); });
-        long favoriteCount = interactionRedisStore.readCount(InteractionKind.FAVORITE, id,
+        PostInteractionCounts counts = interactionCountReader.readForPost(id,
+                () -> { CommunityPost p = lazyPost.get(); return p == null ? 0L : p.getLikeCount(); },
                 () -> { CommunityPost p = lazyPost.get(); return p == null ? 0L : p.getFavoriteCount(); });
-        return assembleDetail(content, likeCount, favoriteCount);
+        return assembleDetail(content, counts.likeCount(), counts.favoriteCount());
     }
 
     /**
