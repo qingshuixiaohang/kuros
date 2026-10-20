@@ -119,7 +119,9 @@ test("帖子详情可以渲染混合 Markdown，并且不为无标题正文生�
 });
 
 test("帖子详情的无标题正文不生成失效目录", async ({ page }) => {
-  await page.route("**/api/v1/posts/plain-markdown-no-heading**", async (route) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await page.route("**/api/v1/posts/plain-markdown-no-heading", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -145,4 +147,5 @@ test("帖子详情的无标题正文不生成失效目录", async ({ page }) => 
   await page.goto("/guides/plain-markdown-no-heading");
   await expect(page.locator(".post-detail-body strong").filter({ hasText: "重点" })).toHaveCount(1);
   await expect(page.locator(".post-outline")).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
 });
