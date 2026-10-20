@@ -28,20 +28,23 @@ for (const route of coreRoutes) {
   }
 }
 
-test("窄桌面频道抽屉可以用键盘打开并关闭", async ({ page }) => {
+test("首页和子页面的窄桌面频道抽屉都可用键盘打开并关闭", async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 900 });
-  await page.goto("/guides");
 
-  const openButton = page.getByRole("button", { name: "打开导航" });
-  await openButton.focus();
-  await page.keyboard.press("Enter");
-  await expect(page.locator(".drawer-sidebar")).toBeVisible();
-  await expect(page.getByRole("dialog", { name: "社区频道" }).getByRole("button", { name: "关闭导航" })).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect.poll(() => page.evaluate(() => Boolean(document.activeElement?.closest(".mobile-drawer")))).toBe(true);
-  await page.keyboard.press("Escape");
-  await expect(page.locator(".drawer-sidebar")).toBeHidden();
-  await expect(openButton).toBeFocused();
+  for (const path of ["/", "/guides"]) {
+    await page.goto(path);
+
+    const openButton = page.getByRole("button", { name: "打开导航" });
+    await openButton.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".drawer-sidebar")).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "社区频道" }).getByRole("button", { name: "关闭导航" })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect.poll(() => page.evaluate(() => Boolean(document.activeElement?.closest(".mobile-drawer")))).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".drawer-sidebar")).toBeHidden();
+    await expect(openButton).toBeFocused();
+  }
 });
 
 test("侧栏承载全部频道入口（图鉴/工具箱从顶栏并入后可达）", async ({ page }) => {
