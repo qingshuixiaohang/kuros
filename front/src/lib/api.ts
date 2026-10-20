@@ -238,6 +238,36 @@ export async function fetchNews(slug: string) {
   return envelope?.data;
 }
 
+export type ApiEchoSet = {
+  id: string;
+  slug: string;
+  name: string;
+  effect: string;
+  location: string;
+  role: string;
+  description: string;
+  /** 关联攻略 slug；未关联时为 null——前端据此决定是否渲染攻略按钮 */
+  guideSlug: string | null;
+};
+
+/**
+ * 声骸列表（前端审计 H-9）。此前读 mock.ts 的 echoSets 硬编码数组，
+ * 改声骸数据要改前端代码发版；现在由后端维护。
+ */
+export async function fetchEchoPage(options: { role?: string; page?: number; pageSize?: number } = {}) {
+  const params = new URLSearchParams();
+  params.set("page", String(options.page ?? 1));
+  params.set("pageSize", String(options.pageSize ?? 20));
+  if (options.role) params.set("role", options.role);
+  const envelope = await requestEnvelope<ApiEchoSet[]>("/api/v1/echoes?" + params.toString());
+  return { items: envelope?.data ?? [], meta: envelope?.meta };
+}
+
+export async function fetchEchoSet(slug: string) {
+  const envelope = await requestEnvelope<ApiEchoSet>("/api/v1/echoes/" + encodeURIComponent(slug));
+  return envelope?.data;
+}
+
 export function fetchCharacter(slug: string) {
   return request<ApiCharacter>("/api/v1/characters/" + encodeURIComponent(slug));
 }

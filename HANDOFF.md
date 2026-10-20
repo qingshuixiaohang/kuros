@@ -44,7 +44,7 @@
 
 ### 技术栈
 - **后端**：Spring Boot 4.1.1 + Java 21 + Maven；Spring Cloud 2025.1.1 + SCA 2025.1.0.0
-- **前端**：Next.js 15 + TypeScript
+- **前端**：Next.js 16.3.5 + React 19.2.8 + TypeScript + react-query 5（2026-10-15 从 node_modules 核实，此前记的 15/19 均不准）
 - **存储**：MySQL 8 + Flyway 迁移 + Redis 7 + MinIO
 - **治理**：Nacos（注册/配置）、Sentinel（限流）、Gateway（统一入口）、SaToken 1.39（认证）
 - **测试**：JUnit 5 + Testcontainers 2.0.5 + Playwright
@@ -107,8 +107,11 @@ gateway 8080（正门，前端/冒烟唯一入口）/ backend 8090 / user 8091�
 - 集成测试：MySQL/Nacos 固定端口容器（28848 / 29848）
 - 跨服务测试（#10 起）：JDK HttpServer 桩 + Feign `url` 属性直连（双接缝）
 
-### 前端（Playwright）
-68 个 e2e（登录、发帖、评论、上传、UI 回归），对着 compose 容器跑。
+### 前端（Playwright + vitest）
+> 2026-10-15 更新：e2e 已从 68 例增至 **106 例 / 13 spec**（新增 write-read-consistency、
+> home-feed-request-count、search、following-feed、news、echoes、character-catalog 等）；
+> 另有 vitest 单测层 39 例 / 4 文件（纯函数与映射层）。测试全部自给自足——
+> `page.route` mock 掉后端，不依赖后端是否在跑（这个改造的来龙去脉见 docs/learning/17）。
 
 ### 全栈验证
 - `scripts/compose-smoke.mjs`：三服务 Nacos 注册校验 → 网关登录（kuros-user 写共享 Redis）→ `/auth/me` 取权威身份 → 关注 → 发帖（backend 读同一会话）→ **详情作者昵称经 Feign 回填断言（跨服务端到端）** → 评论 → 传图 → 持久化
