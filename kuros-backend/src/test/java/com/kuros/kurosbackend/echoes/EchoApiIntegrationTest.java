@@ -2,6 +2,7 @@ package com.kuros.kurosbackend.echoes;
 
 import com.kuros.kurosbackend.TestDatabases;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -42,6 +43,11 @@ class EchoApiIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @BeforeEach
+    void 清理排序测试夹具() {
+        jdbcTemplate.update("DELETE FROM echo_sets WHERE id LIKE '70000000-%'");
+    }
+
     @Test
     void 游客可读声骸列表且只返回已上线条目() throws Exception {
         mockMvc.perform(get("/api/v1/echoes"))
@@ -58,9 +64,9 @@ class EchoApiIntegrationTest {
                 INSERT INTO echo_sets
                     (id, slug, name, effect, location, role, description, guide_slug, sort_order, enabled, created_at, updated_at)
                 VALUES
-                    ('70000000-0000-0000-0000-000000000003', 'sort-a2', '甲排序', '效果', '位置', '输出', '描述', NULL, 5, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-                    ('70000000-0000-0000-0000-000000000002', 'sort-a', '甲排序', '效果', '位置', '输出', '描述', NULL, 5, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-                    ('70000000-0000-0000-0000-000000000001', 'sort-z', '乙排序', '效果', '位置', '输出', '描述', NULL, 5, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ('70000000-0000-0000-0000-000000000003', 'sort-a2', 'Alpha', '效果', '位置', '输出', '描述', NULL, 5, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                    ('70000000-0000-0000-0000-000000000002', 'sort-a', 'Alpha', '效果', '位置', '输出', '描述', NULL, 5, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                    ('70000000-0000-0000-0000-000000000001', 'sort-z', 'Beta', '效果', '位置', '输出', '描述', NULL, 5, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """);
 
         mockMvc.perform(get("/api/v1/echoes").param("pageSize", "10"))
