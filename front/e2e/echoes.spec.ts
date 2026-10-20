@@ -82,23 +82,82 @@ test("声骸列表展示后端返回的套装", async ({ page }) => {
   await expect(page.getByText("已收录 4 套")).toBeVisible();
 });
 
+test("声骸列表加载和空结果消息作为 status 播报", async ({ page }) => {
+  let releaseResponse!: () => void;
+  const responseGate = new Promise<void>((resolve) => {
+    releaseResponse = resolve;
+  });
+  await page.route("**/api/v1/echoes**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() !== "GET" || url.pathname !== "/api/v1/echoes") {
+      await route.continue();
+      return;
+    }
+
+    await responseGate;
+    await route.fulfill({ json: { ...ECHO_LIST, data: [], meta: { ...ECHO_LIST.meta, totalItems: 0 } } });
+  });
+
+  await page.goto("/echoes");
+  const status = page.getByRole("status");
+  await expect(status).toHaveText("正在整理声骸图鉴…");
+  releaseResponse();
+  await expect(status).toHaveText("没有找到匹配的声骸。");
+});
+
+test("声骸列表加载失败消息作为 status 播报", async ({ page }) => {
+  await page.route("**/api/v1/echoes**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() !== "GET" || url.pathname !== "/api/v1/echoes") {
+      await route.continue();
+      return;
+    }
+
+    await route.fulfill({ status: 500, body: "boom" });
+  });
+
+  await page.goto("/echoes");
+  await expect(page.getByRole("status")).toHaveText("声骸图鉴加载失败，请稍后重试。", { timeout: 15_000 });
+});
+
 test("声骸列表视角 tab 只换显示列，不过滤数据", async ({ page }) => {
   await mockEchoes(page);
   await page.goto("/echoes");
   const list = page.locator(".echo-table");
-  await expect(list.getByText("浮星祛暗")).toBeVisible();
+  const modeGroup = page.getByRole("group", { name: "声骸展示视角" });
+  await expect(modeGroup).toBeVisible();
+  const modeButtons = modeGroup.getByRole("button");
+  const initialStates = await modeButtons.evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-pressed")));
+  expect(initialStates.every((state) => state === "true" || state === "false")).toBe(true);
+  expect(initialStates.filter((state) => state === "true")).toHaveLength(1);
+  await expect(modeGroup.getByRole("button", { name: "套装" })).toHaveAttribute("aria-pressed", "true");
+  const rows = list.locator(".echo-row");
+  await expect(rows.locator("strong")).toHaveText(["浮星祛暗", "彻空冥雷", "轻云出月", "隐世回光"]);
+  await expect(list.locator(".echo-table-head span").nth(1)).toHaveText("两件套效果");
+  await expect(rows.first().locator("p").first()).toHaveText("湮灭伤害提升");
 
   // 三个 tab 是「视角」不是「过滤」：切 tab 只改第二列显示 effect 还是 location，
   // 数据行不变。mock 时代就是这个语义（只切 mode），接真 API 后刻意保留——
   // 加 role 过滤属于新功能不是 H-9 的范围。这条用例钉住语义别漂。
-  await page.getByRole("button", { name: "掉落位置" }).click();
-  await expect(list.getByText("浮星祛暗")).toBeVisible();
-  await expect(list.getByText("彻空冥雷")).toBeVisible();
-  await expect(list.getByText("轻云出月")).toBeVisible();
+  await modeGroup.getByRole("button", { name: "掉落位置" }).click();
+  const locationStates = await modeButtons.evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-pressed")));
+  expect(locationStates.every((state) => state === "true" || state === "false")).toBe(true);
+  expect(locationStates.filter((state) => state === "true")).toHaveLength(1);
+  await expect(modeGroup.getByRole("button", { name: "掉落位置" })).toHaveAttribute("aria-pressed", "true");
+  await expect(rows.locator("strong")).toHaveText(["浮星祛暗", "彻空冥雷", "轻云出月", "隐世回光"]);
+  await expect(list.locator(".echo-table-head span").nth(1)).toHaveText("推荐掉落区域");
+  await expect(rows.first().locator("p").first()).toHaveText("荒石高地 / 无音区");
 
-  await page.getByRole("button", { name: "单体声骸" }).click();
-  await expect(list.getByText("浮星祛暗")).toBeVisible();
-  await expect(list.getByText("彻空冥雷")).toBeVisible();
+  await modeGroup.getByRole("button", { name: "单体声骸" }).click();
+  const individualStates = await modeButtons.evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-pressed")));
+  expect(individualStates.every((state) => state === "true" || state === "false")).toBe(true);
+  expect(individualStates.filter((state) => state === "true")).toHaveLength(1);
+  await expect(modeGroup.getByRole("button", { name: "单体声骸" })).toHaveAttribute("aria-pressed", "true");
+  await expect(rows.locator("strong")).toHaveText(["浮星祛暗", "彻空冥雷", "轻云出月", "隐世回光"]);
+  await expect(list.locator(".echo-table-head span").nth(1)).toHaveText("两件套效果");
+  await expect(rows.first().locator("p").first()).toHaveText("湮灭伤害提升");
 });
 
 test("声骸搜索框按名称/效果/位置本地过滤", async ({ page }) => {

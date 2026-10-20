@@ -29,9 +29,9 @@ export function EchoesPage() {
         }
       />
       <div className="echo-toolbar">
-        <div>
+        <div aria-label="声骸展示视角" role="group">
           {VIEW_TABS.map((item) => (
-            <button className={mode === item ? "is-active" : ""} key={item} onClick={() => setMode(item)} type="button">
+            <button aria-pressed={mode === item} className={mode === item ? "is-active" : ""} key={item} onClick={() => setMode(item)} type="button">
               {item}
             </button>
           ))}
@@ -45,9 +45,21 @@ export function EchoesPage() {
           <span>推荐掉落区域</span>
           <span>操作</span>
         </div>
-        {echoesQuery.isPending ? <p className="admin-empty">正在整理声骸图鉴…</p> : null}
-        {echoesQuery.isError ? <p className="admin-empty">声骸图鉴加载失败，请稍后重试。</p> : null}
-        {!echoesQuery.isPending && !echoesQuery.isError && visible.length === 0 ? <p className="admin-empty">没有找到匹配的声骸。</p> : null}
+        {echoesQuery.isPending ? (
+          <p className="admin-empty" role="status">
+            正在整理声骸图鉴…
+          </p>
+        ) : null}
+        {echoesQuery.isError ? (
+          <p className="admin-empty" role="status">
+            声骸图鉴加载失败，请稍后重试。
+          </p>
+        ) : null}
+        {!echoesQuery.isPending && !echoesQuery.isError && visible.length === 0 ? (
+          <p className="admin-empty" role="status">
+            没有找到匹配的声骸。
+          </p>
+        ) : null}
         {visible.map((item) => (
           <div className="echo-row" key={item.id}>
             <div>
