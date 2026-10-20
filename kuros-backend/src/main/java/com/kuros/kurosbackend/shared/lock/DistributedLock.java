@@ -10,6 +10,9 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -125,10 +128,18 @@ public class DistributedLock {
      * @return action 的返回值；未抢到锁时返回 null
      */
     public <T> T withLock(String key, int ttlSeconds, Supplier<T> action) {
+        return withLockWhileOwned(key, ttlSeconds, ignored -> action.get());
+    }
+
+    /**
+     * Executes an action that can stop work at safe boundaries if the watchdog loses ownership.
+     */
+    public <T> T withLockWhileOwned(String key, int ttlSeconds, Function<BooleanSupplier, T> action) {
         String value = tryLock(key, ttlSeconds);
         if (value == null) {
             return null;
         }
+        AtomicBoolean owned = new AtomicBoolean(true);
         long intervalMillis = Math.max(100L, ttlSeconds * 1000L / 3);
         ScheduledExecutorService watchdog = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, "distributed-lock-watchdog");
@@ -138,17 +149,16 @@ public class DistributedLock {
         watchdog.scheduleAtFixedRate(() -> {
             try {
                 if (!renew(key, value, ttlSeconds)) {
-                    // 锁已丢失（过期被他人抢到，或已被释放）——继续跑业务只会
-                    // 在没有互斥保护的情况下执行，此时应尽快收尾
+                    owned.set(false);
                     watchdog.shutdownNow();
                 }
             } catch (RuntimeException ignored) {
-                // 续期失败不中断业务：锁可能仍在（只是这次续期没成功），
-                // 由下一次续期或 finally 的 unlock 收场
+                owned.set(false);
+                watchdog.shutdownNow();
             }
         }, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
         try {
-            return action.get();
+            return action.apply(owned::get);
         } finally {
             watchdog.shutdownNow();
             unlock(key, value);

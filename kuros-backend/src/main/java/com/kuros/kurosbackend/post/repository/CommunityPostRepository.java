@@ -139,17 +139,22 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, St
 
     Page<CommunityPost> findByAuthorIdAndStatus(String authorId, PostStatus status, Pageable pageable);
 
+    @Query("select p.id from CommunityPost p where p.status = :status and p.id > :afterId order by p.id asc")
+    List<String> findPublishedIdsAfter(@Param("status") PostStatus status,
+                                       @Param("afterId") String afterId,
+                                       Pageable pageable);
+
     long countByAuthorIdAndStatus(String authorId, PostStatus status);
 
     @Query("select coalesce(sum(p.likeCount), 0) from CommunityPost p where p.authorId = :authorId and p.status = :status")
     long sumLikeCountByAuthorIdAndStatus(@Param("authorId") String authorId, @Param("status") PostStatus status);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("update CommunityPost p set p.likeCount = p.likeCount + 1 where p.id = :postId")
+    @Query("update CommunityPost p set p.likeCount = p.likeCount + 1, p.interactionCountVersion = p.interactionCountVersion + 1 where p.id = :postId")
     int incrementLikeCount(@Param("postId") String postId);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("update CommunityPost p set p.likeCount = case when p.likeCount > 0 then p.likeCount - 1 else 0 end where p.id = :postId")
+    @Query("update CommunityPost p set p.likeCount = case when p.likeCount > 0 then p.likeCount - 1 else 0 end, p.interactionCountVersion = p.interactionCountVersion + 1 where p.id = :postId")
     int decrementLikeCount(@Param("postId") String postId);
 
     /**
@@ -160,19 +165,31 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, St
      * 用关系表 COUNT(*) 重算出的绝对值才能把它拉回真相。
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("update CommunityPost p set p.likeCount = :count where p.id = :postId")
+    @Query("update CommunityPost p set p.likeCount = :count, p.interactionCountVersion = p.interactionCountVersion + 1 where p.id = :postId")
     int updateLikeCount(@Param("postId") String postId, @Param("count") long count);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("update CommunityPost p set p.favoriteCount = p.favoriteCount + 1 where p.id = :postId")
+    @Query("update CommunityPost p set p.likeCount = :count, p.interactionCountVersion = p.interactionCountVersion + 1 where p.id = :postId and p.interactionCountVersion = :expectedVersion")
+    int updateLikeCountIfVersion(@Param("postId") String postId,
+                                 @Param("expectedVersion") long expectedVersion,
+                                 @Param("count") long count);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update CommunityPost p set p.favoriteCount = p.favoriteCount + 1, p.interactionCountVersion = p.interactionCountVersion + 1 where p.id = :postId")
     int incrementFavoriteCount(@Param("postId") String postId);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("update CommunityPost p set p.favoriteCount = case when p.favoriteCount > 0 then p.favoriteCount - 1 else 0 end where p.id = :postId")
+    @Query("update CommunityPost p set p.favoriteCount = case when p.favoriteCount > 0 then p.favoriteCount - 1 else 0 end, p.interactionCountVersion = p.interactionCountVersion + 1 where p.id = :postId")
     int decrementFavoriteCount(@Param("postId") String postId);
 
     /** 把收藏计数直接设为指定值（审计 M5 / B3：对账修正冗余列）。 */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("update CommunityPost p set p.favoriteCount = :count where p.id = :postId")
+    @Query("update CommunityPost p set p.favoriteCount = :count, p.interactionCountVersion = p.interactionCountVersion + 1 where p.id = :postId")
     int updateFavoriteCount(@Param("postId") String postId, @Param("count") long count);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update CommunityPost p set p.favoriteCount = :count, p.interactionCountVersion = p.interactionCountVersion + 1 where p.id = :postId and p.interactionCountVersion = :expectedVersion")
+    int updateFavoriteCountIfVersion(@Param("postId") String postId,
+                                     @Param("expectedVersion") long expectedVersion,
+                                     @Param("count") long count);
 }

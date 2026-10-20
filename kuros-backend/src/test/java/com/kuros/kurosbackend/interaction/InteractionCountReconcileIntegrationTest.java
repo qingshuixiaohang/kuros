@@ -2,6 +2,7 @@ package com.kuros.kurosbackend.interaction;
 
 import com.kuros.kurosbackend.TestDatabases;
 import com.kuros.kurosbackend.UserDirectoryStub;
+import com.kuros.kurosbackend.interaction.domain.PostLike;
 import com.kuros.kurosbackend.interaction.event.InteractionEvent;
 import com.kuros.kurosbackend.interaction.event.InteractionKind;
 import com.kuros.kurosbackend.interaction.event.InteractionType;
@@ -9,9 +10,12 @@ import com.kuros.kurosbackend.interaction.redis.InteractionRedisStore;
 import com.kuros.kurosbackend.interaction.repository.PostFavoriteRepository;
 import com.kuros.kurosbackend.interaction.repository.PostLikeRepository;
 import com.kuros.kurosbackend.interaction.service.InteractionCountReconciler;
+import com.kuros.kurosbackend.interaction.service.InteractionCountReconciliationJob;
 import com.kuros.kurosbackend.interaction.service.InteractionProjectionService;
+import com.kuros.kurosbackend.shared.lock.DistributedLock;
 import com.kuros.kurosbackend.post.domain.CommunityPost;
 import com.kuros.kurosbackend.post.domain.PostType;
+import com.kuros.kurosbackend.post.domain.PostStatus;
 import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,6 +32,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -64,6 +69,8 @@ class InteractionCountReconcileIntegrationTest {
         registry.add("spring.datasource.url", () -> TestDatabases.h2Url("interaction-reconcile"));
         registry.add("app.feign.kuros-user.url", userDirectory::baseUrl);
         registry.add("app.internal.token", () -> "test-internal-token");
+        registry.add("app.interaction.reconciliation.batch-size", () -> 2);
+        registry.add("app.interaction.reconciliation.initial-delay-ms", () -> 86_400_000);
     }
 
     private static final String AUTHOR_ID = "10000000-0000-0000-0000-000000000001";
@@ -75,6 +82,12 @@ class InteractionCountReconcileIntegrationTest {
 
     @Autowired
     private InteractionCountReconciler reconciler;
+
+    @Autowired
+    private InteractionCountReconciliationJob reconciliationJob;
+
+    @Autowired
+    private DistributedLock distributedLock;
 
     @Autowired
     private InteractionProjectionService projectionService;
@@ -254,5 +267,120 @@ class InteractionCountReconcileIntegrationTest {
         long afterReconcile = redisStore.readCount(InteractionKind.LIKE, postId,
                 () -> postRepository.findById(postId).orElseThrow().getLikeCount());
         assertThat(afterReconcile).isEqualTo(truth);
+    }
+
+    @Test
+    void 扫描多个批次并修复已发布帖子的互动计数() {
+        CommunityPost secondPost = createPost("第二个扫描帖");
+        CommunityPost thirdPost = createPost("第三个扫描帖");
+        seedLike(secondPost.getId(), "20000000-0000-0000-0000-000000000001");
+        seedLike(thirdPost.getId(), "20000000-0000-0000-0000-000000000002");
+        List<CommunityPost> publishedPosts = postRepository.findAll().stream()
+                .filter(post -> post.getStatus() == PostStatus.PUBLISHED)
+                .toList();
+        assertThat(publishedPosts).hasSizeGreaterThan(2);
+        for (CommunityPost post : publishedPosts) {
+            long likeTruth = likeRepository.countByPostId(post.getId());
+            long favoriteTruth = favoriteRepository.countByPostId(post.getId());
+            setRedisCounts(post.getId(), likeTruth, favoriteTruth);
+            corruptDatabaseCounts(post.getId(), 17, 19);
+        }
+
+        reconciliationJob.reconcilePublishedPosts();
+
+        assertThat(publishedPosts).extracting(CommunityPost::getId).contains(postId, secondPost.getId(), thirdPost.getId());
+        for (CommunityPost post : publishedPosts) {
+            assertCounts(post.getId(), likeRepository.countByPostId(post.getId()), favoriteRepository.countByPostId(post.getId()));
+        }
+    }
+
+    @Test
+    void 待投影互动的Redis计数不会被关系表旧快照覆盖() {
+        CommunityPost post = createPost("异步投影中的帖子");
+        String likeKey = "interaction:count:like:" + post.getId();
+        redisTemplate.opsForValue().set(likeKey, "1");
+
+        reconciliationJob.reconcilePublishedPosts();
+
+        assertThat(redisTemplate.opsForValue().get(likeKey)).isEqualTo("1");
+        assertThat(postRepository.findById(post.getId()).orElseThrow().getLikeCount()).isEqualTo(1);
+        assertThat(likeRepository.countByPostId(post.getId())).isZero();
+    }
+
+    @Test
+    void 计数经过ABA变化后旧版本对账不能覆盖投影结果() {
+        long observedVersion = postRepository.findById(postId).orElseThrow().getInteractionCountVersion();
+        projectionService.apply(InteractionEvent.of(postId, LIKER_ID, InteractionType.LIKE));
+        projectionService.apply(InteractionEvent.of(postId, LIKER_ID, InteractionType.UNLIKE));
+
+        int updated = transactionTemplate.execute(status ->
+                postRepository.updateLikeCountIfVersion(postId, observedVersion, 1));
+
+        assertThat(updated).isZero();
+        CommunityPost post = postRepository.findById(postId).orElseThrow();
+        assertThat(post.getLikeCount()).isZero();
+        assertThat(post.getInteractionCountVersion()).isGreaterThan(observedVersion);
+    }
+
+    @Test
+    void 已删除帖子不进入对账扫描() {
+        CommunityPost deleted = createPost("已删除扫描帖");
+        deleted.delete(LocalDateTime.now());
+        postRepository.save(deleted);
+        corruptCounts(deleted.getId(), 23, 29);
+
+        reconciliationJob.reconcilePublishedPosts();
+
+        assertCounts(deleted.getId(), 23, 29);
+    }
+
+    @Test
+    void 另一实例持有扫描锁时跳过本轮() {
+        corruptCounts(postId, 17, 19);
+        String lockValue = distributedLock.tryLock("lock:interaction-count-reconciliation", 30);
+        assertThat(lockValue).isNotNull();
+
+        try {
+            reconciliationJob.reconcilePublishedPosts();
+        } finally {
+            distributedLock.unlock("lock:interaction-count-reconciliation", lockValue);
+        }
+
+        assertCounts(postId, 17, 19);
+    }
+
+    private CommunityPost createPost(String title) {
+        return postRepository.save(CommunityPost.publish(
+                AUTHOR_ID, PostType.GUIDE, "配队攻略", title, "摘要", "正文", LocalDateTime.now()));
+    }
+
+    private void seedLike(String targetPostId, String userId) {
+        likeRepository.save(new PostLike(userId, targetPostId, LocalDateTime.now()));
+    }
+
+    private void corruptCounts(String targetPostId, long likeCount, long favoriteCount) {
+        corruptDatabaseCounts(targetPostId, likeCount, favoriteCount);
+        setRedisCounts(targetPostId, likeCount, favoriteCount);
+    }
+
+    private void corruptDatabaseCounts(String targetPostId, long likeCount, long favoriteCount) {
+        transactionTemplate.executeWithoutResult(status -> {
+            postRepository.updateLikeCount(targetPostId, likeCount);
+            postRepository.updateFavoriteCount(targetPostId, favoriteCount);
+        });
+    }
+
+    private void setRedisCounts(String targetPostId, long likeCount, long favoriteCount) {
+        redisTemplate.opsForValue().set("interaction:count:like:" + targetPostId, Long.toString(likeCount));
+        redisTemplate.opsForValue().set("interaction:count:favorite:" + targetPostId, Long.toString(favoriteCount));
+    }
+
+    private void assertCounts(String targetPostId, long likeCount, long favoriteCount) {
+        assertThat(postRepository.findById(targetPostId).orElseThrow().getLikeCount()).isEqualTo(likeCount);
+        assertThat(postRepository.findById(targetPostId).orElseThrow().getFavoriteCount()).isEqualTo(favoriteCount);
+        assertThat(redisTemplate.opsForValue().get("interaction:count:like:" + targetPostId))
+                .isEqualTo(Long.toString(likeCount));
+        assertThat(redisTemplate.opsForValue().get("interaction:count:favorite:" + targetPostId))
+                .isEqualTo(Long.toString(favoriteCount));
     }
 }
