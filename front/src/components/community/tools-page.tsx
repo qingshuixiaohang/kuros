@@ -3,8 +3,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { CommunityPageFrame, PageHeader } from "@/components/community/community-pages";
-import { characters, toolItems } from "@/lib/mock";
+import { fetchCharacterPage, type ApiCharacter } from "@/lib/api";
+import { toolItems } from "@/lib/mock";
 
 export function ToolsPage() {
   return (
@@ -39,6 +41,13 @@ export function ToolDetailPage({ slug }: { slug: string }) {
   const [level, setLevel] = useState(1);
   const [weapon, setWeapon] = useState(1);
   const [members, setMembers] = useState<string[]>([]);
+  const teamCharacters = useQuery({
+    queryKey: ["team-builder-characters"],
+    queryFn: () => fetchCharacterPage({ pageSize: 50 }),
+    enabled: slug === "team-builder",
+    retry: false,
+  });
+  const characters: ApiCharacter[] = teamCharacters.data?.items ?? [];
   if (!tool)
     return (
       <CommunityPageFrame activeNav="tools">
@@ -77,12 +86,29 @@ export function ToolDetailPage({ slug }: { slug: string }) {
               ))}
             </div>
             <div className="tool-choice-list">
-              {characters.map((item) => (
-                <button className={members.includes(item.id) ? "is-active" : ""} key={item.id} onClick={() => toggleMember(item.id)} type="button">
-                  {item.name}
-                  <small>{item.role}</small>
-                </button>
-              ))}
+              {teamCharacters.isPending ? (
+                <p className="tool-result" role="status">
+                  角色列表加载中…
+                </p>
+              ) : teamCharacters.isError ? (
+                <div className="tool-result" role="alert">
+                  <p>角色资料暂时无法加载，请检查后端服务。</p>
+                  <button className="secondary-button" onClick={() => void teamCharacters.refetch()} type="button">
+                    重试
+                  </button>
+                </div>
+              ) : characters.length === 0 ? (
+                <p className="tool-result" role="status">
+                  暂无可用于配队的角色。
+                </p>
+              ) : (
+                characters.map((item) => (
+                  <button className={members.includes(item.id) ? "is-active" : ""} key={item.id} onClick={() => toggleMember(item.id)} type="button">
+                    {item.name}
+                    <small>{item.role}</small>
+                  </button>
+                ))
+              )}
             </div>
             <p className="tool-result">
               {members.length ? "当前队伍已记录 " + members.length + " 位角色。Demo 版用于梳理轮切思路。" : "从下方选择至多三位角色，开始构建队伍。"}
