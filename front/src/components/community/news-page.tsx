@@ -28,15 +28,19 @@ export function NewsPage() {
           </button>
         }
       />
-      <div className="news-page-tabs">
+      <div aria-label="资讯分类筛选" className="news-page-tabs" role="group">
         {tabs.map((item) => (
-          <button className={category === item ? "is-active" : ""} key={item} onClick={() => setCategory(item)} type="button">
+          <button aria-pressed={category === item} className={category === item ? "is-active" : ""} key={item} onClick={() => setCategory(item)} type="button">
             {item}
           </button>
         ))}
       </div>
       <section className="news-page-list">
-        {newsQuery.isPending ? <p className="admin-empty">正在整理资讯…</p> : null}
+        {newsQuery.isPending ? (
+          <p className="admin-empty" role="status">
+            正在整理资讯…
+          </p>
+        ) : null}
         {newsQuery.isError ? <p className="admin-empty">资讯加载失败，请稍后重试。</p> : null}
         {!newsQuery.isPending && !newsQuery.isError && visible.length === 0 ? <p className="admin-empty">当前分类下没有资讯。</p> : null}
         {visible.map((item) => (
