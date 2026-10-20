@@ -1,10 +1,10 @@
 "use client";
 import Link from "next/link";
-import { ChevronRight, Eye, Heart, MessageSquare, MoveRight, X } from "lucide-react";
+import { ChevronRight, Eye, Heart, MessageSquare, MoveRight } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { HighlightText } from "@/components/community/search-highlight";
-import { RightRail } from "@/components/community/community-home";
-import { Sidebar, TopNavigation, useCommunityDrawer } from "@/components/community/community-navigation";
+import { RightRail } from "@/components/community/community-right-rail";
+import { CommunityChannelDrawer, Sidebar, TopNavigation } from "@/components/community/community-navigation";
 import { guides } from "@/lib/mock";
 
 /**
@@ -31,23 +31,10 @@ function FrameContent({ children, query, onQueryChange, hideSidebar = false, hid
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [localQuery, setLocalQuery] = useState("");
   const value = query ?? localQuery;
-  const { drawerCloseRef, drawerRef } = useCommunityDrawer(drawerOpen, setDrawerOpen);
   return (
     <main className="app-shell">
       <TopNavigation query={value} onQueryChange={onQueryChange ?? setLocalQuery} onMenu={() => setDrawerOpen(true)} />
-      {drawerOpen && (
-        <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)}>
-          <div aria-label="社区频道" aria-modal="true" className="mobile-drawer" onClick={(event) => event.stopPropagation()} ref={drawerRef} role="dialog">
-            <div className="drawer-header">
-              <span>频道</span>
-              <button onClick={() => setDrawerOpen(false)} ref={drawerCloseRef} type="button" aria-label="关闭导航">
-                <X size={20} />
-              </button>
-            </div>
-            <Sidebar drawer />
-          </div>
-        </div>
-      )}
+      <CommunityChannelDrawer open={drawerOpen} setOpen={setDrawerOpen} />
       <div className={"page-grid " + (hideSidebar && hideRail ? "page-grid--focused" : "")}>
         {!hideSidebar && <Sidebar />}
         <div className="main-column page-content" id="main-content" tabIndex={-1}>

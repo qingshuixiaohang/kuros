@@ -22,9 +22,10 @@ import {
   Sparkles,
   UserRound,
   UsersRound,
+  X,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { fetchMyProfile } from "@/lib/api";
 const channels = [
@@ -275,7 +276,24 @@ export function TopNavigation({ query, onQueryChange, onMenu }: { query: string;
     </header>
   );
 }
-export function useCommunityDrawer(open: boolean, setOpen: (value: boolean) => void) {
+export function CommunityChannelDrawer({ open, setOpen }: { open: boolean; setOpen: Dispatch<SetStateAction<boolean>> }) {
+  const { drawerCloseRef, drawerRef } = useCommunityDrawer(open, setOpen);
+  if (!open) return null;
+  return (
+    <div className="drawer-backdrop" onClick={() => setOpen(false)}>
+      <div aria-label="社区频道" aria-modal="true" className="mobile-drawer" onClick={(event) => event.stopPropagation()} ref={drawerRef} role="dialog">
+        <div className="drawer-header">
+          <span>频道</span>
+          <button onClick={() => setOpen(false)} ref={drawerCloseRef} type="button" aria-label="关闭导航">
+            <X size={20} />
+          </button>
+        </div>
+        <Sidebar drawer />
+      </div>
+    </div>
+  );
+}
+function useCommunityDrawer(open: boolean, setOpen: (value: boolean) => void) {
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const drawerCloseRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
