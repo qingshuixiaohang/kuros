@@ -2,8 +2,10 @@ package com.kuros.kurosbackend.user.client;
 
 import com.kuros.kurosbackend.UserDirectoryStub;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -57,6 +59,11 @@ class InternalTokenRequestInterceptorTest {
         // 复位期望令牌与健康开关：个别用例会临时改它们，必须每例前恢复
         userDirectory.setExpectedInternalToken("test-internal-token");
         userDirectory.setHealthy(true);
+    }
+
+    @AfterEach
+    void clearRequestId() {
+        MDC.remove(RequestIdRequestInterceptor.MDC_KEY);
     }
 
     @AfterAll
@@ -142,5 +149,24 @@ class InternalTokenRequestInterceptorTest {
 
         assertThat(template.headers().get(INTERNAL_TOKEN_HEADER))
                 .containsExactly("secret-token");
+    }
+
+    @Test
+    void Feign真实HTTP请求携带当前MDC请求ID() {
+        String requestId = "4860f41d-86d8-4484-a4ac-422893d69655";
+        MDC.put(RequestIdRequestInterceptor.MDC_KEY, requestId);
+
+        client.batch(List.of(SEED_USER_1));
+
+        assertThat(userDirectory.lastSeenRequestId()).isEqualTo(requestId);
+    }
+
+    @Test
+    void 无HTTP请求上下文时Feign不发送请求ID头() {
+        MDC.remove(RequestIdRequestInterceptor.MDC_KEY);
+
+        client.batch(List.of(SEED_USER_1));
+
+        assertThat(userDirectory.lastSeenRequestId()).isNull();
     }
 }

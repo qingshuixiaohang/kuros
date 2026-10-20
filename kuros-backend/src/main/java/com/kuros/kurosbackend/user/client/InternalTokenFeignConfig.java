@@ -50,4 +50,14 @@ public class InternalTokenFeignConfig {
     public RequestInterceptor internalTokenHeaderInjector(InternalTokenRequestInterceptor interceptor) {
         return interceptor;
     }
+
+    @Bean
+    public RequestIdRequestInterceptor requestIdRequestInterceptor() {
+        return new RequestIdRequestInterceptor();
+    }
+
+    @Bean
+    public RequestInterceptor requestIdHeaderInjector(RequestIdRequestInterceptor interceptor) {
+        return interceptor;
+    }
 }

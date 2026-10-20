@@ -28,6 +28,7 @@ public final class StubBackend {
     private volatile String lastCookie;
     private volatile String lastContentType;
     private volatile String lastBody;
+    private volatile String lastRequestId;
 
     /** 默认桩名 backend：与历史单桩用法兼容（Nacos 发现测试等）。 */
     public StubBackend() {
@@ -50,6 +51,7 @@ public final class StubBackend {
             lastQuery = exchange.getRequestURI().getRawQuery();
             lastCookie = exchange.getRequestHeaders().getFirst("Cookie");
             lastContentType = exchange.getRequestHeaders().getFirst("Content-Type");
+            lastRequestId = exchange.getRequestHeaders().getFirst("X-Request-Id");
             byte[] requestBody = exchange.getRequestBody().readAllBytes();
             lastBody = new String(requestBody, StandardCharsets.UTF_8);
 
@@ -103,6 +105,10 @@ public final class StubBackend {
 
     public String lastBody() {
         return lastBody;
+    }
+
+    public String lastRequestId() {
+        return lastRequestId;
     }
 
 }
