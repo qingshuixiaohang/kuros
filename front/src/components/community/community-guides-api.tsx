@@ -95,9 +95,15 @@ export function GuidesApiPage() {
         }
       />
       <div className="filter-bar">
-        <div className="filter-tabs">
+        <div className="filter-tabs" role="group" aria-label="攻略分类筛选">
           {categories.map((item) => (
-            <button className={category === item ? "is-active" : ""} key={item} onClick={() => changeCategory(item)} type="button">
+            <button
+              aria-pressed={category === item}
+              className={category === item ? "is-active" : ""}
+              key={item}
+              onClick={() => changeCategory(item)}
+              type="button"
+            >
               {item}
             </button>
           ))}
@@ -119,13 +125,17 @@ export function GuidesApiPage() {
             <option value="hot">热门内容</option>
           </select>
         </label>
-        <span className="result-count">{result.isLoading ? "正在同步内容…" : "共 " + totalItems + " 篇"}</span>
+        <span className="result-count" role={result.isLoading ? "status" : undefined}>
+          {result.isLoading ? "正在同步内容…" : "共 " + totalItems + " 篇"}
+        </span>
       </div>
       <section className="guide-list-page">
         {visibleItems.length ? (
           visibleItems.map((guide) => <GuideListItem guide={guide} key={guide.id} />)
         ) : (
-          <p className="empty-state">没有找到匹配的攻略。</p>
+          <p className="empty-state" role="status">
+            没有找到匹配的攻略。
+          </p>
         )}
         {apiUnavailable && <ApiFallbackNote onRetry={result.refetch} />}
         {totalPages > 1 && (

@@ -10,6 +10,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Duration;
 
@@ -46,10 +49,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Testcontainers
 class DevCodeDefaultIntegrationTest {
 
     private static final String PHONE = "13800000031";
     private static final String REAL_CODE = "654321";
+
+    @Container
+    static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
 
     /**
      * 显式覆盖 test profile 的 123456：本类要验证的正是"没有 dev-code 的世界"。
@@ -58,6 +65,8 @@ class DevCodeDefaultIntegrationTest {
      */
     @DynamicPropertySource
     static void withoutDevCode(DynamicPropertyRegistry registry) {
+        registry.add("spring.data.redis.host", redis::getHost);
+        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
         registry.add("app.auth.dev-code", () -> "");
         registry.add("app.auth.dev-code-exposed", () -> "false");
     }

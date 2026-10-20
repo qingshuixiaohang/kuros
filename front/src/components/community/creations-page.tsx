@@ -3,9 +3,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChevronRight, PenLine } from "lucide-react";
 import { CommunityPageFrame, PageHeader } from "@/components/community/community-pages";
-import { characters } from "@/lib/mock";
+import { useCommunityPostQuery } from "@/lib/community-queries";
+import { formatPublishedAt, toGuide } from "@/lib/post-view";
 
 export function CreationsPage() {
+  const creationsQuery = useCommunityPostQuery({ category: "同人", page: 1, pageSize: 20, sort: "latest", retry: false });
+  const creations = creationsQuery.data?.items.map((post) => ({ post, view: toGuide(post) })) ?? [];
+
   return (
     <CommunityPageFrame activeNav="creations">
       <PageHeader
@@ -20,17 +24,40 @@ export function CreationsPage() {
         }
       />
       <section className="creation-list">
-        {characters.map((item, index) => (
-          <Link className="creation-card" href={"/characters/" + item.id} key={item.id}>
-            <div className="creation-image">
-              <Image alt={item.name + "创作预览"} fill sizes="(max-width: 620px) 50vw, 420px" src={item.image} />
-            </div>
+        {creationsQuery.isPending ? (
+          <p className="admin-empty" role="status">
+            正在加载同人创作…
+          </p>
+        ) : null}
+        {creationsQuery.isError ? (
+          <p className="admin-empty" role="alert">
+            同人创作加载失败，请检查后端服务。
+          </p>
+        ) : null}
+        {!creationsQuery.isPending && !creationsQuery.isError && creations.length === 0 ? (
+          <p className="admin-empty" role="status">
+            暂时还没有同人创作。
+          </p>
+        ) : null}
+        {creations.map(({ post, view }, index) => (
+          <Link className="creation-card" href={"/guides/" + post.id} key={post.id}>
+            {view.mediaUrls?.[0] ? (
+              <div className="creation-image">
+                <Image
+                  alt={post.title + "创作预览"}
+                  fill
+                  loading={index === 0 ? "eager" : "lazy"}
+                  sizes="(max-width: 620px) 50vw, 420px"
+                  src={view.mediaUrls[0]}
+                />
+              </div>
+            ) : null}
             <div>
-              <span>玩家创作 · {index === 1 ? "摄影" : "绘画"}</span>
-              <h2>{item.name} · 潮声片段</h2>
-              <p>以原创角色意象为灵感的社区作品展示。</p>
+              <span>玩家创作 · {post.category}</span>
+              <h2>{post.title}</h2>
+              <p>{post.excerpt}</p>
               <small>
-                查看作品 <ChevronRight size={13} />
+                {post.author.nickname} · {formatPublishedAt(post.publishedAt)} · 查看作品 <ChevronRight size={13} />
               </small>
             </div>
           </Link>

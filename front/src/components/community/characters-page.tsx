@@ -58,39 +58,57 @@ export function CharactersPage() {
       />
 
       {/* 角色定位 */}
-      <div className="catalog-tabs">
+      <div aria-label="角色定位筛选" className="catalog-tabs" role="group">
         {roles.map((item) => (
-          <button className={role === item ? "is-active" : ""} key={item} onClick={() => resetPage(setRole)(item)} type="button">
+          <button aria-pressed={role === item} className={role === item ? "is-active" : ""} key={item} onClick={() => resetPage(setRole)(item)} type="button">
             {item}
           </button>
         ))}
       </div>
 
       {/* 属性筛选 */}
-      <div className="catalog-tabs catalog-tabs--sub">
+      <div aria-label="属性筛选" className="catalog-tabs catalog-tabs--sub" role="group">
         <span className="catalog-tabs-label">属性</span>
         {elements.map((item) => (
-          <button className={element === item ? "is-active" : ""} key={item} onClick={() => resetPage(setElement)(item)} type="button">
+          <button
+            aria-pressed={element === item}
+            className={element === item ? "is-active" : ""}
+            key={item}
+            onClick={() => resetPage(setElement)(item)}
+            type="button"
+          >
             {item}
           </button>
         ))}
       </div>
 
       {/* 武器筛选 */}
-      <div className="catalog-tabs catalog-tabs--sub">
+      <div aria-label="武器筛选" className="catalog-tabs catalog-tabs--sub" role="group">
         <span className="catalog-tabs-label">武器</span>
         {weapons.map((item) => (
-          <button className={weapon === item ? "is-active" : ""} key={item} onClick={() => resetPage(setWeapon)(item)} type="button">
+          <button
+            aria-pressed={weapon === item}
+            className={weapon === item ? "is-active" : ""}
+            key={item}
+            onClick={() => resetPage(setWeapon)(item)}
+            type="button"
+          >
             {item}
           </button>
         ))}
       </div>
 
       {/* 稀有度筛选 */}
-      <div className="catalog-tabs catalog-tabs--sub">
+      <div aria-label="稀有度筛选" className="catalog-tabs catalog-tabs--sub" role="group">
         <span className="catalog-tabs-label">稀有度</span>
         {rarities.map((item) => (
-          <button className={rarity === item ? "is-active" : ""} key={item} onClick={() => resetPage(setRarity)(item)} type="button">
+          <button
+            aria-pressed={rarity === item}
+            className={rarity === item ? "is-active" : ""}
+            key={item}
+            onClick={() => resetPage(setRarity)(item)}
+            type="button"
+          >
             {item}
           </button>
         ))}
@@ -107,7 +125,7 @@ export function CharactersPage() {
         </div>
       ) : items.length === 0 ? (
         <div className="empty-state">
-          <p>没有找到符合条件的角色。</p>
+          <p role="status">没有找到符合条件的角色。</p>
         </div>
       ) : (
         <>

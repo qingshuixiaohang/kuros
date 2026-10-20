@@ -7,6 +7,8 @@ import {
   favoritePost,
   fetchAdminReports,
   fetchComments,
+  fetchEchoPage,
+  fetchEchoSet,
   fetchNews,
   fetchNewsPage,
   fetchPostInteractions,
@@ -32,12 +34,14 @@ export function useCommunityPostQuery(options: {
   page?: number;
   pageSize?: number;
   sort?: "latest" | "hot";
+  retry?: boolean;
 }) {
-  const { category = "", keyword = "", tag = "", page = 1, pageSize = 20, sort = "latest" } = options;
+  const { category = "", keyword = "", tag = "", page = 1, pageSize = 20, sort = "latest", retry } = options;
   return useQuery({
     queryKey: ["community-posts", category, keyword, tag, page, pageSize, sort],
     queryFn: () => fetchPostPage({ category: category || undefined, keyword: keyword || undefined, tag: tag || undefined, page, pageSize, sort }),
     placeholderData: keepPreviousData,
+    retry,
   });
 }
 
@@ -248,6 +252,40 @@ export function useNewsDetailQuery(slug: string) {
   return useQuery({
     queryKey: ["news-detail", slug],
     queryFn: async () => await fetchNews(slug),
+    enabled: Boolean(slug),
+    retry: false,
+  });
+}
+
+/**
+ * 声骸列表查询（前端审计 H-9）。
+ *
+ * 与资讯同为低频公开内容，staleTime 5 分钟。按 role 分 key——页面上的
+ * 定位 tab 就是换 key，不需要本地过滤（mock 时代是本地 filter，现在
+ * 服务端过滤，pageSize 上限内的全量结果直接可用）。
+ */
+export function useEchoListQuery(role?: string) {
+  return useQuery({
+    queryKey: ["echo-list", role ?? "全部"],
+    queryFn: async () => {
+      const result = await fetchEchoPage({ role });
+      return { items: result.items, meta: result.meta };
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 300_000,
+  });
+}
+
+/**
+ * 声骸详情查询。
+ *
+ * retry: false——404 是业务结果（套装不存在/已下架）不是瞬时故障，重试
+ * 只会让失败态晚出现几秒。失败态由页面显示成「不存在」，与 news 同款。
+ */
+export function useEchoDetailQuery(slug: string) {
+  return useQuery({
+    queryKey: ["echo-detail", slug],
+    queryFn: async () => await fetchEchoSet(slug),
     enabled: Boolean(slug),
     retry: false,
   });
