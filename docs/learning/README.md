@@ -37,3 +37,6 @@
 | — | [17-test-baseline-cleanup.md](./17-test-baseline-cleanup.md) | 测试基线清洗（e2e 3 红灯 → 0，后端 168 零失败）：环境缺失伪装成测试失败、长期红灯污染回归基线、被两层 mock 夹住掩盖的鉴权白名单遗漏（游客首页 401）、vitest 单测层从零到 39 例、tsc/format:check/vitest 接入 CI |
 | — | [18-team-builder-real-character-api.md](./18-team-builder-real-character-api.md) | 配队模拟器接入游戏角色图鉴：仅在目标路由请求真实目录、显式加载/失败重试/空状态、Playwright 页面边界验证 |
 | — | [19-creations-post-catalog.md](./19-creations-post-catalog.md) | 同人创作页复用已发布帖子目录：精确内容分类、媒体映射、无图卡片、React Query 重试策略范围与 Playwright 页面边界测试 |
+| — | [20-community-navigation-extraction.md](./20-community-navigation-extraction.md) | 前端社区壳层拆分：把共享侧栏、顶栏、路由选中态与移动抽屉焦点管理移到独立客户端模块；两处消费点保持行为一致 |
+| — | [21-community-feed-extraction.md](./21-community-feed-extraction.md) | 前端社区内容流拆分：将 Banner、Feed 查询状态、帖子卡片和媒体渲染迁到独立模块，首页仅负责页面组合 |
+| — | [22-community-channel-drawer.md](./22-community-channel-drawer.md) | 前端导航复用：让首页与子页面共用频道抽屉和焦点生命周期 |
