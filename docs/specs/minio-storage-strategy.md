@@ -168,9 +168,14 @@ public class MediaResourceController {
 
 ### 9. compose.yml 新增 MinIO 服务
 
+运行时更新（2026-10-20）：官方社区镜像拉取返回 401 后，Compose 与 Testcontainers 改为共用 `docker/minio/Dockerfile`，从固定版本的官方源码构建；MinIO 端口、凭证、数据卷和 S3 API 保持不变。健康检查改用 MinIO readiness HTTP endpoint。
+
 ```yaml
   minio:
-    image: minio/minio:latest
+    image: kuros-minio:RELEASE.2025-10-15T17-29-55Z
+    build:
+      context: ./docker/minio
+      dockerfile: Dockerfile
     restart: unless-stopped
     environment:
       MINIO_ROOT_USER: ${APP_STORAGE_MINIO_ACCESS_KEY:-minioadmin}
@@ -182,7 +187,7 @@ public class MediaResourceController {
     volumes:
       - kuros_minio_data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9000/minio/health/ready || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -250,7 +255,7 @@ APP_STORAGE_MINIO_BUCKET=kuros-media
 | 风险 | 缓解 |
 |---|---|
 | 重命名接口导致大量文件改动 | 全局搜索替换，确保无遗漏 |
-| MinIO 容器启动慢影响测试 | 使用 `minio/minio:latest` 轻量镜像，Testcontainers 复用 |
+| MinIO 源码构建时间较长 | Compose 与 Testcontainers 共用固定版本 Dockerfile，并复用 Docker 构建缓存 |
 | MinIO 模式下图片 content-type 丢失 | `put()` 时保存 content-type 为 object metadata，`get()` 时读取 |
 | 本地模式 ResourceHandler 与 MinIO Controller 路由冲突 | Controller 加 `@ConditionalOnProperty` 条件，本地模式下不加载 |
 
