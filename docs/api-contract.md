@@ -14,13 +14,28 @@
 
 ```json
 {
-  "code": "POST_TITLE_REQUIRED",
-  "message": "请输入帖子标题",
-  "details": {}
+  "code": "COMMENT_NOT_FOUND",
+  "message": "评论不存在",
+  "fieldErrors": {
+    "phone": "手机号格式不正确"
+  }
 }
 ```
 
-常用状态码：`400` 请求校验失败，`401` 未登录，`403` 无权限，`404` 资源不存在，`409` 状态冲突，`500` 服务端错误。前端不得依赖 message 判断业务分支，应优先使用 code。
+`fieldErrors` 只在存在字段级校验结果时返回，普通错误不包含该字段。
+
+稳定通用错误码：
+
+| HTTP | code | 说明 |
+| --- | --- | --- |
+| 400 | `INVALID_REQUEST` | 请求体无法解析、参数类型错误或缺少参数 |
+| 400 | `VALIDATION_FAILED` | 字段校验失败，详细结果在 `fieldErrors` |
+| 413 | `UPLOAD_TOO_LARGE` | 上传请求超过容器上限 |
+| 500 | `INTERNAL_ERROR` | 未捕获的服务端异常，响应不会包含内部异常信息 |
+
+资源不存在使用具体资源码，例如 `POST_NOT_FOUND`、`COMMENT_NOT_FOUND`、`MEDIA_NOT_FOUND`、`REPORT_NOT_FOUND`、`USER_NOT_FOUND`。
+
+常用状态码：`400` 请求校验失败，`401` 未登录，`403` 无权限，`404` 资源不存在，`409` 状态冲突，`413` 上传过大，`500` 服务端错误。前端不得依赖 message 判断业务分支，应优先使用 code。
 
 ## 3. 认证
 
