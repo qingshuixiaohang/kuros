@@ -32,8 +32,8 @@
 - [x] 端口由帖子域拥有，互动域实现它；`CommunityPostService` 中没有互动包导入。
 - [x] 单元测试覆盖两个计数的 Redis 命中及惰性基线未调用。
 - [x] 单元测试覆盖 Redis 缺失后使用对应基线，并验证另一项计数的基线互不串用。
-- [ ] 详情集成测试覆盖响应仍返回实时计数，详情缓存 DTO 不含计数字段（已有 `TwoLevelCacheIntegrationTest` 锁定该行为，待 CI 复跑）。
-- [ ] 现有互动写入、状态查询、投影、计数校准定向测试通过。
+- [x] 详情集成测试覆盖响应仍返回实时计数，详情缓存 DTO 不含计数字段（`TwoLevelCacheIntegrationTest` 3/3 通过）。
+- [x] 现有互动写入、状态查询、投影、计数校准测试通过；完整后端 suite 190 条、0 failures、0 errors、21 skipped。
 - [x] `mvnw test-compile` 通过；适配器定向单测 2/2 通过。
 - [x] `post` 主代码无 `com.kuros.kurosbackend.interaction` 导入。
 
