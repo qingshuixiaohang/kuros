@@ -3,6 +3,17 @@
 > 更新：2026-10-14。本文是 leader（Hermes）的统一作战图，子任务派单以此为依据。
 > 分工：Hermes 负责计划/派单/验收/git；pi 与 omp 是编码工具，不直接对外提交。
 
+## 当前状态核对（2026-10-20）
+
+以下是基于当前 `main`（`3179d09a`）和最近学习复盘的补充；下文的 2026-10-14“当前批次”、分支和测试数字均为历史记录，不应当作当前状态。
+
+- 前端 H-9 的 tools、creations 页面已完成真 API 接入；news、echoes、characters 也已接真实 API。依据学习复盘 #18、#19 与后续社区拆分复盘。
+- Batch A–E 中的安全、缓存/锁、读路径、测试基线和前端 mutation 核心项已有后续实现记录（学习复盘 #15–#22）；逐项结论应以复盘与当前代码为准。
+- B3 定期互动计数校准正通过 [PR #140](https://github.com/qingshuixiaohang/kuros/pull/140) 实现，关联 [Issue #139](https://github.com/qingshuixiaohang/kuros/issues/139)。PR 已推送，尚未合并；GitHub Actions 是手动触发，目前该提交尚无 CI run。
+- 本机针对该切片的定向单测 5/5、后端 `test-compile` 通过；Testcontainers 集成测试被 `UserDirectoryStub` 的 JDK loopback pipe 初始化阻断，未进入 Docker。不得把它记录成集成测试通过。
+- 有明确记录但仍延期的架构方向：Feed 高粉作者推拉混合（复盘 #15）。Batch F 的 M14/M15 与 tracing/logback 项需要基于当前代码重新核验，不能直接沿用下方旧审计表当作未修复结论。
+- 当前不宣称项目 100% 完成。先完成 PR #140 的 CI/合并，再对上述延期项逐项确认是否仍适用、是否进入正式范围；只有所有已确认的范围项验收关闭后才更新为完成。
+
 ## 〇、当前批次（2026-10-14 更新，优先读这一节）
 
 **批次：前端审计 H-9「mock 页接真数据」。** 剩 **tools / creations 两页**。
