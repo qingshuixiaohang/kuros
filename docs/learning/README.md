@@ -40,3 +40,4 @@
 | — | [20-community-navigation-extraction.md](./20-community-navigation-extraction.md) | 前端社区壳层拆分：把共享侧栏、顶栏、路由选中态与移动抽屉焦点管理移到独立客户端模块；两处消费点保持行为一致 |
 | — | [21-community-feed-extraction.md](./21-community-feed-extraction.md) | 前端社区内容流拆分：将 Banner、Feed 查询状态、帖子卡片和媒体渲染迁到独立模块，首页仅负责页面组合 |
 | — | [22-community-channel-drawer.md](./22-community-channel-drawer.md) | 前端导航复用：让首页与子页面共用频道抽屉和焦点生命周期 |
+| — | [23-minio-ci-compose.md](./23-minio-ci-compose.md) | MinIO 源码构建、Compose/Testcontainers 共用镜像与 user dev profile 全栈验收 |
