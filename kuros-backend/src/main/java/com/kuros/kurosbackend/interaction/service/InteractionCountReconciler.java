@@ -71,6 +71,41 @@ public class InteractionCountReconciler {
         return deltas;
     }
 
+    /** Repairs the persisted count columns from the live Redis counts without overwriting them. */
+    public void reconcilePublishedPostCounts(String postId) {
+        reconcileLikeColumnFromRedis(postId);
+        reconcileFavoriteColumnFromRedis(postId);
+    }
+
+    private void reconcileLikeColumnFromRedis(String postId) {
+        CommunityPostState dbBefore = transactionTemplate.execute(status -> postRepository.findById(postId)
+                .map(post -> new CommunityPostState(post.getLikeCount(), post.getInteractionCountVersion()))
+                .orElse(new CommunityPostState(0L, 0L)));
+        long liveCount = redisStore.readCount(InteractionKind.LIKE, postId,
+                () -> likeRepository.countByPostId(postId));
+        int updated = transactionTemplate.execute(status ->
+                postRepository.updateLikeCountIfVersion(postId, dbBefore.version(), liveCount));
+        logColumnRepair(postId, InteractionKind.LIKE, dbBefore.count(), liveCount, updated);
+    }
+
+    private void reconcileFavoriteColumnFromRedis(String postId) {
+        CommunityPostState dbBefore = transactionTemplate.execute(status -> postRepository.findById(postId)
+                .map(post -> new CommunityPostState(post.getFavoriteCount(), post.getInteractionCountVersion()))
+                .orElse(new CommunityPostState(0L, 0L)));
+        long liveCount = redisStore.readCount(InteractionKind.FAVORITE, postId,
+                () -> favoriteRepository.countByPostId(postId));
+        int updated = transactionTemplate.execute(status ->
+                postRepository.updateFavoriteCountIfVersion(postId, dbBefore.version(), liveCount));
+        logColumnRepair(postId, InteractionKind.FAVORITE, dbBefore.count(), liveCount, updated);
+    }
+
+    private void logColumnRepair(String postId, InteractionKind kind, long dbBefore, long liveCount, int updated) {
+        if (updated > 0 && dbBefore != liveCount) {
+            log.warn("互动计数对账修正：postId={} kind={} dbColumn {} -> {}，Redis 保持实时值",
+                    postId, kind, dbBefore, liveCount);
+        }
+    }
+
     private CountDelta reconcileLike(String postId) {
         long truth = likeRepository.countByPostId(postId);
         long redisBefore = readRedisCount(InteractionKind.LIKE, postId, truth);
@@ -126,5 +161,8 @@ public class InteractionCountReconciler {
      * @param dbBefore    修正前 DB 冗余列
      */
     public record CountDelta(long redisBefore, long after, long dbBefore) {
+    }
+
+    private record CommunityPostState(long count, long version) {
     }
 }

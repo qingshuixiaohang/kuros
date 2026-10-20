@@ -113,7 +113,7 @@
 |---|---|---|
 | B1 | 缓存驱逐/回填写在事务内，违反项目自己的 afterCommit 纪律 | `PostPublishingService.java:108-109` 等 5 处 |
 | B2 | 分布式锁无续期，TTL 硬 3s → 锁过期互斥失效 | `DistributedLock.java:61-66` |
-| B3 | 互动计数无对账 + state/count 两 key TTL 独立 → 计数双重计入 | `InteractionRedisStore.java:63-105` |
+| B3 | 定期计数校准已完成（Issue #139）；state/count 两 key TTL 独立问题未在本切片复核 | `InteractionCountReconciliationJob.java` |
 
 ### Batch C 读路径加固
 

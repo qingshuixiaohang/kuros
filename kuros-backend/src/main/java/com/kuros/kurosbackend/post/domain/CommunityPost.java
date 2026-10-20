@@ -57,6 +57,9 @@ public class CommunityPost {
     @Column(name = "favorite_count", nullable = false)
     private long favoriteCount;
 
+    @Column(name = "interaction_count_version", nullable = false, insertable = false, updatable = false)
+    private long interactionCountVersion;
+
     @Column(name = "comment_count", nullable = false)
     private long commentCount;
 
@@ -165,6 +168,10 @@ public class CommunityPost {
 
     public long getFavoriteCount() {
         return favoriteCount;
+    }
+
+    public long getInteractionCountVersion() {
+        return interactionCountVersion;
     }
 
     public long getCommentCount() {

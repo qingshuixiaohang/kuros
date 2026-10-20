@@ -41,3 +41,4 @@
 | — | [21-community-feed-extraction.md](./21-community-feed-extraction.md) | 前端社区内容流拆分：将 Banner、Feed 查询状态、帖子卡片和媒体渲染迁到独立模块，首页仅负责页面组合 |
 | — | [22-community-channel-drawer.md](./22-community-channel-drawer.md) | 前端导航复用：让首页与子页面共用频道抽屉和焦点生命周期 |
 | — | [23-minio-ci-compose.md](./23-minio-ci-compose.md) | MinIO 源码构建、Compose/Testcontainers 共用镜像与 user dev profile 全栈验收 |
+| — | [24-periodic-interaction-count-reconciliation.md](./24-periodic-interaction-count-reconciliation.md) | 定期校准数据库互动计数：保留 Redis 实时值、版本条件写、keyset 扫描与锁丢失停止 |
