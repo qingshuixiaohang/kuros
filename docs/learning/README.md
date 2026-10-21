@@ -48,3 +48,4 @@
 | — | [28-media-upload-consistency.md](./28-media-upload-consistency.md) | 媒体上传一致性：先登记临时资产再写对象存储、失败补偿、原始异常保留与孤儿对象可发现性 |
 | #29 | [29-api-error-contract.md](./29-api-error-contract.md) | 双服务 API 错误契约：坏 JSON、绑定、校验、上传上限与未知异常统一信封，资源码由抛出点显式提供 |
 | — | [30-browser-baseline-repair.md](./30-browser-baseline-repair.md) | 最终浏览器基线修复：实际执行优先于测试发现数、请求隔离按业务参数收窄、区分 404 与 500、live status 语义与临时 worktree 构建边界 |
+| — | [31-gateway-nacos-test-resource-boundaries.md](./31-gateway-nacos-test-resource-boundaries.md) | Gateway Nacos 集成测试资源边界：固定端口暴露、容器与 Surefire 内存收敛、真实服务发现验证 |
