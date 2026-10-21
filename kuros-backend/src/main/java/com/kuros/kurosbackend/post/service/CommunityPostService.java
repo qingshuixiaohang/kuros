@@ -137,7 +137,7 @@ public class CommunityPostService {
         });
         if (content == null) {
             // 内容 null = 本次查无 或 命中空值哨兵，二者对外语义一致：帖子不存在或已删除
-            throw new ResourceNotFoundException("帖子不存在或已删除");
+            throw new ResourceNotFoundException("POST_NOT_FOUND", "帖子不存在或已删除");
         }
 
         // 计数解耦：不进缓存，每次从 #11 实时 Redis 源读；Redis 计数键 miss 时用 DB 冗余列回填基线

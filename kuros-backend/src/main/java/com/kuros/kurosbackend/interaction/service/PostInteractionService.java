@@ -188,6 +188,6 @@ public class PostInteractionService {
 
     private CommunityPost findPublishedPost(String postId) {
         return postRepository.findByIdAndStatus(postId, PostStatus.PUBLISHED)
-                .orElseThrow(() -> new ResourceNotFoundException("帖子不存在或已删除"));
+                .orElseThrow(() -> new ResourceNotFoundException("POST_NOT_FOUND", "帖子不存在或已删除"));
     }
 }

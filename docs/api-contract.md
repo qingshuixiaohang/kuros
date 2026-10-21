@@ -14,8 +14,8 @@
 
 ```json
 {
-  "code": "COMMENT_NOT_FOUND",
-  "message": "评论不存在",
+  "code": "VALIDATION_FAILED",
+  "message": "请求参数校验失败",
   "fieldErrors": {
     "phone": "手机号格式不正确"
   }
@@ -30,10 +30,13 @@
 | --- | --- | --- |
 | 400 | `INVALID_REQUEST` | 请求体无法解析、参数类型错误或缺少参数 |
 | 400 | `VALIDATION_FAILED` | 字段校验失败，详细结果在 `fieldErrors` |
+| 404 | `NOT_FOUND` | 未匹配路由或框架级静态资源不存在 |
+| 405 | `METHOD_NOT_ALLOWED` | 请求方法不受支持 |
 | 413 | `UPLOAD_TOO_LARGE` | 上传请求超过容器上限 |
+| 415 | `UNSUPPORTED_MEDIA_TYPE` | 请求内容类型不受支持 |
 | 500 | `INTERNAL_ERROR` | 未捕获的服务端异常，响应不会包含内部异常信息 |
 
-资源不存在使用具体资源码，例如 `POST_NOT_FOUND`、`COMMENT_NOT_FOUND`、`MEDIA_NOT_FOUND`、`REPORT_NOT_FOUND`、`USER_NOT_FOUND`。
+业务资源不存在使用具体资源码，例如 `POST_NOT_FOUND`、`COMMENT_NOT_FOUND`、`MEDIA_NOT_FOUND`、`REPORT_NOT_FOUND`、`USER_NOT_FOUND`；`NOT_FOUND` 只用于框架级无匹配路由或静态资源。
 
 常用状态码：`400` 请求校验失败，`401` 未登录，`403` 无权限，`404` 资源不存在，`409` 状态冲突，`413` 上传过大，`500` 服务端错误。前端不得依赖 message 判断业务分支，应优先使用 code。
 

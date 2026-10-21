@@ -1,6 +1,6 @@
 # ERR-01 统一 API 错误契约
 
-状态：ready-for-agent
+状态：implemented（本地测试与 Compose 验证通过，待 CI 复验）
 
 依赖：无
 
@@ -22,9 +22,16 @@
 1. 先添加失败测试：user 坏 JSON、backend 参数类型错误、backend 坏 JSON、backend 缺失评论错误码、两个服务的通用异常信封。
 2. 确认测试因当前默认响应或错误码错误而 RED。
 3. 实现最小 handler、资源码和配置改动。
-4. 确认定向测试 GREEN，再跑两个模块的 `test-compile` 和受影响回归。
+4. Compose 冒烟上传超过容器上限的文件，断言 413 `UPLOAD_TOO_LARGE`。
+5. 确认定向测试 GREEN，再跑两个模块的 `test-compile` 和受影响回归。
 
 ## 已知限制
 
-- 容器级上传上限无法由 MockMvc 完整复现；集成测试覆盖业务大小校验，CI/Compose 冒烟负责容器链路。
 - user 服务当前唯一资源类型仍是用户，因此其 handler 保持 `USER_NOT_FOUND` 映射；本切片不移除该异常类。
+
+## 验证记录
+
+- RED：backend 契约 3 例为 2 failure + 1 error；user 契约 2 例为 1 failure + 1 error。
+- GREEN：backend `ApiExceptionHandlerContractTest` 5/5、`KurosBackendApplicationTests` 41/41；user `ApiExceptionHandlerContractTest` 4/4、`AuthLoginIntegrationTest` 7/7。
+- 两侧 `test-compile` 通过，`node --check scripts/compose-smoke.mjs` 和 `git diff --check` 通过。
+- 在最小 Compose 栈（MySQL、Redis、Nacos、backend）发送 15 MB multipart 请求，实际返回 HTTP 413 与 `{"code":"UPLOAD_TOO_LARGE","message":"上传文件过大"}`。

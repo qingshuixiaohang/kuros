@@ -30,6 +30,9 @@
 | 请求体无法解析、参数类型错误或缺少参数 | 400 | `INVALID_REQUEST` |
 | Bean Validation 字段校验失败 | 400 | `VALIDATION_FAILED` |
 | 上传请求超过容器上限 | 413 | `UPLOAD_TOO_LARGE` |
+| 未匹配路由或框架级静态资源不存在 | 404 | `NOT_FOUND` |
+| 请求方法不受支持 | 405 | `METHOD_NOT_ALLOWED` |
+| 请求内容类型不受支持 | 415 | `UNSUPPORTED_MEDIA_TYPE` |
 | 未捕获的服务端异常 | 500 | `INTERNAL_ERROR` |
 
 业务校验继续使用现有细分错误码（例如 `POST_TITLE_REQUIRED`、`REPORT_DUPLICATE`），不改语义。
@@ -60,7 +63,8 @@
 4. 两个服务的通用异常 handler 返回 HTTP 500、`code=INTERNAL_ERROR`，不包含内部异常消息。
 5. `ResourceNotFoundException` 无默认错误码构造器；所有 backend 调用点显式提供资源码。
 6. 普通错误不再混用 `fieldErrors=null` 与空对象两种表示。
-7. 定向单元/集成测试、`test-compile` 和相关鉴权回归通过。
+7. Compose 冒烟发起超过容器请求上限的上传，并断言 HTTP 413、`code=UPLOAD_TOO_LARGE`。
+8. 定向单元/集成测试、`test-compile` 和相关鉴权回归通过。
 
 ## 非目标
 

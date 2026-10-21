@@ -9,15 +9,30 @@ import com.kuros.kurosbackend.shared.exception.AuthRequestException;
 import com.kuros.kurosbackend.shared.exception.ForbiddenException;
 import com.kuros.kurosbackend.shared.exception.FileStorageException;
 import com.kuros.kurosbackend.shared.exception.ServiceUnavailableException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.BindException;
+import org.springframework.validation.BindingResult;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.bind.ServletRequestBindingException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
     /**
      * SaToken 未登录异常 → 401。
@@ -60,8 +75,8 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> resourceNotFound(ResourceNotFoundException exception) {
-        // code 由异常自带：既有调用方默认 POST_NOT_FOUND，角色图鉴等新域传自己的 code
-        // （如 CHARACTER_NOT_FOUND），对外错误码随资源类型区分，前端据此渲染对应提示
+        // code 由异常自带：帖子、评论、媒体等调用点必须显式选择资源码，
+        // 对外错误码随资源类型区分，前端据此渲染对应提示。
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(new ErrorResponse(exception.getCode(), exception.getMessage(), null));
     }
@@ -69,7 +84,7 @@ public class ApiExceptionHandler {
     @ExceptionHandler(AuthRequestException.class)
     public ResponseEntity<ErrorResponse> authRequest(AuthRequestException exception) {
         return ResponseEntity.badRequest()
-                .body(new ErrorResponse(exception.getCode(), exception.getMessage(), Map.of()));
+                .body(new ErrorResponse(exception.getCode(), exception.getMessage(), null));
     }
 
     @ExceptionHandler(ForbiddenException.class)
@@ -90,5 +105,76 @@ public class ApiExceptionHandler {
     public ResponseEntity<ErrorResponse> fileStorage(FileStorageException exception) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorResponse("FILE_UPLOAD_FAILED", exception.getMessage(), null));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> unreadableRequest(HttpMessageNotReadableException exception) {
+        return ResponseEntity.badRequest()
+                .body(new ErrorResponse("INVALID_REQUEST", "请求体格式不正确", null));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> typeMismatch(MethodArgumentTypeMismatchException exception) {
+        return ResponseEntity.badRequest()
+                .body(new ErrorResponse("INVALID_REQUEST", "请求参数不正确", null));
+    }
+
+    @ExceptionHandler(ServletRequestBindingException.class)
+    public ResponseEntity<ErrorResponse> missingRequestValue(ServletRequestBindingException exception) {
+        return ResponseEntity.badRequest()
+                .body(new ErrorResponse("INVALID_REQUEST", "缺少必需的请求参数", null));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> validation(MethodArgumentNotValidException exception) {
+        return validationFailure(fieldErrors(exception.getBindingResult()));
+    }
+
+    @ExceptionHandler(BindException.class)
+    public ResponseEntity<ErrorResponse> binding(BindException exception) {
+        return validationFailure(fieldErrors(exception.getBindingResult()));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> uploadTooLarge(MaxUploadSizeExceededException exception) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(new ErrorResponse("UPLOAD_TOO_LARGE", "上传文件过大", null));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> methodNotAllowed(HttpRequestMethodNotSupportedException exception) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(new ErrorResponse("METHOD_NOT_ALLOWED", "请求方法不受支持", null));
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> mediaTypeNotSupported(HttpMediaTypeNotSupportedException exception) {
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(new ErrorResponse("UNSUPPORTED_MEDIA_TYPE", "请求内容类型不受支持", null));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> noResource(NoResourceFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse("NOT_FOUND", "请求的资源不存在", null));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> unexpected(Exception exception) {
+        log.error("Unhandled API exception", exception);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorResponse("INTERNAL_ERROR", "服务器内部错误，请稍后重试", null));
+    }
+
+    private ResponseEntity<ErrorResponse> validationFailure(Map<String, String> fieldErrors) {
+        return ResponseEntity.badRequest()
+                .body(new ErrorResponse("VALIDATION_FAILED", "请求参数校验失败", fieldErrors));
+    }
+
+    private Map<String, String> fieldErrors(BindingResult result) {
+        return result.getFieldErrors().stream()
+                .collect(LinkedHashMap::new,
+                        (errors, error) -> errors.putIfAbsent(error.getField(), error.getDefaultMessage()),
+                        LinkedHashMap::putAll);
     }
 }

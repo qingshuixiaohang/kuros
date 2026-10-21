@@ -60,7 +60,7 @@ public class MediaResourceController {
         // 从数据库查询 MediaAsset 获取 Content-Type
         // 为什么不直接从 MinIO metadata 读？因为 MediaAsset 表已有这个信息，避免二次查询
         MediaAsset asset = mediaAssetRepository.findByStorageKey(key)
-                .orElseThrow(() -> new ResourceNotFoundException("图片资源不存在"));
+                .orElseThrow(() -> new ResourceNotFoundException("MEDIA_NOT_FOUND", "图片资源不存在"));
 
         byte[] data = storageStrategy.get(key);
 

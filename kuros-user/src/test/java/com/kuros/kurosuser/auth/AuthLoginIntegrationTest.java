@@ -107,6 +107,17 @@ class AuthLoginIntegrationTest {
     }
 
     @Test
+    void 畸形JSON返回统一请求错误信封() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/code")
+                        .contentType(APPLICATION_JSON)
+                        .content("{"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value("请求体格式不正确"))
+                .andExpect(jsonPath("$.fieldErrors").doesNotExist());
+    }
+
+    @Test
     void 新手机号首次验证码登录会建号并恢复会话() throws Exception {
         mockMvc.perform(post("/api/v1/auth/code")
                         .contentType(APPLICATION_JSON)
