@@ -44,3 +44,4 @@
 | — | [24-periodic-interaction-count-reconciliation.md](./24-periodic-interaction-count-reconciliation.md) | 定期校准数据库互动计数：保留 Redis 实时值、版本条件写、keyset 扫描与锁丢失停止 |
 | — | [25-post-interaction-read-boundary.md](./25-post-interaction-read-boundary.md) | 帖子详情互动计数读端口：解除 post→interaction 具体实现依赖，并保留惰性数据库基线与实时计数语义 |
 | — | [26-request-id-propagation.md](./26-request-id-propagation.md) | 三服务请求关联 ID：Gateway 生成与覆盖、Servlet MDC 生命周期、Feign 子调用传播和安全完成日志 |
+| — | [30-browser-baseline-repair.md](./30-browser-baseline-repair.md) | 最终浏览器基线修复：实际执行优先于测试发现数、请求隔离按业务参数收窄、区分 404 与 500、live status 语义与临时 worktree 构建边界 |
