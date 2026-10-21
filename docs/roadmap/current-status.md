@@ -27,7 +27,7 @@
 | `codex/api-error-contract` | `ce9ad6d` | Spec #145 / Implement #146 | backend handler 契约 5/5、应用级 41/41；user handler 契约 4/4、登录集成 7/7；两侧 `test-compile` 通过；最小 Compose 栈实测 15 MB 上传返回 413 `UPLOAD_TOO_LARGE` |
 | `codex/report-moderation-boundary` | `48f6a64` | Implement #147 / Spec #148 | 领域边界 5/5、举报缓存集成 5/5、后端应用级 38/38；`test-compile` 通过 |
 | `codex/media-upload-consistency` | `23e2985` | Spec #149 / Implement #150 | 上传与清理合计 8/8、后端应用级 38/38；`test-compile` 通过 |
-| `codex/browser-baseline-repair` | `4a27fc1` | 集成验证发现修复 | 定向 Playwright 14/14、全量 Playwright 128/128；ESLint、TypeScript、Vitest 39/39、Prettier 与 Webpack 生产构建通过 |
+| `codex/browser-baseline-repair` | `0e3e2d9` | 集成验证发现修复 | 定向 Playwright 14/14、全量 Playwright 128/128；ESLint、TypeScript、Vitest 39/39、Prettier、Webpack 生产构建与 `learning/30` retro 通过 |
 
 ## 发布前集成验证
 
