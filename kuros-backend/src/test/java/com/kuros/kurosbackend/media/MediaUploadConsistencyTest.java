@@ -64,6 +64,7 @@ class MediaUploadConsistencyTest {
                 MediaAssetStatus.DELETED
         );
         assertThat(storage.deleteCount).isEqualTo(1);
+        assertThat(storage.deleteKey).isEqualTo(storage.putKey);
         assertThat(storage.objectExists).isFalse();
     }
 
@@ -96,6 +97,7 @@ class MediaUploadConsistencyTest {
         );
         assertThat(persistedStatuses).containsExactly(MediaAssetStatus.TEMPORARY);
         assertThat(storage.deleteCount).isEqualTo(1);
+        assertThat(storage.deleteKey).isEqualTo(storage.putKey);
         assertThat(storage.objectExists).isFalse();
     }
 
@@ -119,6 +121,7 @@ class MediaUploadConsistencyTest {
 
         assertThat(savedStatuses).containsExactly(MediaAssetStatus.TEMPORARY);
         assertThat(storage.deleteCount).isEqualTo(1);
+        assertThat(storage.deleteKey).isEqualTo(storage.putKey);
         assertThat(storage.objectExists).isTrue();
     }
 
@@ -178,6 +181,8 @@ class MediaUploadConsistencyTest {
     private static final class RecordingStorage implements StorageStrategy {
         private int putCount;
         private int deleteCount;
+        private String putKey;
+        private String deleteKey;
         private RuntimeException failure;
         private RuntimeException deleteFailure;
         private boolean objectExists;
@@ -186,6 +191,7 @@ class MediaUploadConsistencyTest {
         @Override
         public void put(String key, byte[] bytes, String contentType) {
             putCount++;
+            putKey = key;
             objectExists = true;
             if (events != null) {
                 events.add("put");
@@ -203,6 +209,7 @@ class MediaUploadConsistencyTest {
         @Override
         public void delete(String key) {
             deleteCount++;
+            deleteKey = key;
             if (events != null) {
                 events.add("delete");
             }
