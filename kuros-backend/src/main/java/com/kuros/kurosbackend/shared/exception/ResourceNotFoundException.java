@@ -4,12 +4,11 @@ public class ResourceNotFoundException extends RuntimeException {
 
     private final String code;
 
-    public ResourceNotFoundException(String message) {
-        this("POST_NOT_FOUND", message);
-    }
-
     public ResourceNotFoundException(String code, String message) {
         super(message);
+        if (code == null || code.isBlank()) {
+            throw new IllegalArgumentException("resource-not-found code is required");
+        }
         this.code = code;
     }
 

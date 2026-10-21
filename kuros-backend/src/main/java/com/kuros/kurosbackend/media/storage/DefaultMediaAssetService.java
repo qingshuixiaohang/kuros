@@ -116,7 +116,7 @@ public class DefaultMediaAssetService implements MediaAssetService {
     @Override
     public void delete(String assetId, String ownerId) {
         MediaAsset asset = mediaAssetRepository.findById(assetId)
-                .orElseThrow(() -> new ResourceNotFoundException("图片资源不存在"));
+                .orElseThrow(() -> new ResourceNotFoundException("MEDIA_NOT_FOUND", "图片资源不存在"));
         if (!ownerId.equals(asset.getOwnerId())) {
             throw new ForbiddenException("不能删除其他用户的图片");
         }

@@ -105,7 +105,7 @@ public class UserDirectoryFacade {
         }
         List<UserBriefDto> data = response == null ? null : response.data();
         if (data == null || data.isEmpty()) {
-            throw new ResourceNotFoundException("用户不存在");
+            throw new ResourceNotFoundException("USER_NOT_FOUND", "用户不存在");
         }
         return data.get(0);
     }
@@ -128,7 +128,7 @@ public class UserDirectoryFacade {
             return call.get();
         } catch (FeignException.NotFound e) {
             // 服务端 ensureUser 判定目标用户不存在 → 映射为 404，与公开资料端点同一语义
-            throw new ResourceNotFoundException("用户不存在");
+            throw new ResourceNotFoundException("USER_NOT_FOUND", "用户不存在");
         } catch (RuntimeException e) {
             log.warn("读取关注关系失败，降级为 503（kuros-user 暂不可用）：{}", e.toString());
             throw new ServiceUnavailableException("用户资料暂不可用");

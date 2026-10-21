@@ -24,7 +24,7 @@ function cookieHeader() {
   return [...cookies.entries()].map(([name, value]) => `${name}=${value}`).join("; ");
 }
 
-async function request(base, path, init = {}) {
+async function performRequest(base, path, init = {}) {
   const headers = new Headers(init.headers);
   const cookie = cookieHeader();
   if (cookie) headers.set("Cookie", cookie);
@@ -37,10 +37,26 @@ async function request(base, path, init = {}) {
   } catch {
     body = text;
   }
+  return { response, body, text };
+}
+
+async function request(base, path, init = {}) {
+  const result = await performRequest(base, path, init);
+  const { response, body, text } = result;
   if (!response.ok) {
     throw new Error(`${init.method ?? "GET"} ${path} returned ${response.status}: ${text}`);
   }
-  return { response, body };
+  return result;
+}
+
+async function requestFailure(base, path, expectedStatus, expectedCode, init = {}) {
+  const { response, body, text } = await performRequest(base, path, init);
+  if (response.status !== expectedStatus) {
+    throw new Error(`${init.method ?? "GET"} ${path} returned ${response.status}, expected ${expectedStatus}: ${text}`);
+  }
+  if (body?.code !== expectedCode) {
+    throw new Error(`${init.method ?? "GET"} ${path} returned code ${body?.code}, expected ${expectedCode}: ${text}`);
+  }
 }
 
 function csrfHeaders() {
@@ -86,6 +102,15 @@ async function main() {
     body: JSON.stringify({ phone: "13800000002", code: "123456" }),
   });
   await request(apiBase, "/api/v1/auth/csrf");
+
+  const oversizedForm = new FormData();
+  oversizedForm.append("file", new Blob([Buffer.alloc(15 * 1024 * 1024)], { type: "image/png" }), "oversized.png");
+  await requestFailure(apiBase, "/api/v1/files/images", 413, "UPLOAD_TOO_LARGE", {
+    method: "POST",
+    headers: csrfHeaders(),
+    body: oversizedForm,
+  });
+  console.log("Oversized upload returned 413 UPLOAD_TOO_LARGE");
 
   // 跨服务端到端 · 第 1 跳：/auth/me 经网关回到 kuros-user，读它自己刚写进 Redis 的会话。
   // 拿到权威用户身份（id + nickname），作为后续 backend 侧 Feign 回填的对照基准。

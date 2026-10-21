@@ -212,6 +212,15 @@ class KurosBackendApplicationTests {
     }
 
     @Test
+    void 请求参数类型错误返回统一请求错误信封() throws Exception {
+        mockMvc.perform(get("/api/v1/characters").param("rarity", "not-a-number"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value("请求参数不正确"))
+                .andExpect(jsonPath("$.fieldErrors").doesNotExist());
+    }
+
+    @Test
     void 游客查看不存在或未启用角色返回角色未找到() throws Exception {
         mockMvc.perform(get("/api/v1/characters/not-found"))
                 .andExpect(status().isNotFound())
@@ -527,6 +536,34 @@ class KurosBackendApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[?(@.id == '" + commentId + "')].content").value("该评论已删除"))
                 .andExpect(jsonPath("$.data[?(@.id == '" + commentId + "')].deleted").value(true));
+    }
+
+    @Test
+    void 删除不存在的评论返回评论不存在() throws Exception {
+        Cookie sessionCookie = login("13800000018");
+        mockMvc.perform(delete("/api/v1/posts/10000000-0000-0000-0000-000000000001/comments/"
+                        + "30000000-0000-0000-0000-000000000099")
+                        .cookie(sessionCookie)
+                        .cookie(CSRF_COOKIE)
+                        .header("X-XSRF-TOKEN", CSRF_TOKEN))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("COMMENT_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("评论不存在"));
+    }
+
+    @Test
+    void 畸形JSON返回统一请求错误信封() throws Exception {
+        Cookie sessionCookie = login("13800000018");
+        mockMvc.perform(post("/api/v1/posts/10000000-0000-0000-0000-000000000001/comments")
+                        .cookie(sessionCookie)
+                        .cookie(CSRF_COOKIE)
+                        .header("X-XSRF-TOKEN", CSRF_TOKEN)
+                        .contentType(APPLICATION_JSON)
+                        .content("{"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value("请求体格式不正确"))
+                .andExpect(jsonPath("$.fieldErrors").doesNotExist());
     }
 
     @Test

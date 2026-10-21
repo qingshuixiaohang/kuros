@@ -115,7 +115,7 @@ public class PostPublishingService {
     @Transactional
     public void delete(String postId, String authorId) {
         CommunityPost post = postRepository.findById(postId)
-                .orElseThrow(() -> new ResourceNotFoundException("帖子不存在或已删除"));
+                .orElseThrow(() -> new ResourceNotFoundException("POST_NOT_FOUND", "帖子不存在或已删除"));
         if (!authorId.equals(post.getAuthorId())) {
             throw new ForbiddenException("只能管理自己的帖子");
         }
@@ -130,12 +130,12 @@ public class PostPublishingService {
 
     private CommunityPost ownedPost(String postId, String authorId) {
         CommunityPost post = postRepository.findById(postId)
-                .orElseThrow(() -> new ResourceNotFoundException("帖子不存在或已删除"));
+                .orElseThrow(() -> new ResourceNotFoundException("POST_NOT_FOUND", "帖子不存在或已删除"));
         if (!authorId.equals(post.getAuthorId())) {
             throw new ForbiddenException("只能管理自己的帖子");
         }
         if (post.getStatus() == PostStatus.DELETED) {
-            throw new ResourceNotFoundException("帖子不存在或已删除");
+            throw new ResourceNotFoundException("POST_NOT_FOUND", "帖子不存在或已删除");
         }
         return post;
     }

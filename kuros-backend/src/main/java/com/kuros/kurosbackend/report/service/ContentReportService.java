@@ -90,7 +90,7 @@ public class ContentReportService {
     @Transactional
     public ReportResponse handle(String reportId, String adminId, HandleReportRequest request) {
         ContentReport report = reportRepository.findById(reportId)
-                .orElseThrow(() -> new ResourceNotFoundException("举报记录不存在"));
+                .orElseThrow(() -> new ResourceNotFoundException("REPORT_NOT_FOUND", "举报记录不存在"));
         if (report.getStatus() != ReportStatus.PENDING) {
             throw new AuthRequestException("REPORT_ALREADY_HANDLED", "该举报已经处理过了");
         }
@@ -109,12 +109,12 @@ public class ContentReportService {
     private void ensureReportableTarget(ReportTargetType targetType, String targetId) {
         if (targetType == ReportTargetType.POST) {
             postRepository.findByIdAndStatus(targetId, PostStatus.PUBLISHED)
-                    .orElseThrow(() -> new ResourceNotFoundException("帖子不存在或已删除"));
+                    .orElseThrow(() -> new ResourceNotFoundException("POST_NOT_FOUND", "帖子不存在或已删除"));
             return;
         }
         commentRepository.findById(targetId)
                 .filter(comment -> comment.getStatus() == CommentStatus.NORMAL)
-                .orElseThrow(() -> new ResourceNotFoundException("评论不存在或已删除"));
+                .orElseThrow(() -> new ResourceNotFoundException("COMMENT_NOT_FOUND", "评论不存在或已删除"));
     }
 
     /**

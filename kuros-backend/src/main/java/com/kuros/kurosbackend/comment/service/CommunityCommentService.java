@@ -102,9 +102,9 @@ public class CommunityCommentService {
     @Transactional
     public void delete(String postId, String commentId, String authorId) {
         CommunityComment comment = commentRepository.findById(commentId)
-                .orElseThrow(() -> new ResourceNotFoundException("评论不存在"));
+                .orElseThrow(() -> new ResourceNotFoundException("COMMENT_NOT_FOUND", "评论不存在"));
         if (!postId.equals(comment.getPostId())) {
-            throw new ResourceNotFoundException("评论不存在");
+            throw new ResourceNotFoundException("COMMENT_NOT_FOUND", "评论不存在");
         }
         if (!authorId.equals(comment.getAuthorId())) {
             throw new ForbiddenException("只能删除自己的评论");
@@ -117,7 +117,7 @@ public class CommunityCommentService {
 
     private CommunityPost ensurePublishedPost(String postId) {
         return postRepository.findByIdAndStatus(postId, PostStatus.PUBLISHED)
-                .orElseThrow(() -> new ResourceNotFoundException("帖子不存在或已删除"));
+                .orElseThrow(() -> new ResourceNotFoundException("POST_NOT_FOUND", "帖子不存在或已删除"));
     }
 
     private Sort sortOf(String sort) {
