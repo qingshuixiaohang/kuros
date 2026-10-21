@@ -27,7 +27,7 @@
 | `codex/api-error-contract` | `ce9ad6d` | Spec #145 / Implement #146 | backend handler 契约 5/5、应用级 41/41；user handler 契约 4/4、登录集成 7/7；两侧 `test-compile` 通过；最小 Compose 栈实测 15 MB 上传返回 413 `UPLOAD_TOO_LARGE` |
 | `codex/report-moderation-boundary` | `48f6a64` | Implement #147 / Spec #148 | 领域边界 5/5、举报缓存集成 5/5、后端应用级 38/38；`test-compile` 通过 |
 | `codex/media-upload-consistency` | `23e2985` | Spec #149 / Implement #150 | 上传与清理合计 8/8、后端应用级 38/38；`test-compile` 通过 |
-| `codex/browser-baseline-repair` | `0e3e2d9` | 集成验证发现修复 | 定向 Playwright 14/14、全量 Playwright 128/128；ESLint、TypeScript、Vitest 39/39、Prettier、Webpack 生产构建与 `learning/30` retro 通过 |
+| `codex/browser-baseline-repair` | `43b043f` | 集成验证发现修复 | review 回归取得 RED 后，受影响 Playwright 15/15、全量 Playwright 129/129；ESLint、TypeScript、Vitest 39/39、Prettier、Webpack 生产构建与 `learning/30` retro 通过 |
 
 ## 发布前集成验证
 
@@ -61,7 +61,7 @@ GitHub 当前只有上述三组 Issue，且没有开放 PR：
 | `npx tsc --noEmit` | 通过，0 error |
 | `npm run test` | 4 个文件，39/39 通过 |
 | `npm run format:check` | 通过 |
-| `npm run test:e2e -- --workers=1` | 128/128 通过 |
+| `npm run test:e2e -- --workers=1` | 129/129 通过 |
 | `npx next build --webpack` | 生产构建通过 |
 
 全量 Playwright 在最终集成树实际执行，不等于测试发现计数。临时 worktree 的
@@ -70,7 +70,7 @@ GitHub 当前只有上述三组 Issue，且没有开放 PR：
 
 ## 收口顺序
 
-1. 推送三个待发布分支，创建对应 PR，并逐个手动触发 CI。
+1. 推送四个待发布分支，创建对应 PR，并逐个手动触发 CI。
 2. 对每个 PR 复核差异、CI 与双轴 code review，通过后合并并回写对应 Issue。
 3. 更新本地 `origin/main`，从新的主线重新审计开放 Issue 和源码，再决定是否还有
    可执行的路线图项。
