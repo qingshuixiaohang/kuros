@@ -28,6 +28,20 @@
 | `codex/report-moderation-boundary` | `48f6a64` | Implement #147 / Spec #148 | 领域边界 5/5、举报缓存集成 5/5、后端应用级 38/38；`test-compile` 通过 |
 | `codex/media-upload-consistency` | `23e2985` | Spec #149 / Implement #150 | 上传与清理合计 8/8、后端应用级 38/38；`test-compile` 通过 |
 
+## 发布前集成验证
+
+2026-10-21 在包含最新 `origin/main` 的最终集成树上使用短 `TEMP`
+`G:\kuros-web\.scratch\tmp` 与 Docker Desktop 实际执行：
+
+| 检查 | 结果 |
+|---|---|
+| `kuros-backend\mvnw.cmd test` | 216/216 通过，0 failure、0 error，21 skipped |
+| `kuros-user\mvnw.cmd test` | 51/51 通过，0 failure、0 error |
+| 最小 Compose 栈 15 MB 上传 | HTTP 413，`UPLOAD_TOO_LARGE` |
+| `git diff --check` | 通过 |
+
+`216/216` 与 `51/51` 是 Maven 全量测试汇总，不是定向测试或测试发现数量。
+
 ## 当前开放 Issue
 
 GitHub 当前只有上述三组 Issue，且没有开放 PR：
