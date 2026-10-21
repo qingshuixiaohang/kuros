@@ -32,6 +32,7 @@
 | 400 | `VALIDATION_FAILED` | 字段校验失败，详细结果在 `fieldErrors` |
 | 404 | `NOT_FOUND` | 未匹配路由或框架级静态资源不存在 |
 | 405 | `METHOD_NOT_ALLOWED` | 请求方法不受支持 |
+| 406 | `NOT_ACCEPTABLE` | 请求的响应类型不受支持 |
 | 413 | `UPLOAD_TOO_LARGE` | 上传请求超过容器上限 |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | 请求内容类型不受支持 |
 | 500 | `INTERNAL_ERROR` | 未捕获的服务端异常，响应不会包含内部异常信息 |

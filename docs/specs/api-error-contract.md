@@ -33,6 +33,7 @@
 | 未匹配路由或框架级静态资源不存在 | 404 | `NOT_FOUND` |
 | 请求方法不受支持 | 405 | `METHOD_NOT_ALLOWED` |
 | 请求内容类型不受支持 | 415 | `UNSUPPORTED_MEDIA_TYPE` |
+| 请求响应类型不受支持 | 406 | `NOT_ACCEPTABLE` |
 | 未捕获的服务端异常 | 500 | `INTERNAL_ERROR` |
 
 业务校验继续使用现有细分错误码（例如 `POST_TITLE_REQUIRED`、`REPORT_DUPLICATE`），不改语义。

@@ -32,6 +32,7 @@
 ## 验证记录
 
 - RED：backend 契约 3 例为 2 failure + 1 error；user 契约 2 例为 1 failure + 1 error。
-- GREEN：backend `ApiExceptionHandlerContractTest` 5/5、`KurosBackendApplicationTests` 41/41；user `ApiExceptionHandlerContractTest` 4/4、`AuthLoginIntegrationTest` 7/7。
+- GREEN：backend `ApiExceptionHandlerContractTest` 9/9、`KurosBackendApplicationTests` 41/41；user `ApiExceptionHandlerContractTest` 8/8、`AuthLoginIntegrationTest` 7/7。
+- 复审补充 multipart 缺失 part、405、415、406 契约；406 同时断言 `application/json`。
 - 两侧 `test-compile` 通过，`node --check scripts/compose-smoke.mjs` 和 `git diff --check` 通过。
 - 在最小 Compose 栈（MySQL、Redis、Nacos、backend）发送 15 MB multipart 请求，实际返回 HTTP 413 与 `{"code":"UPLOAD_TOO_LARGE","message":"上传文件过大"}`。

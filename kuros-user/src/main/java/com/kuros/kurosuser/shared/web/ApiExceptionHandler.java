@@ -10,10 +10,12 @@ import com.kuros.kurosuser.shared.exception.UnauthorizedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.BindingResult;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.ServletRequestBindingException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.LinkedHashMap;
@@ -120,8 +123,8 @@ public class ApiExceptionHandler {
                 .body(new ErrorResponse("INVALID_REQUEST", "请求参数不正确", null));
     }
 
-    @ExceptionHandler(ServletRequestBindingException.class)
-    public ResponseEntity<ErrorResponse> missingRequestValue(ServletRequestBindingException exception) {
+    @ExceptionHandler({ServletRequestBindingException.class, MissingServletRequestPartException.class})
+    public ResponseEntity<ErrorResponse> missingRequestValue(Exception exception) {
         return ResponseEntity.badRequest()
                 .body(new ErrorResponse("INVALID_REQUEST", "缺少必需的请求参数", null));
     }
@@ -152,6 +155,13 @@ public class ApiExceptionHandler {
     public ResponseEntity<ErrorResponse> mediaTypeNotSupported(HttpMediaTypeNotSupportedException exception) {
         return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
                 .body(new ErrorResponse("UNSUPPORTED_MEDIA_TYPE", "请求内容类型不受支持", null));
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+    public ResponseEntity<ErrorResponse> mediaTypeNotAcceptable(HttpMediaTypeNotAcceptableException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(new ErrorResponse("NOT_ACCEPTABLE", "请求的响应类型不受支持", null));
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
