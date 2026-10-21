@@ -5,19 +5,14 @@ import com.kuros.kurosbackend.report.api.HandleReportRequest;
 import com.kuros.kurosbackend.shared.api.PageMeta;
 import com.kuros.kurosbackend.shared.api.PageResult;
 import com.kuros.kurosbackend.report.api.ReportResponse;
-import com.kuros.kurosbackend.comment.domain.CommentStatus;
+import com.kuros.kurosbackend.comment.service.CommunityCommentService;
 import com.kuros.kurosbackend.report.domain.ContentReport;
-import com.kuros.kurosbackend.post.domain.PostStatus;
 import com.kuros.kurosbackend.report.domain.ReportReason;
 import com.kuros.kurosbackend.report.domain.ReportStatus;
 import com.kuros.kurosbackend.report.domain.ReportTargetType;
+import com.kuros.kurosbackend.post.service.PostPublishingService;
 import com.kuros.kurosbackend.shared.exception.AuthRequestException;
 import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
-import com.kuros.kurosbackend.shared.cache.CacheInvalidationAfterCommit;
-import com.kuros.kurosbackend.shared.cache.CacheNames;
-import com.kuros.kurosbackend.shared.cache.TwoLevelCache;
-import com.kuros.kurosbackend.comment.repository.CommunityCommentRepository;
-import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.report.repository.ContentReportRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -36,20 +31,17 @@ public class ContentReportService {
     private static final int MAX_PAGE_SIZE = 50;
 
     private final ContentReportRepository reportRepository;
-    private final CommunityPostRepository postRepository;
-    private final CommunityCommentRepository commentRepository;
-    private final TwoLevelCache twoLevelCache;
+    private final PostPublishingService postPublishingService;
+    private final CommunityCommentService commentService;
 
     public ContentReportService(
             ContentReportRepository reportRepository,
-            CommunityPostRepository postRepository,
-            CommunityCommentRepository commentRepository,
-            TwoLevelCache twoLevelCache
+            PostPublishingService postPublishingService,
+            CommunityCommentService commentService
     ) {
         this.reportRepository = reportRepository;
-        this.postRepository = postRepository;
-        this.commentRepository = commentRepository;
-        this.twoLevelCache = twoLevelCache;
+        this.postPublishingService = postPublishingService;
+        this.commentService = commentService;
     }
 
     @Transactional
@@ -89,7 +81,7 @@ public class ContentReportService {
 
     @Transactional
     public ReportResponse handle(String reportId, String adminId, HandleReportRequest request) {
-        ContentReport report = reportRepository.findById(reportId)
+        ContentReport report = reportRepository.findByIdForUpdate(reportId)
                 .orElseThrow(() -> new ResourceNotFoundException("REPORT_NOT_FOUND", "举报记录不存在"));
         if (report.getStatus() != ReportStatus.PENDING) {
             throw new AuthRequestException("REPORT_ALREADY_HANDLED", "该举报已经处理过了");
@@ -108,45 +100,18 @@ public class ContentReportService {
 
     private void ensureReportableTarget(ReportTargetType targetType, String targetId) {
         if (targetType == ReportTargetType.POST) {
-            postRepository.findByIdAndStatus(targetId, PostStatus.PUBLISHED)
-                    .orElseThrow(() -> new ResourceNotFoundException("POST_NOT_FOUND", "帖子不存在或已删除"));
+            postPublishingService.ensurePublished(targetId);
             return;
         }
-        commentRepository.findById(targetId)
-                .filter(comment -> comment.getStatus() == CommentStatus.NORMAL)
-                .orElseThrow(() -> new ResourceNotFoundException("COMMENT_NOT_FOUND", "评论不存在或已删除"));
+        commentService.ensureReportable(targetId);
     }
 
-    /**
-     * 举报成立后的内容处置：把目标帖子/评论置为删除态。
-     *
-     * 为什么必须显式驱逐两级缓存（审计 H5）：帖子详情的内容字段（正文、媒体）走
-     * {@link TwoLevelCache}，L1 存活 10s、L2 存活 60s。若只改 DB 不驱逐，管理员确认一条
-     * 违规举报后，被处置的帖子在最多 60 秒内仍能通过 GET /api/v1/posts/{id} 完整读到正文
-     * 与图片 URL——缓存里是删除前的内容。对 UGC 平台这是审核时效问题。
-     *
-     * 评论被删同理：评论是帖子详情响应的一部分（见 CommunityCommentService.create/delete
-     * 都在变更后驱逐所属帖子的详情缓存），所以删评论驱逐的也是「所属帖子」的 key。
-     *
-     * 遗留问题（审计 M14，未在本次修复范围内）：本方法直接改 post/comment 域实体状态，
-     * 绕过了 PostPublishingService/CommunityCommentService，导致帖子域的写规则（事件发布、
-     * 媒体状态）在举报路径上全部缺失。根治做法是把「删帖/删评论」收敛为领域服务方法，
-     * 由它统一负责缓存失效与事件发布，举报域只调用该方法。
-     */
     private void applyDisposition(ContentReport report) {
         if (report.getTargetType() == ReportTargetType.POST) {
-            postRepository.findById(report.getTargetId()).ifPresent(post -> {
-                if (post.getStatus() == PostStatus.PUBLISHED) post.delete(LocalDateTime.now());
-            });
-            CacheInvalidationAfterCommit.run(
-                    () -> twoLevelCache.evict(CacheNames.POST_DETAIL, report.getTargetId()));
+            postPublishingService.deleteForModeration(report.getTargetId());
             return;
         }
-        commentRepository.findById(report.getTargetId()).ifPresent(comment -> {
-            if (comment.getStatus() == CommentStatus.NORMAL) comment.delete(LocalDateTime.now());
-            CacheInvalidationAfterCommit.run(
-                    () -> twoLevelCache.evict(CacheNames.POST_DETAIL, comment.getPostId()));
-        });
+        commentService.deleteForModeration(report.getTargetId());
     }
 
     private ReportTargetType parseTargetType(String value) {

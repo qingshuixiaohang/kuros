@@ -1,14 +1,19 @@
 package com.kuros.kurosbackend.report;
 
 import com.kuros.kurosbackend.TestDatabases;
+import com.kuros.kurosbackend.comment.domain.CommentStatus;
+import com.kuros.kurosbackend.comment.domain.CommunityComment;
+import com.kuros.kurosbackend.comment.repository.CommunityCommentRepository;
 import com.kuros.kurosbackend.post.api.CreatePostRequest;
 import com.kuros.kurosbackend.post.service.CommunityPostService;
 import com.kuros.kurosbackend.post.service.PostPublishingService;
 import com.kuros.kurosbackend.report.api.CreateReportRequest;
 import com.kuros.kurosbackend.report.api.HandleReportRequest;
+import com.kuros.kurosbackend.report.domain.ReportStatus;
 import com.kuros.kurosbackend.report.service.ContentReportService;
 import com.kuros.kurosbackend.shared.cache.CacheNames;
 import com.kuros.kurosbackend.shared.cache.TwoLevelCache;
+import com.kuros.kurosbackend.shared.exception.AuthRequestException;
 import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,9 +36,15 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -81,6 +92,8 @@ class ReportDispositionCacheEvictionIntegrationTest {
     private PostPublishingService publishingService;
     @Autowired
     private CommunityPostService postService;
+    @Autowired
+    private CommunityCommentRepository commentRepository;
     @Autowired
     private TwoLevelCache twoLevelCache;
     @Autowired
@@ -174,6 +187,77 @@ class ReportDispositionCacheEvictionIntegrationTest {
         assertThat(l1.get(postId)).isNotNull();
         assertThat(redisTemplate.hasKey(L2_POST_DETAIL_PREFIX + postId)).isTrue();
         assertThat(postService.findPublishedById(postId)).isNotNull();
+    }
+
+    @Test
+    void 确认评论举报后驱逐所属帖子详情缓存并删除评论() {
+        String postId = publish("包含违规评论的帖子");
+        String commentId = UUID.randomUUID().toString();
+        commentRepository.saveAndFlush(new CommunityComment(
+                commentId, postId, REPORTER_ID, null, "违规评论", LocalDateTime.now()
+        ));
+
+        postService.findPublishedById(postId);
+        Cache l1 = Objects.requireNonNull(cacheManager.getCache(CacheNames.POST_DETAIL));
+        assertThat(l1.get(postId)).isNotNull();
+        assertThat(redisTemplate.hasKey(L2_POST_DETAIL_PREFIX + postId)).isTrue();
+
+        var report = reportService.create("COMMENT", commentId, REPORTER_ID,
+                new CreateReportRequest("ABUSE"));
+        reportService.handle(report.id(), ADMIN_ID, new HandleReportRequest("CONFIRM", "确认评论违规"));
+
+        assertThat(l1.get(postId)).isNull();
+        assertThat(redisTemplate.hasKey(L2_POST_DETAIL_PREFIX + postId)).isFalse();
+        assertThat(commentRepository.findById(commentId).orElseThrow().getStatus())
+                .isEqualTo(CommentStatus.DELETED);
+    }
+
+    @Test
+    void 目标帖子提前删除后仍可确认举报() {
+        String postId = publish("举报后由作者删除的帖子");
+        var report = reportService.create("POST", postId, REPORTER_ID,
+                new CreateReportRequest("MISINFORMATION"));
+
+        publishingService.delete(postId, REPORTER_ID);
+
+        var handled = reportService.handle(
+                report.id(), ADMIN_ID, new HandleReportRequest("CONFIRM", "帖子已由作者删除")
+        );
+
+        assertThat(handled.status()).isEqualTo(ReportStatus.CONFIRMED);
+        assertThatThrownBy(() -> postService.findPublishedById(postId))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void 并发确认同一举报只允许一次成功() throws Exception {
+        String postId = publish("并发举报处置的帖子");
+        var report = reportService.create("POST", postId, REPORTER_ID,
+                new CreateReportRequest("MISINFORMATION"));
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Boolean> first = executor.submit(() -> confirmAfter(start, report.id()));
+            Future<Boolean> second = executor.submit(() -> confirmAfter(start, report.id()));
+
+            start.countDown();
+
+            assertThat(List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(true, false);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private boolean confirmAfter(CountDownLatch start, String reportId) throws InterruptedException {
+        start.await();
+        try {
+            reportService.handle(reportId, ADMIN_ID, new HandleReportRequest("CONFIRM", null));
+            return true;
+        } catch (AuthRequestException exception) {
+            assertThat(exception.getCode()).isEqualTo("REPORT_ALREADY_HANDLED");
+            return false;
+        }
     }
 
     private String publish(String title) {
