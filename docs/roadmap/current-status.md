@@ -28,6 +28,7 @@
 | `codex/report-moderation-boundary` | `48f6a64` | Implement #147 / Spec #148 | 领域边界 5/5、举报缓存集成 5/5、后端应用级 38/38；`test-compile` 通过 |
 | `codex/media-upload-consistency` | `23e2985` | Spec #149 / Implement #150 | 上传与清理合计 8/8、后端应用级 38/38；`test-compile` 通过 |
 | `codex/browser-baseline-repair` | `43b043f` | 集成验证发现修复 | review 回归取得 RED 后，受影响 Playwright 15/15、全量 Playwright 129/129；ESLint、TypeScript、Vitest 39/39、Prettier、Webpack 生产构建与 `learning/30` retro 通过 |
+| `codex/gateway-nacos-container-ports` | `2f15cfc` | 集成验证发现修复 | 真实 Nacos 定向 2/2；Surefire 按测试类隔离后连续两轮全量 11/11，最终集成树 11/11；Nacos 容器堆上限 512 MiB、测试 JVM 堆上限 768 MiB；`learning/31` retro 通过 |
 
 ## 发布前集成验证
 
@@ -38,10 +39,11 @@
 |---|---|
 | `kuros-backend\mvnw.cmd test` | 216/216 通过，0 failure、0 error，21 skipped |
 | `kuros-user\mvnw.cmd test` | 51/51 通过，0 failure、0 error |
+| `kuros-gateway\mvnw.cmd test` | 11/11 通过，0 failure、0 error |
 | 最小 Compose 栈 15 MB 上传 | HTTP 413，`UPLOAD_TOO_LARGE` |
 | `git diff --check` | 通过 |
 
-`216/216` 与 `51/51` 是 Maven 全量测试汇总，不是定向测试或测试发现数量。
+`216/216`、`51/51` 与 `11/11` 是 Maven 全量测试汇总，不是定向测试或测试发现数量。
 
 ## 当前开放 Issue
 
@@ -70,7 +72,7 @@ GitHub 当前只有上述三组 Issue，且没有开放 PR：
 
 ## 收口顺序
 
-1. 推送本状态页及四个待发布实现分支，创建对应 PR，并逐个手动触发 CI。
+1. 推送本状态页及五个待发布实现分支，创建对应 PR，并逐个手动触发 CI。
 2. 对每个 PR 复核差异、CI 与双轴 code review，通过后合并并回写对应 Issue。
 3. 更新本地 `origin/main`，从新的主线重新审计开放 Issue 和源码，再决定是否还有
    可执行的路线图项。
