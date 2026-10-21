@@ -4,12 +4,17 @@ import com.kuros.kurosbackend.TestDatabases;
 import com.kuros.kurosbackend.comment.domain.CommentStatus;
 import com.kuros.kurosbackend.comment.domain.CommunityComment;
 import com.kuros.kurosbackend.comment.repository.CommunityCommentRepository;
+import com.kuros.kurosbackend.comment.service.CommunityCommentService;
 import com.kuros.kurosbackend.post.api.CreatePostRequest;
+import com.kuros.kurosbackend.post.domain.PostStatus;
+import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.post.service.CommunityPostService;
 import com.kuros.kurosbackend.post.service.PostPublishingService;
 import com.kuros.kurosbackend.report.api.CreateReportRequest;
 import com.kuros.kurosbackend.report.api.HandleReportRequest;
+import com.kuros.kurosbackend.report.domain.ContentReport;
 import com.kuros.kurosbackend.report.domain.ReportStatus;
+import com.kuros.kurosbackend.report.repository.ContentReportRepository;
 import com.kuros.kurosbackend.report.service.ContentReportService;
 import com.kuros.kurosbackend.shared.cache.CacheNames;
 import com.kuros.kurosbackend.shared.cache.TwoLevelCache;
@@ -31,6 +36,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -50,6 +56,8 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 
 /**
  * 举报处置后必须驱逐帖子详情两级缓存（审计 H5 的回归测试）。
@@ -94,6 +102,12 @@ class ReportDispositionCacheEvictionIntegrationTest {
     private CommunityPostService postService;
     @Autowired
     private CommunityCommentRepository commentRepository;
+    @Autowired
+    private CommunityCommentService commentService;
+    @Autowired
+    private CommunityPostRepository postRepository;
+    @MockitoSpyBean
+    private ContentReportRepository reportRepository;
     @Autowired
     private TwoLevelCache twoLevelCache;
     @Autowired
@@ -186,7 +200,8 @@ class ReportDispositionCacheEvictionIntegrationTest {
         // 驳回不动内容，缓存必须原样保留（避免无谓的跨节点失效风暴）
         assertThat(l1.get(postId)).isNotNull();
         assertThat(redisTemplate.hasKey(L2_POST_DETAIL_PREFIX + postId)).isTrue();
-        assertThat(postService.findPublishedById(postId)).isNotNull();
+        assertThat(postRepository.findById(postId).orElseThrow().getStatus())
+                .isEqualTo(PostStatus.PUBLISHED);
     }
 
     @Test
@@ -227,6 +242,53 @@ class ReportDispositionCacheEvictionIntegrationTest {
         assertThat(handled.status()).isEqualTo(ReportStatus.CONFIRMED);
         assertThatThrownBy(() -> postService.findPublishedById(postId))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void 目标评论提前删除后仍可确认举报() {
+        String postId = publish("举报后由作者删除评论的帖子");
+        String commentId = UUID.randomUUID().toString();
+        commentRepository.saveAndFlush(new CommunityComment(
+                commentId, postId, REPORTER_ID, null, "作者随后删除的评论", LocalDateTime.now()
+        ));
+        var report = reportService.create("COMMENT", commentId, REPORTER_ID,
+                new CreateReportRequest("ABUSE"));
+
+        commentService.delete(postId, commentId, REPORTER_ID);
+
+        var handled = reportService.handle(
+                report.id(), ADMIN_ID, new HandleReportRequest("CONFIRM", "评论已由作者删除")
+        );
+
+        assertThat(handled.status()).isEqualTo(ReportStatus.CONFIRMED);
+        assertThat(commentRepository.findById(commentId).orElseThrow().getStatus())
+                .isEqualTo(CommentStatus.DELETED);
+    }
+
+    @Test
+    void 举报记录保存失败时帖子处置与缓存失效整体回滚() {
+        String postId = publish("举报保存失败时应保持可读的帖子");
+        postService.findPublishedById(postId);
+        Cache l1 = Objects.requireNonNull(cacheManager.getCache(CacheNames.POST_DETAIL));
+        assertThat(l1.get(postId)).isNotNull();
+        assertThat(redisTemplate.hasKey(L2_POST_DETAIL_PREFIX + postId)).isTrue();
+        var report = reportService.create("POST", postId, REPORTER_ID,
+                new CreateReportRequest("MISINFORMATION"));
+        spyReceived.clear();
+        doThrow(new IllegalStateException("forced report persistence failure"))
+                .when(reportRepository).save(any(ContentReport.class));
+
+        assertThatThrownBy(() -> reportService.handle(
+                report.id(), ADMIN_ID, new HandleReportRequest("CONFIRM", "确认违规")
+        )).isInstanceOf(IllegalStateException.class);
+
+        assertThat(postRepository.findById(postId).orElseThrow().getStatus())
+                .isEqualTo(PostStatus.PUBLISHED);
+        assertThat(reportRepository.findById(report.id()).orElseThrow().getStatus())
+                .isEqualTo(ReportStatus.PENDING);
+        assertThat(l1.get(postId)).isNotNull();
+        assertThat(redisTemplate.hasKey(L2_POST_DETAIL_PREFIX + postId)).isTrue();
+        assertThat(spyReceived).isEmpty();
     }
 
     @Test
