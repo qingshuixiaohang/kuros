@@ -9,6 +9,8 @@ import com.kuros.kurosbackend.shared.exception.ForbiddenException;
 import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.media.repository.MediaAssetRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -59,13 +61,14 @@ public class DefaultMediaAssetService implements MediaAssetService {
 
     /**
      * 上传图片。
-     * 流程：校验 → UUID 重命名 → 存储 → 记录元数据 → 返回响应
+     * 流程：校验 → UUID 重命名 → 记录临时元数据 → 存储 → 返回响应
      *
      * 为什么校验逻辑放在业务层而不是 Strategy？
      * 因为校验规则（大小/类型/Magic Number）是业务规则，跟存储介质无关。
      * 无论存本地还是 MinIO，校验逻辑都一样。
      */
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ImageUploadResponse store(MultipartFile file, String ownerId) {
         // 1. 文件校验（业务规则，与存储无关）
         validateFile(file);
@@ -87,17 +90,31 @@ public class DefaultMediaAssetService implements MediaAssetService {
         // 2. UUID 重命名（避免文件名冲突 + 防止路径穿越）
         String storedName = UUID.randomUUID() + "." + extension;
 
-        // 3. 委托 Strategy 存储（本地 or MinIO）
-        try {
-            storageStrategy.put(storedName, file.getBytes(), contentType);
-        } catch (Exception exception) {
-            throw new FileStorageException("图片保存失败", exception);
-        }
-
-        // 4. 记录元数据到数据库
+        // 3. 先记录元数据，确保对象一旦写入就可被临时资产清理发现
         MediaAsset asset = mediaAssetRepository.save(MediaAsset.temporary(
                 ownerId, storedName, file.getOriginalFilename(), contentType, file.getSize(), LocalDateTime.now()
         ));
+
+        // 4. 委托 Strategy 存储（本地 or MinIO）
+        try {
+            storageStrategy.put(storedName, file.getBytes(), contentType);
+        } catch (Exception exception) {
+            try {
+                storageStrategy.delete(storedName);
+            } catch (RuntimeException cleanupException) {
+                log.warn("媒体对象残留删除失败，保留临时态等待清理：assetId={}，storageKey={}",
+                        asset.getId(), storedName, cleanupException);
+                throw new FileStorageException("图片保存失败", exception);
+            }
+            try {
+                asset.markDeleted();
+                mediaAssetRepository.save(asset);
+            } catch (RuntimeException compensationException) {
+                log.warn("媒体资产补偿删除失败，保留临时态等待清理：assetId={}",
+                        asset.getId(), compensationException);
+            }
+            throw new FileStorageException("图片保存失败", exception);
+        }
 
         // 5. 返回响应（URL 由 Strategy 生成，保证与存储位置一致）
         return new ImageUploadResponse(
@@ -132,16 +149,16 @@ public class DefaultMediaAssetService implements MediaAssetService {
     }
 
     /**
-     * 清理过期的临时图片（上传后未关联帖子的孤儿文件）。
+     * 清理过期的临时媒体资产（上传后尚未关联帖子，但仍可由元数据发现）。
      * 定时任务调用（后续 XXL-JOB 切片会接入）。
      *
      * 为什么逐项 try/catch 而不是整批一个事务（可靠性加固）：
      * 原实现把 delete 循环包在方法里，任何一个文件删除失败就抛出方法，
      * 整批剩余文件这次都不处理——下次定时任务还会在同一个位置崩，
-     * 清理永远跑不完。而孤儿文件是持续产生的，跑不完就意味着无限堆积。
+     * 清理永远跑不完。而临时媒体资产会持续产生，跑不完就意味着无限堆积。
      *
-     * 失败项保持 TEMPORARY 而不是 markDeleted：delete 失败了物理文件还在，
-     * 标成 DELETED 会让它再也进不了清理范围，成为永久孤儿。保持原状态
+     * 失败项保持 TEMPORARY 而不是 markDeleted：delete 失败时对象还在，
+     * 标成 DELETED 会让它再也进不了清理范围，成为无法收敛的残留对象。保持原状态
      * 等下次重试才是可自愈的。
      *
      * 返回值语义：实际成功删除的文件数。全部失败返回 0 而不抛异常——
@@ -160,7 +177,7 @@ public class DefaultMediaAssetService implements MediaAssetService {
                 storageStrategy.delete(asset.getStorageKey());
             } catch (RuntimeException exception) {
                 // 单个文件失败只跳过它，不中断整批；保持 TEMPORARY 等下次重试
-                log.warn("临时图片清理跳过（下次重试）：storageKey={}，原因={}",
+                log.warn("临时媒体资产清理跳过（下次重试）：storageKey={}，原因={}",
                         asset.getStorageKey(), exception.getMessage());
                 continue;
             }
