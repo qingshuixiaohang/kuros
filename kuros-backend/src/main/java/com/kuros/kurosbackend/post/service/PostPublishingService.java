@@ -128,6 +128,22 @@ public class PostPublishingService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public void ensurePublished(String postId) {
+        postRepository.findByIdAndStatus(postId, PostStatus.PUBLISHED)
+                .orElseThrow(() -> new ResourceNotFoundException("POST_NOT_FOUND", "帖子不存在或已删除"));
+    }
+
+    @Transactional
+    public void deleteForModeration(String postId) {
+        postRepository.findById(postId).ifPresent(post -> {
+            if (post.getStatus() == PostStatus.PUBLISHED) {
+                post.delete(LocalDateTime.now());
+            }
+        });
+        CacheInvalidationAfterCommit.run(() -> twoLevelCache.evict(CacheNames.POST_DETAIL, postId));
+    }
+
     private CommunityPost ownedPost(String postId, String authorId) {
         CommunityPost post = postRepository.findById(postId)
                 .orElseThrow(() -> new ResourceNotFoundException("POST_NOT_FOUND", "帖子不存在或已删除"));

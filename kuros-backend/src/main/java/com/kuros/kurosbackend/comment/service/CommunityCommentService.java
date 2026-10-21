@@ -115,6 +115,23 @@ public class CommunityCommentService {
         CacheInvalidationAfterCommit.run(() -> twoLevelCache.evict(CacheNames.POST_DETAIL, postId));
     }
 
+    @Transactional(readOnly = true)
+    public void ensureReportable(String commentId) {
+        commentRepository.findById(commentId)
+                .filter(comment -> comment.getStatus() == CommentStatus.NORMAL)
+                .orElseThrow(() -> new ResourceNotFoundException("COMMENT_NOT_FOUND", "评论不存在或已删除"));
+    }
+
+    @Transactional
+    public void deleteForModeration(String commentId) {
+        commentRepository.findById(commentId).ifPresent(comment -> {
+            if (comment.getStatus() == CommentStatus.NORMAL) {
+                comment.delete(LocalDateTime.now());
+            }
+            CacheInvalidationAfterCommit.run(() -> twoLevelCache.evict(CacheNames.POST_DETAIL, comment.getPostId()));
+        });
+    }
+
     private CommunityPost ensurePublishedPost(String postId) {
         return postRepository.findByIdAndStatus(postId, PostStatus.PUBLISHED)
                 .orElseThrow(() -> new ResourceNotFoundException("POST_NOT_FOUND", "帖子不存在或已删除"));
