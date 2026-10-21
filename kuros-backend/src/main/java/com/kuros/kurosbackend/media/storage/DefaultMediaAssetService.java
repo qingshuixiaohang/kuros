@@ -9,6 +9,8 @@ import com.kuros.kurosbackend.shared.exception.ForbiddenException;
 import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.media.repository.MediaAssetRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -66,6 +68,7 @@ public class DefaultMediaAssetService implements MediaAssetService {
      * 无论存本地还是 MinIO，校验逻辑都一样。
      */
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ImageUploadResponse store(MultipartFile file, String ownerId) {
         // 1. 文件校验（业务规则，与存储无关）
         validateFile(file);
@@ -97,11 +100,18 @@ public class DefaultMediaAssetService implements MediaAssetService {
             storageStrategy.put(storedName, file.getBytes(), contentType);
         } catch (Exception exception) {
             try {
+                storageStrategy.delete(storedName);
+            } catch (RuntimeException cleanupException) {
+                log.warn("媒体对象残留删除失败，保留临时态等待清理：assetId={}，storageKey={}",
+                        asset.getId(), storedName, cleanupException);
+                throw new FileStorageException("图片保存失败", exception);
+            }
+            try {
                 asset.markDeleted();
                 mediaAssetRepository.save(asset);
             } catch (RuntimeException compensationException) {
-                log.warn("媒体资产补偿删除失败，保留临时态等待清理：assetId={}，原因={}",
-                        asset.getId(), compensationException.getMessage());
+                log.warn("媒体资产补偿删除失败，保留临时态等待清理：assetId={}",
+                        asset.getId(), compensationException);
             }
             throw new FileStorageException("图片保存失败", exception);
         }

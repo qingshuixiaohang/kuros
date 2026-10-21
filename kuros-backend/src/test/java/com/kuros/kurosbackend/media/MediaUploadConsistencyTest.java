@@ -37,10 +37,12 @@ class MediaUploadConsistencyTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
 
         assertThat(storage.putCount).isZero();
+        assertThat(storage.deleteCount).isZero();
+        assertThat(storage.objectExists).isFalse();
     }
 
     @Test
-    void 对象存储失败时标记临时资产删除并传播存储异常() {
+    void 对象存储失败时删除已写入对象并标记资产删除() {
         List<MediaAssetStatus> savedStatuses = new ArrayList<>();
         RecordingStorage storage = new RecordingStorage();
         storage.failure = new IllegalStateException("对象存储不可用");
@@ -61,6 +63,8 @@ class MediaUploadConsistencyTest {
                 MediaAssetStatus.TEMPORARY,
                 MediaAssetStatus.DELETED
         );
+        assertThat(storage.deleteCount).isEqualTo(1);
+        assertThat(storage.objectExists).isFalse();
     }
 
     @Test
@@ -91,6 +95,31 @@ class MediaUploadConsistencyTest {
                 MediaAssetStatus.DELETED
         );
         assertThat(persistedStatuses).containsExactly(MediaAssetStatus.TEMPORARY);
+        assertThat(storage.deleteCount).isEqualTo(1);
+        assertThat(storage.objectExists).isFalse();
+    }
+
+    @Test
+    void 残留对象删除失败时保留临时资产等待清理() {
+        List<MediaAssetStatus> savedStatuses = new ArrayList<>();
+        RecordingStorage storage = new RecordingStorage();
+        storage.failure = new IllegalStateException("对象存储写入结果未知");
+        storage.deleteFailure = new IllegalStateException("对象存储删除失败");
+        DefaultMediaAssetService service = new DefaultMediaAssetService(
+                storage,
+                repository(asset -> {
+                    savedStatuses.add(asset.getStatus());
+                    return asset;
+                })
+        );
+
+        assertThatThrownBy(() -> service.store(pngFile(), "owner-1"))
+                .isInstanceOf(FileStorageException.class)
+                .hasCause(storage.failure);
+
+        assertThat(savedStatuses).containsExactly(MediaAssetStatus.TEMPORARY);
+        assertThat(storage.deleteCount).isEqualTo(1);
+        assertThat(storage.objectExists).isTrue();
     }
 
     @Test
@@ -113,6 +142,7 @@ class MediaUploadConsistencyTest {
 
         assertThat(savedStatuses).containsExactly(MediaAssetStatus.TEMPORARY);
         assertThat(storage.putCount).isEqualTo(1);
+        assertThat(storage.deleteCount).isZero();
         assertThat(events).containsExactly("save:TEMPORARY", "put");
         assertThat(response.assetId()).isNotBlank();
         assertThat(response.url())
@@ -147,12 +177,16 @@ class MediaUploadConsistencyTest {
 
     private static final class RecordingStorage implements StorageStrategy {
         private int putCount;
+        private int deleteCount;
         private RuntimeException failure;
+        private RuntimeException deleteFailure;
+        private boolean objectExists;
         private List<String> events;
 
         @Override
         public void put(String key, byte[] bytes, String contentType) {
             putCount++;
+            objectExists = true;
             if (events != null) {
                 events.add("put");
             }
@@ -168,7 +202,14 @@ class MediaUploadConsistencyTest {
 
         @Override
         public void delete(String key) {
-            throw new UnsupportedOperationException();
+            deleteCount++;
+            if (events != null) {
+                events.add("delete");
+            }
+            if (deleteFailure != null) {
+                throw deleteFailure;
+            }
+            objectExists = false;
         }
 
         @Override
