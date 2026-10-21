@@ -27,6 +27,7 @@
 | `codex/api-error-contract` | `ce9ad6d` | Spec #145 / Implement #146 | backend handler 契约 5/5、应用级 41/41；user handler 契约 4/4、登录集成 7/7；两侧 `test-compile` 通过；最小 Compose 栈实测 15 MB 上传返回 413 `UPLOAD_TOO_LARGE` |
 | `codex/report-moderation-boundary` | `48f6a64` | Implement #147 / Spec #148 | 领域边界 5/5、举报缓存集成 5/5、后端应用级 38/38；`test-compile` 通过 |
 | `codex/media-upload-consistency` | `23e2985` | Spec #149 / Implement #150 | 上传与清理合计 8/8、后端应用级 38/38；`test-compile` 通过 |
+| `codex/browser-baseline-repair` | `4a27fc1` | 集成验证发现修复 | 定向 Playwright 14/14、全量 Playwright 128/128；ESLint、TypeScript、Vitest 39/39、Prettier 与 Webpack 生产构建通过 |
 
 ## 发布前集成验证
 
@@ -60,10 +61,12 @@ GitHub 当前只有上述三组 Issue，且没有开放 PR：
 | `npx tsc --noEmit` | 通过，0 error |
 | `npm run test` | 4 个文件，39/39 通过 |
 | `npm run format:check` | 通过 |
-| `npx playwright test --list` | 128 条用例，25 个 spec |
+| `npm run test:e2e -- --workers=1` | 128/128 通过 |
+| `npx next build --webpack` | 生产构建通过 |
 
-本表只声明命令实际覆盖的内容。`playwright test --list` 统计用例，不代表本轮已经执行
-128 条浏览器用例；分支 CI 仍按项目流程手动触发。
+全量 Playwright 在最终集成树实际执行，不等于测试发现计数。临时 worktree 的
+`node_modules` 是外部 junction，Turbopack 会将其判为超出项目文件系统根，因此生产构建
+使用 Webpack 路径验证；分支 CI 仍按项目流程手动触发。
 
 ## 收口顺序
 
