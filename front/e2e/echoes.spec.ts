@@ -1,4 +1,11 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Route } from "@playwright/test";
+
+async function continueUnlessGet(route: Route, pathname: string) {
+  const request = route.request();
+  if (request.method() === "GET" && new URL(request.url()).pathname === pathname) return true;
+  await route.continue();
+  return false;
+}
 
 /**
  * 声骸域 e2e（前端审计 H-9 的第二块，news 域见 news.spec.ts）。
@@ -59,17 +66,25 @@ const ECHO_LIST = {
 /** mock 声骸列表与详情，返回一个可按 slug 查询详情的函数。 */
 async function mockEchoes(page: import("@playwright/test").Page) {
   // role 过滤由服务端做（后端 EchoController 支持 ?role=），mock 必须照做
-  await page.route(/\/api\/v1\/echoes\?/, (route) => {
+  await page.route(/\/api\/v1\/echoes\?/, async (route) => {
+    if (!(await continueUnlessGet(route, "/api/v1/echoes"))) return;
     const role = new URL(route.request().url()).searchParams.get("role");
     const items = role ? ECHO_LIST.data.filter((item) => item.role === role) : ECHO_LIST.data;
-    route.fulfill({ json: { ...ECHO_LIST, data: items, meta: { ...ECHO_LIST.meta, totalItems: items.length } } });
+    await route.fulfill({ json: { ...ECHO_LIST, data: items, meta: { ...ECHO_LIST.meta, totalItems: items.length } } });
   });
-  await page.route("**/api/v1/echoes", (route) => route.fulfill({ json: ECHO_LIST }));
-  await page.route("**/api/v1/echoes/floating-stars", (route) => route.fulfill({ json: { code: "SUCCESS", data: ECHO_LIST.data[0] } }));
+  await page.route("**/api/v1/echoes", async (route) => {
+    if (!(await continueUnlessGet(route, "/api/v1/echoes"))) return;
+    await route.fulfill({ json: ECHO_LIST });
+  });
+  await page.route("**/api/v1/echoes/floating-stars", async (route) => {
+    if (!(await continueUnlessGet(route, "/api/v1/echoes/floating-stars"))) return;
+    await route.fulfill({ json: { code: "SUCCESS", data: ECHO_LIST.data[0] } });
+  });
   // 未上线/未知 slug：后端返回 404 + 业务码
-  await page.route("**/api/v1/echoes/disabled-set", (route) =>
-    route.fulfill({ status: 404, json: { code: "ECHO_NOT_FOUND", message: "声骸套装不存在或已下架" } }),
-  );
+  await page.route("**/api/v1/echoes/disabled-set", async (route) => {
+    if (!(await continueUnlessGet(route, "/api/v1/echoes/disabled-set"))) return;
+    await route.fulfill({ status: 404, json: { code: "ECHO_NOT_FOUND", message: "声骸套装不存在或已下架" } });
+  });
 }
 
 test("声骸列表展示后端返回的套装", async ({ page }) => {
@@ -88,13 +103,7 @@ test("声骸列表加载和空结果消息作为 status 播报", async ({ page }
     releaseResponse = resolve;
   });
   await page.route("**/api/v1/echoes**", async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    if (request.method() !== "GET" || url.pathname !== "/api/v1/echoes") {
-      await route.continue();
-      return;
-    }
-
+    if (!(await continueUnlessGet(route, "/api/v1/echoes"))) return;
     await responseGate;
     await route.fulfill({ json: { ...ECHO_LIST, data: [], meta: { ...ECHO_LIST.meta, totalItems: 0 } } });
   });
@@ -108,13 +117,7 @@ test("声骸列表加载和空结果消息作为 status 播报", async ({ page }
 
 test("声骸列表加载失败消息作为 status 播报", async ({ page }) => {
   await page.route("**/api/v1/echoes**", async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    if (request.method() !== "GET" || url.pathname !== "/api/v1/echoes") {
-      await route.continue();
-      return;
-    }
-
+    if (!(await continueUnlessGet(route, "/api/v1/echoes"))) return;
     await route.fulfill({ status: 500, body: "boom" });
   });
 
@@ -187,7 +190,20 @@ test("未知声骸 slug 走不存在态，不回退到第一条冒充", async ({
 
 test("声骸详情接口失败时显示错误态而不是空白", async ({ page }) => {
   await mockEchoes(page);
-  await page.route("**/api/v1/echoes/floating-stars", (route) => route.fulfill({ status: 500, body: "boom" }));
+  await page.route("**/api/v1/echoes/floating-stars", async (route) => {
+    if (!(await continueUnlessGet(route, "/api/v1/echoes/floating-stars"))) return;
+    await route.fulfill({ status: 500, body: "boom" });
+  });
   await page.goto("/echoes/floating-stars");
-  await expect(page.getByText("声骸套装不存在或已下架。")).toBeVisible();
+  await expect(page.getByText("声骸套装加载失败，请稍后重试。")).toBeVisible();
+});
+
+test("声骸详情非业务 404 显示错误态而不是不存在态", async ({ page }) => {
+  await mockEchoes(page);
+  await page.route("**/api/v1/echoes/floating-stars", async (route) => {
+    if (!(await continueUnlessGet(route, "/api/v1/echoes/floating-stars"))) return;
+    await route.fulfill({ status: 404, json: { code: "ROUTE_NOT_FOUND", message: "route not found" } });
+  });
+  await page.goto("/echoes/floating-stars");
+  await expect(page.getByText("声骸套装加载失败，请稍后重试。")).toBeVisible();
 });

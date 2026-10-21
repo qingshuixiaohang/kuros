@@ -1,4 +1,11 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Route } from "@playwright/test";
+
+async function continueUnlessGet(route: Route, pathname: string) {
+  const request = route.request();
+  if (request.method() === "GET" && new URL(request.url()).pathname === pathname) return true;
+  await route.continue();
+  return false;
+}
 
 const posts = [
   {
@@ -51,20 +58,27 @@ const posts = [
 
 test("同人列表按 API 分类展示作品并链接到对应帖子详情", async ({ page }) => {
   let requestedUrl = "";
-  await page.route("**/api/v1/posts?*", (route) => {
+  await page.route("**/api/v1/posts?*", async (route) => {
+    if (!(await continueUnlessGet(route, "/api/v1/posts"))) return;
     requestedUrl = route.request().url();
     const params = new URL(requestedUrl).searchParams;
     const category = params.get("category");
     const filtered = category ? posts.filter((post) => post.category === category) : posts;
-    return route.fulfill({
+    await route.fulfill({
       json: {
         data: filtered,
         meta: { page: 1, pageSize: 20, totalItems: filtered.length, totalPages: 1 },
       },
     });
   });
-  await page.route("**/api/v1/posts/creation-1", (route) => route.fulfill({ json: { data: posts[0] } }));
-  await page.route("**/api/v1/posts/creation-2", (route) => route.fulfill({ json: { data: posts[1] } }));
+  await page.route("**/api/v1/posts/creation-1", async (route) => {
+    if (!(await continueUnlessGet(route, "/api/v1/posts/creation-1"))) return;
+    await route.fulfill({ json: { data: posts[0] } });
+  });
+  await page.route("**/api/v1/posts/creation-2", async (route) => {
+    if (!(await continueUnlessGet(route, "/api/v1/posts/creation-2"))) return;
+    await route.fulfill({ json: { data: posts[1] } });
+  });
 
   await page.goto("/creations");
 
@@ -91,6 +105,7 @@ test("同人列表在等待帖子 API 时显示加载状态", async ({ page }) =
     releaseResponse = resolve;
   });
   await page.route("**/api/v1/posts?*", async (route) => {
+    if (!(await continueUnlessGet(route, "/api/v1/posts"))) return;
     await responseGate;
     await route.fulfill({ json: { data: [], meta: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } } });
   });
@@ -102,7 +117,10 @@ test("同人列表在等待帖子 API 时显示加载状态", async ({ page }) =
 });
 
 test("同人列表 API 失败时显示错误且不显示 Mock 角色", async ({ page }) => {
-  await page.route("**/api/v1/posts?*", (route) => route.fulfill({ status: 503, body: "unavailable" }));
+  await page.route("**/api/v1/posts?*", async (route) => {
+    if (!(await continueUnlessGet(route, "/api/v1/posts"))) return;
+    await route.fulfill({ status: 503, body: "unavailable" });
+  });
 
   await page.goto("/creations");
 
@@ -112,7 +130,10 @@ test("同人列表 API 失败时显示错误且不显示 Mock 角色", async ({ 
 });
 
 test("同人列表在 API 返回空数组时显示空状态", async ({ page }) => {
-  await page.route("**/api/v1/posts?*", (route) => route.fulfill({ json: { data: [], meta: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } } }));
+  await page.route("**/api/v1/posts?*", async (route) => {
+    if (!(await continueUnlessGet(route, "/api/v1/posts"))) return;
+    await route.fulfill({ json: { data: [], meta: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } } });
+  });
 
   await page.goto("/creations");
 
@@ -120,13 +141,15 @@ test("同人列表在 API 返回空数组时显示空状态", async ({ page }) =
 });
 
 test("其他社区页面不会请求同人帖子列表", async ({ page }) => {
-  let requestCount = 0;
-  await page.route("**/api/v1/posts?*", (route) => {
-    requestCount += 1;
-    return route.fulfill({ json: { data: [], meta: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } } });
+  let creationRequestCount = 0;
+  await page.route("**/api/v1/posts?*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === "GET" && url.pathname === "/api/v1/posts" && url.searchParams.get("category") === "同人") creationRequestCount += 1;
+    await route.fulfill({ json: { data: [], meta: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } } });
   });
 
   await page.goto("/news");
 
-  expect(requestCount).toBe(0);
+  expect(creationRequestCount).toBe(0);
 });

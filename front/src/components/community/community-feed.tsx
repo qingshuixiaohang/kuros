@@ -340,7 +340,9 @@ export function CommunityFeed({ query }: { query: string }) {
         ))}
       </div>
       {loading ? (
-        <div className="feed-status">正在整理漂泊者的最新内容…</div>
+        <div className="feed-status" role="status">
+          正在整理漂泊者的最新内容…
+        </div>
       ) : visible.length ? (
         <>
           {visible.map((guide) => (

@@ -52,3 +52,13 @@ gh issue close <number> --comment "..."
 ```
 
 提交前先同步 Issue 状态；实现完成后在 Issue 中补充测试结果、已知限制和关联 PR。
+
+### 最终集成浏览器证据
+
+发布前必须从包含全部待发布切片的最终集成树实际执行 Playwright 全量套件。
+`playwright test --list` 只用于发现计数，不能替代通过证据。Windows 16GB 主机优先使用
+单 worker，避免 Next.js 冷编译时并发争用造成超时。
+
+临时 worktree 通过 junction 复用主工作区的 `node_modules` 时，Turbopack 会拒绝项目
+文件系统根之外的链接。此时使用仓库支持的 Webpack 构建路径完成生产构建，并在 PR
+中记录该环境限制。
