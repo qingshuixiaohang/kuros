@@ -189,5 +189,5 @@ test("声骸详情接口失败时显示错误态而不是空白", async ({ page 
   await mockEchoes(page);
   await page.route("**/api/v1/echoes/floating-stars", (route) => route.fulfill({ status: 500, body: "boom" }));
   await page.goto("/echoes/floating-stars");
-  await expect(page.getByText("声骸套装不存在或已下架。")).toBeVisible();
+  await expect(page.getByText("声骸套装加载失败，请稍后重试。")).toBeVisible();
 });

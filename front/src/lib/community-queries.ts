@@ -1,5 +1,6 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ApiError,
   createComment,
   createPost,
   createReport,
@@ -285,7 +286,14 @@ export function useEchoListQuery(role?: string) {
 export function useEchoDetailQuery(slug: string) {
   return useQuery({
     queryKey: ["echo-detail", slug],
-    queryFn: async () => await fetchEchoSet(slug),
+    queryFn: async () => {
+      try {
+        return await fetchEchoSet(slug);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      }
+    },
     enabled: Boolean(slug),
     retry: false,
   });
