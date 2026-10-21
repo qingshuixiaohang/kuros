@@ -290,7 +290,7 @@ export function useEchoDetailQuery(slug: string) {
       try {
         return await fetchEchoSet(slug);
       } catch (error) {
-        if (error instanceof ApiError && error.status === 404) return null;
+        if (error instanceof ApiError && error.status === 404 && error.code === "ECHO_NOT_FOUND") return null;
         throw error;
       }
     },

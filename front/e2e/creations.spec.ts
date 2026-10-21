@@ -122,7 +122,9 @@ test("同人列表在 API 返回空数组时显示空状态", async ({ page }) =
 test("其他社区页面不会请求同人帖子列表", async ({ page }) => {
   let requestCount = 0;
   await page.route("**/api/v1/posts?*", (route) => {
-    if (new URL(route.request().url()).searchParams.get("category") === "同人") requestCount += 1;
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === "GET" && url.pathname === "/api/v1/posts" && url.searchParams.get("category") === "同人") requestCount += 1;
     return route.fulfill({ json: { data: [], meta: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } } });
   });
 

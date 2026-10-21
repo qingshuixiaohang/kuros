@@ -67,9 +67,12 @@ async function mockEchoes(page: import("@playwright/test").Page) {
   await page.route("**/api/v1/echoes", (route) => route.fulfill({ json: ECHO_LIST }));
   await page.route("**/api/v1/echoes/floating-stars", (route) => route.fulfill({ json: { code: "SUCCESS", data: ECHO_LIST.data[0] } }));
   // 未上线/未知 slug：后端返回 404 + 业务码
-  await page.route("**/api/v1/echoes/disabled-set", (route) =>
-    route.fulfill({ status: 404, json: { code: "ECHO_NOT_FOUND", message: "声骸套装不存在或已下架" } }),
-  );
+  await page.route("**/api/v1/echoes/disabled-set", (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() !== "GET" || url.pathname !== "/api/v1/echoes/disabled-set") return route.continue();
+    return route.fulfill({ status: 404, json: { code: "ECHO_NOT_FOUND", message: "声骸套装不存在或已下架" } });
+  });
 }
 
 test("声骸列表展示后端返回的套装", async ({ page }) => {
@@ -187,7 +190,24 @@ test("未知声骸 slug 走不存在态，不回退到第一条冒充", async ({
 
 test("声骸详情接口失败时显示错误态而不是空白", async ({ page }) => {
   await mockEchoes(page);
-  await page.route("**/api/v1/echoes/floating-stars", (route) => route.fulfill({ status: 500, body: "boom" }));
+  await page.route("**/api/v1/echoes/floating-stars", (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() !== "GET" || url.pathname !== "/api/v1/echoes/floating-stars") return route.continue();
+    return route.fulfill({ status: 500, body: "boom" });
+  });
+  await page.goto("/echoes/floating-stars");
+  await expect(page.getByText("声骸套装加载失败，请稍后重试。")).toBeVisible();
+});
+
+test("声骸详情非业务 404 显示错误态而不是不存在态", async ({ page }) => {
+  await mockEchoes(page);
+  await page.route("**/api/v1/echoes/floating-stars", (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() !== "GET" || url.pathname !== "/api/v1/echoes/floating-stars") return route.continue();
+    return route.fulfill({ status: 404, json: { code: "ROUTE_NOT_FOUND", message: "route not found" } });
+  });
   await page.goto("/echoes/floating-stars");
   await expect(page.getByText("声骸套装加载失败，请稍后重试。")).toBeVisible();
 });
