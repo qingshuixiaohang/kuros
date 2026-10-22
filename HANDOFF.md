@@ -1,6 +1,7 @@
 # 项目交接文档
 
 > 当前状态已迁移到 [`docs/roadmap/current-status.md`](docs/roadmap/current-status.md)。
+> ds4.1 接手入口：[`docs/roadmap/ds41-handoff.md`](docs/roadmap/ds41-handoff.md)。
 > 本文件保留 2026-09-21 的历史交接内容与架构背景；其中的切片进度、测试数字和
 > “下一步”不构成当前事实。
 
