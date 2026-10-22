@@ -7,6 +7,11 @@ import com.kuros.kurosbackend.feed.redis.FeedTimelineStore;
 import com.kuros.kurosbackend.post.domain.CommunityPost;
 import com.kuros.kurosbackend.post.domain.PostType;
 import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
+import com.kuros.kurosbackend.shared.api.AuthorResponse;
+import com.kuros.kurosbackend.shared.api.PageMeta;
+import com.kuros.kurosbackend.shared.api.PageResult;
+import com.kuros.kurosbackend.user.client.UserBriefDto;
+import com.kuros.kurosbackend.user.client.UserDirectoryFacade;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,6 +22,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.containers.GenericContainer;
@@ -27,6 +33,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -64,6 +76,7 @@ class CursorHttpContractIntegrationTest {
     @Autowired CommunityPostRepository postRepository;
     @Autowired FeedTimelineStore timelineStore;
     @Autowired JdbcTemplate jdbcTemplate;
+    @MockitoBean UserDirectoryFacade users;
 
     private static final String AUTHOR = "cursor-http-author";
     private static final String USER = "cursor-http-user";
@@ -71,6 +84,13 @@ class CursorHttpContractIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        reset(users);
+        when(users.following(eq(USER), anyInt(), anyInt())).thenReturn(new PageResult<>(
+                List.of(new UserBriefDto(AUTHOR, "作者", null, null)),
+                new PageMeta(1, 50, 1, 1)));
+        when(users.toAuthor(anyString(), anyMap()))
+                .thenAnswer(call -> new AuthorResponse(call.getArgument(0), "作者", null, null));
+
         timelineStore.clear(USER);
         jdbcTemplate.update("DELETE FROM post_media");
         jdbcTemplate.update("DELETE FROM post_tags");
