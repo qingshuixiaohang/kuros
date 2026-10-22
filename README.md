@@ -3,7 +3,7 @@
 这是项目工作区：Next.js 前端（react-query 接真实 API，含按页面定义的降级）+ Spring
 Boot 后端微服务群。
 
-当前完成状态、待发布切片和实际测试基线以
+当前完成状态、已合并发布批次和实际测试基线以
 [`docs/roadmap/current-status.md`](docs/roadmap/current-status.md) 为准。历史和审计文档
 保留旧快照，不用于判断当前进度。
 
