@@ -5,7 +5,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ChevronRight, Sparkles, Wrench } from "lucide-react";
 import { useState } from "react";
 import { CommunityPageFrame, PageHeader } from "@/components/community/community-pages";
-import { fetchCharacter, fetchCharacterPage, type ApiCharacter } from "@/lib/api";
+import { ApiError, fetchCharacter, fetchCharacterPage, type ApiCharacter } from "@/lib/api";
 
 const roles = ["全部角色", "输出", "协同", "辅助"];
 const elements = ["全部属性", "湮灭", "导电", "热熔", "冷凝", "气动", "衍射"];
@@ -174,6 +174,7 @@ export function CharacterDetailPage({ slug }: { slug: string }) {
     queryFn: () => fetchCharacter(slug),
     retry: false,
   });
+  const notFound = character.error instanceof ApiError && character.error.status === 404 && character.error.code === "CHARACTER_NOT_FOUND";
 
   return (
     <CommunityPageFrame>
@@ -187,7 +188,12 @@ export function CharacterDetailPage({ slug }: { slug: string }) {
           <div className="feed-status">正在加载角色资料…</div>
         ) : character.isError || !character.data ? (
           <div className="empty-state">
-            <p>角色不存在、已下架或暂时无法加载。</p>
+            <p>{notFound ? "角色不存在或已下架。" : "角色资料暂时无法加载，请稍后重试。"}</p>
+            {!notFound ? (
+              <button className="secondary-button" onClick={() => character.refetch()} type="button">
+                重新加载
+              </button>
+            ) : null}
             <Link className="secondary-button" href="/characters">
               返回角色图鉴
             </Link>

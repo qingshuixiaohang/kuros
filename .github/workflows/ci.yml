@@ -24,9 +24,9 @@ jobs:
         working-directory: front
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -52,9 +52,9 @@ jobs:
         working-directory: kuros-backend
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
@@ -73,9 +73,9 @@ jobs:
         working-directory: kuros-gateway
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
@@ -93,9 +93,9 @@ jobs:
         working-directory: kuros-user
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
@@ -110,7 +110,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+      - name: Test production configuration validation
+        run: node --test scripts/production-config.test.mjs
       - name: Validate Docker Compose configuration
         run: docker compose config --quiet
       # 全栈打包模式必须 --profile full。sec-01 起还需注入内部共享密钥（两个服务同一值）：
@@ -132,7 +134,7 @@ jobs:
           curl --fail --retry 30 --retry-all-errors --retry-delay 2 http://localhost:3000/profile
           curl --fail --retry 30 --retry-all-errors --retry-delay 2 http://localhost:3000/publish
       - name: Install Node.js for Compose smoke test
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Verify business data and file persistence

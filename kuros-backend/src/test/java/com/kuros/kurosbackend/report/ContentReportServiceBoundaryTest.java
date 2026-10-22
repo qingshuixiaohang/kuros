@@ -17,12 +17,17 @@ import com.kuros.kurosbackend.report.service.ContentReportService;
 import com.kuros.kurosbackend.shared.cache.TwoLevelCache;
 import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -88,7 +93,7 @@ class ContentReportServiceBoundaryTest {
     @Test
     void 不存在的帖子举报保持原有错误码() {
         PostPublishingService postService = new PostPublishingService(
-                postRepositoryWithoutMatch(), null, null, null, null, null, null, null, null
+                postRepositoryWithoutMatch(), null, null, null, null, null, null, null, null, null
         );
         CommunityCommentService commentService = new CommunityCommentService(null, null, null, null);
         ContentReportService service = new ContentReportService(
@@ -113,7 +118,7 @@ class ContentReportServiceBoundaryTest {
                 commentRepositoryReturning(deletedComment), null, null, null
         );
         PostPublishingService postService = new PostPublishingService(
-                null, null, null, null, null, null, null, null, null
+                null, null, null, null, null, null, null, null, null, null
         );
         ContentReportService service = new ContentReportService(
                 repositoryThatMustNotBeUsed(), postService, commentService
@@ -125,6 +130,36 @@ class ContentReportServiceBoundaryTest {
                 .isInstanceOf(ResourceNotFoundException.class)
                 .extracting(exception -> ((ResourceNotFoundException) exception).getCode())
                 .isEqualTo("COMMENT_NOT_FOUND");
+    }
+
+    @Test
+    void 管理端举报页批量装配目标标题摘要与所属帖子() {
+        ContentReport postReport = report(ReportTargetType.POST, "post-1");
+        ContentReport commentReport = report(ReportTargetType.COMMENT, "comment-2");
+        RecordingPostService postService = new RecordingPostService();
+        postService.contexts = Map.of(
+                "post-1", new PostPublishingService.ReportTargetContext("post-1", "帖子标题", "帖子摘要"),
+                "post-2", new PostPublishingService.ReportTargetContext("post-2", "评论所在帖子", "帖子摘要二")
+        );
+        RecordingCommentService commentService = new RecordingCommentService();
+        commentService.contexts = Map.of(
+                "comment-2", new CommunityCommentService.ReportTargetContext("post-2", "评论正文")
+        );
+        ContentReportService service = new ContentReportService(
+                repositoryForPage(List.of(postReport, commentReport), 51), postService, commentService
+        );
+
+        var result = service.findForAdmin(1, 20, null);
+
+        assertThat(result.items()).extracting("targetTitle", "targetExcerpt", "targetPostId")
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("帖子标题", "帖子摘要", "post-1"),
+                        org.assertj.core.groups.Tuple.tuple("评论所在帖子", "评论正文", "post-2")
+                );
+        assertThat(postService.requestedIds).containsExactlyInAnyOrder("post-1", "post-2");
+        assertThat(commentService.requestedIds).containsExactly("comment-2");
+        assertThat(result.meta().totalItems()).isEqualTo(51);
+        assertThat(result.meta().totalPages()).isEqualTo(3);
     }
 
     private ContentReport report(ReportTargetType targetType, String targetId) {
@@ -158,6 +193,16 @@ class ContentReportServiceBoundaryTest {
         );
     }
 
+    private ContentReportRepository repositoryForPage(List<ContentReport> reports, long totalItems) {
+        return (ContentReportRepository) Proxy.newProxyInstance(
+                ContentReportRepository.class.getClassLoader(),
+                new Class<?>[]{ContentReportRepository.class},
+                (proxy, method, args) -> method.getName().equals("findAll")
+                        ? new PageImpl<>(reports, (PageRequest) args[0], totalItems)
+                        : throwUnsupported(method.getName())
+        );
+    }
+
     private CommunityPostRepository postRepositoryWithoutMatch() {
         return (CommunityPostRepository) Proxy.newProxyInstance(
                 CommunityPostRepository.class.getClassLoader(),
@@ -184,9 +229,17 @@ class ContentReportServiceBoundaryTest {
 
     private static final class RecordingPostService extends PostPublishingService {
         private String deletedTargetId;
+        private Map<String, ReportTargetContext> contexts = Map.of();
+        private Collection<String> requestedIds = List.of();
 
         private RecordingPostService() {
-            super(null, null, null, null, null, null, null, null, null);
+            super(null, null, null, null, null, null, null, null, null, null);
+        }
+
+        @Override
+        public Map<String, ReportTargetContext> findReportTargetContexts(Collection<String> postIds) {
+            requestedIds = postIds;
+            return contexts;
         }
 
         @Override
@@ -197,9 +250,17 @@ class ContentReportServiceBoundaryTest {
 
     private static final class RecordingCommentService extends CommunityCommentService {
         private String deletedTargetId;
+        private Map<String, ReportTargetContext> contexts = Map.of();
+        private Collection<String> requestedIds = List.of();
 
         private RecordingCommentService() {
             super(null, null, null, null);
+        }
+
+        @Override
+        public Map<String, ReportTargetContext> findReportTargetContexts(Collection<String> commentIds) {
+            requestedIds = commentIds;
+            return contexts;
         }
 
         @Override

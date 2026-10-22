@@ -12,10 +12,13 @@ import { deleteImage, fetchPost, uploadImage } from "@/lib/api";
 import { usePublishPostMutation } from "@/lib/community-queries";
 import { MarkdownArticle } from "./markdown";
 
+const guideCategories = ["配队攻略", "深塔攻略", "角色培养", "新手攻略"] as const;
+const guideCategorySchema = z.enum(guideCategories);
 const publishFormSchema = z.object({
   title: z.string().trim().min(1, "请输入帖子标题").max(200, "标题长度不能超过 200 个字符"),
   content: z.string().trim().min(1, "请输入帖子正文").max(50000, "正文长度不能超过 50000 个字符"),
   type: z.enum(["攻略", "心得", "同人", "提问"]),
+  guideCategory: guideCategorySchema,
   tags: z.string().superRefine((value, context) => {
     const tags = value
       .split(/[，,\s]+/)
@@ -27,11 +30,12 @@ const publishFormSchema = z.object({
 });
 type PublishFormValues = z.infer<typeof publishFormSchema>;
 const publishDraftKey = "wuthering-community-publish-draft-v2";
-const emptyPublishValues: PublishFormValues = { title: "", content: "", type: "心得", tags: "" };
+const emptyPublishValues: PublishFormValues = { title: "", content: "", type: "心得", guideCategory: "配队攻略", tags: "" };
 const publishDraftValuesSchema = z.object({
   title: z.string().max(200),
   content: z.string().max(50000),
   type: z.enum(["攻略", "心得", "同人", "提问"]),
+  guideCategory: guideCategorySchema.default("配队攻略"),
   tags: z.string(),
 });
 
@@ -99,6 +103,7 @@ function PublishPageContent() {
   const title = useWatch({ control, name: "title", defaultValue: "" });
   const content = useWatch({ control, name: "content", defaultValue: "" });
   const tags = useWatch({ control, name: "tags", defaultValue: "" });
+  const contentType = useWatch({ control, name: "type" });
 
   useEffect(() => {
     if (!editPostId) {
@@ -119,6 +124,7 @@ function PublishPageContent() {
           title: post.title,
           content: post.content ?? "",
           type: post.type === "GUIDE" ? "攻略" : ["心得", "同人", "提问"].includes(post.category) ? (post.category as PublishFormValues["type"]) : "心得",
+          guideCategory: guideCategorySchema.catch("配队攻略").parse(post.category),
           tags: post.tags.join("、"),
         };
         reset(values);
@@ -334,7 +340,7 @@ function PublishPageContent() {
     try {
       const input = {
         type: values.type === "攻略" ? "GUIDE" : "GENERAL",
-        category: values.type === "攻略" ? "配队攻略" : values.type,
+        category: values.type === "攻略" ? values.guideCategory : values.type,
         title: values.title,
         content: values.content,
         tags: values.tags
@@ -597,6 +603,16 @@ function PublishPageContent() {
               <option>提问</option>
             </select>
           </label>
+          {contentType === "攻略" ? (
+            <label>
+              <strong>攻略分类</strong>
+              <select aria-label="攻略分类" {...register("guideCategory")}>
+                {guideCategories.map((category) => (
+                  <option key={category}>{category}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <span className="publish-meta-divider" />
           <label className="publish-tags-field">
             <strong>添加标签</strong>

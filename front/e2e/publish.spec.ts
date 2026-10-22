@@ -30,6 +30,70 @@ async function mockAuth(page: Page) {
   await page.route("**/api/v1/auth/me", (route) => route.fulfill({ json: { data: user } }));
 }
 
+for (const category of ["角色培养", "配队攻略", "深塔攻略", "新手攻略"]) {
+  test(`编辑攻略保留原有分类并在保存时提交：${category}`, async ({ page }) => {
+    await mockAuth(page);
+    const guide = { ...post, category };
+    let savedInput: Record<string, unknown> | undefined;
+    await page.route(`**/api/v1/posts/${postId}`, async (route) => {
+      if (route.request().method() === "PUT") savedInput = route.request().postDataJSON();
+      await route.fulfill({ json: { data: guide } });
+    });
+    await page.route("**/api/v1/auth/csrf", (route) => route.fulfill({ status: 204 }));
+    await page.goto(`/publish?edit=${postId}`);
+    const editor = page.getByRole("form", { name: "发布编辑器" });
+    await expect(editor.getByRole("textbox", { name: "帖子标题" })).toHaveValue(post.title);
+    await expect(editor.getByLabel("攻略分类")).toHaveValue(category);
+    await editor.getByRole("button", { name: "保存修改" }).click();
+    await expect(page).toHaveURL(new RegExp(`/guides/${postId}$`));
+    expect(savedInput).toMatchObject({ type: "GUIDE", category });
+  });
+
+  test(`发布攻略提交所选分类：${category}`, async ({ page }) => {
+    await mockAuth(page);
+    await page.route("**/api/v1/auth/csrf", (route) => route.fulfill({ status: 204 }));
+    let publishedInput: Record<string, unknown> | undefined;
+    await page.route("**/api/v1/posts", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      publishedInput = route.request().postDataJSON();
+      await route.fulfill({ json: { data: { ...post, category } } });
+    });
+    await page.route(`**/api/v1/posts/${postId}`, (route) => route.fulfill({ json: { data: { ...post, category } } }));
+    await page.goto("/publish?type=guide");
+    const editor = page.getByRole("form", { name: "发布编辑器" });
+    await editor.getByRole("textbox", { name: "帖子标题" }).fill(post.title);
+    await editor.getByRole("textbox", { name: "帖子正文" }).fill(post.content);
+    await editor.getByLabel("攻略分类").selectOption(category);
+    await editor.getByRole("button", { name: "发布", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/guides/${postId}$`));
+    expect(publishedInput).toMatchObject({ type: "GUIDE", category });
+  });
+}
+
+test("旧版攻略草稿可恢复且保存后保留所选分类", async ({ page }) => {
+  await mockAuth(page);
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("guide-draft-initialized")) return;
+    localStorage.setItem(
+      "wuthering-community-publish-draft-v2",
+      JSON.stringify({
+        version: 2,
+        savedAt: "2026-10-22T00:00:00Z",
+        values: { title: "旧版攻略草稿", content: "已有正文", type: "攻略", tags: "" },
+      }),
+    );
+    sessionStorage.setItem("guide-draft-initialized", "1");
+  });
+  await page.goto("/publish");
+  const editor = page.getByRole("form", { name: "发布编辑器" });
+  await expect(editor.getByRole("textbox", { name: "帖子标题" })).toHaveValue("旧版攻略草稿");
+  await expect(editor.getByLabel("攻略分类")).toHaveValue("配队攻略");
+  await editor.getByLabel("攻略分类").selectOption("新手攻略");
+  await editor.getByRole("button", { name: "保存草稿" }).click();
+  await page.reload();
+  await expect(editor.getByLabel("攻略分类")).toHaveValue("新手攻略");
+});
+
 test("发布编辑器桌面端使用聚焦布局并保留核心字段", async ({ page }) => {
   await mockAuth(page);
   await page.setViewportSize({ width: 1440, height: 1000 });

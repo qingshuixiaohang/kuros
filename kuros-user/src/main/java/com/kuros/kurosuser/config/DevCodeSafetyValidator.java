@@ -46,12 +46,15 @@ public class DevCodeSafetyValidator {
     private static final Set<String> TRUSTED_PROFILES = Set.of("dev", "test");
 
     private final String devCode;
+    private final boolean devCodeExposed;
     private final Set<String> activeProfiles;
 
     public DevCodeSafetyValidator(
             @Value("${app.auth.dev-code:}") String devCode,
+            @Value("${app.auth.dev-code-exposed:false}") boolean devCodeExposed,
             Environment environment) {
         this.devCode = devCode;
+        this.devCodeExposed = devCodeExposed;
         // 从 Environment 读活跃 profile 而不是 @Value("${spring.profiles.active:}")：
         // 后者的取值来源只是那个属性本身，而测试用 @ActiveProfiles("test") 设的 profile
         // 只写进 Environment、不写回该属性——实测 @SpringBootTest 下它是空数组，
@@ -68,11 +71,13 @@ public class DevCodeSafetyValidator {
         // isBlank 而非 isEmpty：APP_AUTH_DEV_CODE=" " 是"看着配了其实没配"的形态。
         // 与 RedisVerificationCodeService 的 devMode = !devCode.isBlank() 必须同一口径，
         // 否则这种部署会被一条永不生效的校验拒绝启动（或反过来被放过）。
-        if (devCode == null || devCode.isBlank()) {
-            // 未注入万能码 = 最安全的形态，任何 profile 都放行
+        if (!activeProfiles.isEmpty() && TRUSTED_PROFILES.containsAll(activeProfiles)) {
             return;
         }
-        if (activeProfiles.stream().anyMatch(TRUSTED_PROFILES::contains)) {
+        if (devCode == null || devCode.isBlank()) {
+            if (devCodeExposed) {
+                throw new IllegalStateException("验证码回显只允许在 dev/test profile 中启用");
+            }
             return;
         }
         // 消息里带上当前 profile 与修法：运维看到这行就知道该删哪个 env 或切哪个

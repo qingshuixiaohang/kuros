@@ -342,6 +342,9 @@ export type ApiReport = {
   reporterId: string;
   targetType: ReportTargetType;
   targetId: string;
+  targetTitle: string | null;
+  targetExcerpt: string | null;
+  targetPostId: string | null;
   reason: ReportReason;
   status: ReportStatus;
   handledBy: string | null;
@@ -359,10 +362,11 @@ export function createReport(targetType: ReportTargetType, targetId: string, rea
   );
 }
 
-export function fetchAdminReports(status?: ReportStatus) {
-  const params = new URLSearchParams({ page: "1", pageSize: "50" });
+export async function fetchAdminReports(status?: ReportStatus, page = 1, pageSize = 20) {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   if (status) params.set("status", status);
-  return request<ApiReport[]>(`/api/v1/admin/reports?${params.toString()}`);
+  const envelope = await requestEnvelope<ApiReport[]>(`/api/v1/admin/reports?${params.toString()}`);
+  return { items: envelope?.data ?? [], meta: envelope?.meta };
 }
 
 export function handleReport(reportId: string, action: "CONFIRM" | "REJECT", note?: string) {

@@ -128,7 +128,7 @@ test.describe("首页 Feed 请求数", () => {
     expect(new Set(requestedIds)).toEqual(new Set(posts(POST_COUNT).map((post) => post.id)));
   });
 
-  test("批量互动请求失败时页面仍可渲染（降级不回退到逐帖请求）", async ({ page }) => {
+  test("批量互动失败显示不可用并可重试，不回退本地写入或逐帖查询", async ({ page }) => {
     const perPostRequests = countRequests(page, /\/api\/v1\/posts\/[^/]+\/interactions(?!\/)/);
 
     await page.route("**/api/v1/posts?**", (route) =>
@@ -138,17 +138,62 @@ test.describe("首页 Feed 请求数", () => {
         body: JSON.stringify({ code: "SUCCESS", data: posts(POST_COUNT), meta: { page: 1, pageSize: 20, totalItems: POST_COUNT, totalPages: 1 } }),
       }),
     );
-    // 批量接口整体故障
-    await page.route("**/api/v1/interactions/batch-states**", (route) => route.abort("failed"));
+    let unavailable = true;
+    await page.route("**/api/v1/auth/me", (route) => route.fulfill({ json: { data: { id: "viewer-1", nickname: "读者", role: "USER" } } }));
+    await page.route("**/api/v1/interactions/batch-states**", (route) =>
+      unavailable
+        ? route.abort("failed")
+        : route.fulfill({ json: { code: "SUCCESS", data: Object.fromEntries(posts(POST_COUNT).map((post) => [post.id, [1, 0]])) } }),
+    );
 
     await page.goto("/");
 
-    // 帖子照样渲染（互动状态降级为本地 demo，不断渲染）
     await expect(page.getByText(`请求计数测试帖 0`)).toBeVisible();
     await expect(page.getByText(`请求计数测试帖 ${POST_COUNT - 1}`)).toBeVisible();
-
-    // 失败也不能退回逐帖请求——那会把一次失败放大成 N 次失败
-    await page.waitForTimeout(1000);
+    const feed = page.getByRole("region", { name: "社区内容流" });
+    await expect(feed.getByText("互动状态暂不可用，请重试。")).toBeVisible();
+    const firstCard = feed.locator("article.post-card").filter({ hasText: "请求计数测试帖 0" });
+    const likeButton = firstCard.locator(".post-actions button");
+    await expect(likeButton).toBeDisabled();
+    await expect(likeButton).not.toHaveAttribute("aria-pressed", "false");
+    unavailable = false;
+    const retry = feed.getByRole("button", { name: "重新加载互动状态" });
+    await expect(retry).toBeVisible();
+    await retry.click();
+    await expect(likeButton).toBeEnabled();
+    await expect(likeButton).toHaveAttribute("aria-pressed", "true");
     expect(perPostRequests).toEqual([]);
+  });
+
+  test("互动状态等待期间禁用真实帖子写操作，不回退本地 toggle", async ({ page }) => {
+    const writeRequests = countRequests(page, /\/api\/v1\/posts\/[^/]+\/(?:like|favorite)/);
+    let releaseBatch = () => {};
+    const batchGate = new Promise<void>((resolve) => {
+      releaseBatch = resolve;
+    });
+
+    await page.route("**/api/v1/posts?**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ code: "SUCCESS", data: posts(1), meta: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 } }),
+      }),
+    );
+    await page.route("**/api/v1/auth/me", (route) => route.fulfill({ json: { data: { id: "viewer-1", nickname: "读者", role: "USER" } } }));
+    await page.route("**/api/v1/interactions/batch-states**", async (route) => {
+      await batchGate;
+      await route.fulfill({ json: { code: "SUCCESS", data: { [posts(1)[0].id]: [0, 0] } } });
+    });
+
+    await page.goto("/");
+    const firstCard = page.getByRole("region", { name: "社区内容流" }).locator("article.post-card").first();
+    const likeButton = firstCard.locator(".post-actions button");
+    await expect(likeButton).toBeDisabled();
+    await expect(likeButton).not.toHaveAttribute("aria-pressed");
+    await likeButton.click({ force: true });
+
+    expect(writeRequests).toEqual([]);
+    await expect(likeButton).not.toHaveClass(/is-active/);
+    releaseBatch();
   });
 });

@@ -4,6 +4,7 @@ import com.kuros.kurosbackend.post.api.CreatePostRequest;
 import com.kuros.kurosbackend.post.api.PostDetailResponse;
 import com.kuros.kurosbackend.media.domain.MediaAsset;
 import com.kuros.kurosbackend.media.domain.MediaAssetStatus;
+import com.kuros.kurosbackend.media.storage.StorageStrategy;
 import com.kuros.kurosbackend.post.domain.PostMedia;
 import com.kuros.kurosbackend.post.domain.CommunityPost;
 import com.kuros.kurosbackend.post.domain.ContentTag;
@@ -27,9 +28,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -47,6 +50,7 @@ public class PostPublishingService {
     private final Counter postsPublishedCounter;
     private final Timer postsPublishTimer;
     private final ApplicationEventPublisher eventPublisher;
+    private final StorageStrategy storageStrategy;
 
     public PostPublishingService(
             CommunityPostRepository postRepository,
@@ -57,7 +61,8 @@ public class PostPublishingService {
             TwoLevelCache twoLevelCache,
             Counter postsPublishedCounter,
             Timer postsPublishTimer,
-            ApplicationEventPublisher eventPublisher
+            ApplicationEventPublisher eventPublisher,
+            StorageStrategy storageStrategy
     ) {
         this.postRepository = postRepository;
         this.tagRepository = tagRepository;
@@ -68,6 +73,7 @@ public class PostPublishingService {
         this.postsPublishedCounter = postsPublishedCounter;
         this.postsPublishTimer = postsPublishTimer;
         this.eventPublisher = eventPublisher;
+        this.storageStrategy = storageStrategy;
     }
 
     @Transactional
@@ -80,7 +86,7 @@ public class PostPublishingService {
             CommunityPost post = CommunityPost.publish(authorId, input.type(), input.category(), input.title(), input.excerpt(), input.content(), LocalDateTime.now());
             post.addTags(tagNames.stream().map(name -> tagRepository.findByName(name).orElseGet(() -> tagRepository.save(new ContentTag(name)))).toList());
             CommunityPost saved = postRepository.save(post);
-            replaceMedia(saved.getId(), List.of(), mediaAssets(request.mediaAssetIds(), authorId, null));
+            replaceMedia(saved.getId(), List.of(), mediaAssets(request.mediaAssetIds(), input.content(), authorId, null));
             // 业务指标埋点：每发布一个帖子计数器 +1
             postsPublishedCounter.increment();
             // 切片 #12：发帖成功后 emit PostPublishedEvent，由 FeedFanoutListener
@@ -107,7 +113,7 @@ public class PostPublishingService {
         post.update(input.type(), input.category(), input.title(), input.excerpt(), input.content(), LocalDateTime.now());
         post.replaceTags(tagNames.stream().map(name -> tagRepository.findByName(name).orElseGet(() -> tagRepository.save(new ContentTag(name)))).toList());
         postRepository.save(post);
-        replaceMedia(post.getId(), postMediaRepository.findByPostIdOrderBySortOrderAsc(post.getId()), mediaAssets(request.mediaAssetIds(), authorId, post.getId()));
+        replaceMedia(post.getId(), postMediaRepository.findAllByPostId(post.getId()), mediaAssets(request.mediaAssetIds(), input.content(), authorId, post.getId()));
         CacheInvalidationAfterCommit.run(() -> twoLevelCache.evict(CacheNames.POST_DETAIL, postId));
         return postService.findPublishedById(post.getId());
     }
@@ -142,6 +148,20 @@ public class PostPublishingService {
             }
         });
         CacheInvalidationAfterCommit.run(() -> twoLevelCache.evict(CacheNames.POST_DETAIL, postId));
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, ReportTargetContext> findReportTargetContexts(Collection<String> postIds) {
+        if (postIds == null || postIds.isEmpty()) return Map.of();
+        List<String> normalizedIds = postIds.stream().filter(Objects::nonNull).distinct().toList();
+        return postRepository.findAllById(normalizedIds).stream()
+                .collect(Collectors.toMap(
+                        CommunityPost::getId,
+                        post -> new ReportTargetContext(post.getId(), post.getTitle(), post.getExcerpt())
+                ));
+    }
+
+    public record ReportTargetContext(String postId, String title, String excerpt) {
     }
 
     private CommunityPost ownedPost(String postId, String authorId) {
@@ -209,7 +229,7 @@ public class PostPublishingService {
         return List.copyOf(normalized);
     }
 
-    private List<MediaAsset> mediaAssets(List<String> ids, String ownerId, String postId) {
+    private ValidatedMedia mediaAssets(List<String> ids, String content, String ownerId, String postId) {
         List<String> normalized = ids == null ? List.of() : ids;
         if (normalized.size() > 9) {
             throw new AuthRequestException("MEDIA_TOO_MANY", "每个帖子最多上传 9 张图片");
@@ -217,11 +237,29 @@ public class PostPublishingService {
         if (new LinkedHashSet<>(normalized).size() != normalized.size()) {
             throw new AuthRequestException("MEDIA_DUPLICATE", "图片不能重复添加");
         }
-        Map<String, MediaAsset> assets = mediaAssetRepository.findAllById(normalized).stream()
+        LinkedHashSet<String> inlineIds = new LinkedHashSet<>();
+        Matcher images = Pattern.compile("!\\[[^\\]]*\\]\\(\\s*<?([^\\s)>]+)>?(?:\\s+[^)]*)?\\)").matcher(content);
+        while (images.find()) {
+            String url = images.group(1);
+            java.net.URI uri;
+            try { uri = java.net.URI.create(url); }
+            catch (IllegalArgumentException ignored) { continue; }
+            String path = uri.getPath();
+            if (path == null || !path.startsWith("/media/")) continue;
+            String key = path.substring("/media/".length());
+            if (key.isBlank() || key.contains("/")) continue;
+            if (!url.equals("/media/" + key) && !url.equals(storageStrategy.getUrl(key))) continue;
+            MediaAsset asset = mediaAssetRepository.findByStorageKey(key)
+                    .orElseThrow(() -> new AuthRequestException("MEDIA_NOT_FOUND", "图片资源不存在或已失效"));
+            if (!normalized.contains(asset.getId())) inlineIds.add(asset.getId());
+        }
+        LinkedHashSet<String> allIds = new LinkedHashSet<>(normalized);
+        allIds.addAll(inlineIds);
+        Map<String, MediaAsset> assets = mediaAssetRepository.findAllByIdForUpdate(allIds).stream()
                 .collect(Collectors.toMap(MediaAsset::getId, asset -> asset));
-        Set<String> currentIds = postId == null ? Set.of() : postMediaRepository.findByPostIdOrderBySortOrderAsc(postId).stream()
+        Set<String> currentIds = postId == null ? Set.of() : postMediaRepository.findAllByPostId(postId).stream()
                 .map(PostMedia::getAssetId).collect(Collectors.toSet());
-        return normalized.stream().map(id -> {
+        for (String id : allIds) {
             MediaAsset asset = assets.get(id);
             if (asset == null || asset.getStatus() == MediaAssetStatus.DELETED) {
                 throw new AuthRequestException("MEDIA_NOT_FOUND", "图片资源不存在或已失效");
@@ -232,13 +270,20 @@ public class PostPublishingService {
             if (asset.getStatus() == MediaAssetStatus.ATTACHED && !currentIds.contains(id)) {
                 throw new AuthRequestException("MEDIA_ALREADY_ATTACHED", "图片已经关联其他帖子");
             }
-            return asset;
-        }).toList();
+        }
+        return new ValidatedMedia(normalized.stream().map(assets::get).toList(), inlineIds.stream().map(assets::get).toList());
     }
 
-    private void replaceMedia(String postId, List<PostMedia> previous, List<MediaAsset> next) {
+    private record ValidatedMedia(List<MediaAsset> gallery, List<MediaAsset> inline) {
+        List<MediaAsset> all() {
+            return java.util.stream.Stream.concat(gallery.stream(), inline.stream()).toList();
+        }
+    }
+
+    private void replaceMedia(String postId, List<PostMedia> previous, ValidatedMedia validated) {
+        List<MediaAsset> next = validated.all();
         Set<String> nextIds = next.stream().map(MediaAsset::getId).collect(Collectors.toSet());
-        Map<String, MediaAsset> previousAssets = mediaAssetRepository.findAllById(previous.stream().map(PostMedia::getAssetId).toList()).stream()
+        Map<String, MediaAsset> previousAssets = mediaAssetRepository.findAllByIdForUpdate(previous.stream().map(PostMedia::getAssetId).toList()).stream()
                 .collect(Collectors.toMap(MediaAsset::getId, asset -> asset));
         previousAssets.values().stream().filter(asset -> !nextIds.contains(asset.getId())).forEach(MediaAsset::markDeleted);
         LocalDateTime now = LocalDateTime.now();
@@ -247,7 +292,9 @@ public class PostPublishingService {
         mediaAssetRepository.saveAll(next);
         postMediaRepository.deleteByPostId(postId);
         postMediaRepository.saveAll(java.util.stream.IntStream.range(0, next.size())
-                .mapToObj(index -> PostMedia.create(postId, next.get(index).getId(), index, now))
+                .mapToObj(index -> index < validated.gallery().size()
+                        ? PostMedia.create(postId, next.get(index).getId(), index, now)
+                        : PostMedia.inline(postId, next.get(index).getId(), index, now))
                 .toList());
     }
 }

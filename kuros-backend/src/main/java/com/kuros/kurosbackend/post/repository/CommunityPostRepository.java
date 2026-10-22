@@ -139,6 +139,8 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, St
 
     Page<CommunityPost> findByAuthorIdAndStatus(String authorId, PostStatus status, Pageable pageable);
 
+    List<CommunityPost> findByAuthorIdInAndStatus(java.util.Collection<String> authorIds, PostStatus status, Pageable pageable);
+
     @Query("select p.id from CommunityPost p where p.status = :status and p.id > :afterId order by p.id asc")
     List<String> findPublishedIdsAfter(@Param("status") PostStatus status,
                                        @Param("afterId") String afterId,

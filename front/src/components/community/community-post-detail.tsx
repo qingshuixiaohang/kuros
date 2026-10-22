@@ -110,6 +110,7 @@ function PostReactionRail({ guide, postId }: { guide: Guide; postId: string }) {
   const interactionsQuery = usePostInteractionsQuery(postId);
   const likeMutation = useLikeMutation(postId);
   const favoriteMutation = useFavoriteMutation(postId);
+  const interactionUnavailable = interactionsQuery.isError;
   const interaction: PostInteraction = interactionsQuery.data ?? {
     postId,
     likeCount: parseCount(guide.likes),
@@ -142,34 +143,45 @@ function PostReactionRail({ guide, postId }: { guide: Guide; postId: string }) {
         <MessageCircle size={26} />
         <span>{guide.replies}</span>
       </button>
-      <button
-        className={display.liked ? "is-active" : ""}
-        disabled={loading}
-        type="button"
-        onClick={() =>
-          protect(() => {
-            void change("like");
-          })
-        }
-        aria-label={display.liked ? "取消点赞" : "点赞"}
-      >
-        <Heart fill={display.liked ? "currentColor" : "none"} size={27} />
-        <span>{display.likeCount}</span>
-      </button>
-      <button
-        className={display.favorited ? "is-active is-bookmarked" : ""}
-        disabled={loading}
-        type="button"
-        onClick={() =>
-          protect(() => {
-            void change("favorite");
-          })
-        }
-        aria-label={display.favorited ? "取消收藏" : "收藏"}
-      >
-        <Bookmark fill={display.favorited ? "currentColor" : "none"} size={27} />
-        <span>{display.favorited ? "已藏" : "收藏"}</span>
-      </button>
+      {interactionUnavailable ? (
+        <div className="post-reaction-error" role="status">
+          <span>互动状态暂不可用，请重试。</span>
+          <button className="secondary-button" onClick={() => interactionsQuery.refetch()} type="button">
+            重新加载互动状态
+          </button>
+        </div>
+      ) : (
+        <>
+          <button
+            className={display.liked ? "is-active" : ""}
+            disabled={loading}
+            type="button"
+            onClick={() =>
+              protect(() => {
+                void change("like");
+              })
+            }
+            aria-label={display.liked ? "取消点赞" : "点赞"}
+          >
+            <Heart fill={display.liked ? "currentColor" : "none"} size={27} />
+            <span>{display.likeCount}</span>
+          </button>
+          <button
+            className={display.favorited ? "is-active is-bookmarked" : ""}
+            disabled={loading}
+            type="button"
+            onClick={() =>
+              protect(() => {
+                void change("favorite");
+              })
+            }
+            aria-label={display.favorited ? "取消收藏" : "收藏"}
+          >
+            <Bookmark fill={display.favorited ? "currentColor" : "none"} size={27} />
+            <span>{display.favorited ? "已藏" : "收藏"}</span>
+          </button>
+        </>
+      )}
     </aside>
   );
 }
@@ -369,15 +381,21 @@ function PostComments({ postId, authorName, onReport }: { postId: string; author
   const createMutation = useCreateCommentMutation(postId);
   const deleteMutation = useDeleteCommentMutation(postId);
   const comments = useMemo(
-    () => (commentsQuery.data?.items ?? []).map((comment, index) => commentFromApi(comment, authorName, index)),
+    () => (commentsQuery.data?.pages.flatMap((page) => page.items) ?? []).map((comment, index) => commentFromApi(comment, authorName, index)),
     [commentsQuery.data, authorName],
   );
-  const totalItems = commentsQuery.data?.totalItems ?? 0;
+  const totalItems = commentsQuery.data?.pages[0]?.meta?.totalItems ?? comments.length;
   const loading = commentsQuery.isPending;
   // 读失败和写失败共用这一个错误位：原实现里 submitComment 的 catch 会
   // setApiError，迁到 mutation 时只留下了 notify，内联错误行从此不再亮。
   // 这里把 createMutation.isError 也接进来，两种失败都能看到。
-  const apiError = commentsQuery.isError ? "评论加载失败，请稍后重试。" : createMutation.isError ? "评论发布失败，请稍后重试。" : "";
+  const apiError = commentsQuery.isError
+    ? "评论加载失败，请稍后重试。"
+    : commentsQuery.isFetchNextPageError
+      ? "后续评论加载失败，请重试。"
+      : createMutation.isError
+        ? "评论发布失败，请稍后重试。"
+        : "";
 
   const visibleComments = useMemo(() => (onlyAuthor ? comments.filter((comment) => comment.authorComment) : comments), [comments, onlyAuthor]);
 
@@ -436,6 +454,7 @@ function PostComments({ postId, authorName, onReport }: { postId: string; author
         </p>
       )}
       {loading && <p className="comment-inline-status">正在整理漂泊者的留言…</p>}
+      {!loading && !commentsQuery.isError && comments.length === 0 && <p className="comment-inline-status">还没有评论，来抢沙发吧。</p>}
       <div className="comment-list">
         {visibleComments.map((comment) => (
           <article
@@ -484,6 +503,13 @@ function PostComments({ postId, authorName, onReport }: { postId: string; author
           </article>
         ))}
       </div>
+      {commentsQuery.hasNextPage && !commentsQuery.isError && (
+        <div className="comment-pagination">
+          <button disabled={commentsQuery.isFetchingNextPage} onClick={() => void commentsQuery.fetchNextPage()} type="button">
+            {commentsQuery.isFetchingNextPage ? "正在加载…" : "加载更多评论"}
+          </button>
+        </div>
+      )}
     </section>
   );
 }

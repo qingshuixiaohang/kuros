@@ -30,6 +30,7 @@ export function toGuide(post: ApiPost): Guide {
     excerpt: post.excerpt,
     content: post.content,
     author: post.author.nickname,
+    authorId: post.author.id,
     authorMark: post.author.nickname.slice(0, 1),
     avatarTone: "blue",
     publishedAt: formatPublishedAt(post.publishedAt),

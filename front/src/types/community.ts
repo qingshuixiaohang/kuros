@@ -11,6 +11,8 @@ export interface Guide {
   /** 后端详情接口返回的首图；未返回时回退到演示素材。 */
   coverImageUrl?: string | null;
   author: string;
+  /** 后端作者 ID；演示数据可省略并按昵称映射。 */
+  authorId?: string;
   authorMark: string;
   avatarTone: AvatarTone;
   publishedAt: string;
