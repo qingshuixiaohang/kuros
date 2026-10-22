@@ -6,7 +6,7 @@ Gateway 的服务发现集成测试使用真实 Nacos v3.1.1 Testcontainer，验
 
 ## 关键难点解析
 
-- **固定端口不等于暴露端口**：Testcontainers 根据 `withExposedPorts` 登记等待策略要检查的端口。只在 Docker 创建参数里绑定 `28848/29848`，HTTP 等待策略会报 `Target port 29848 is not exposed`，容器尚未就绪时测试已经失败。
+- **固定端口不等于暴露端口**：Testcontainers 根据 `withExposedPorts` 登记等待策略要检查的端口。只在 Docker 创建参数里绑定 `28848/29848`，HTTP 等待策略会报 `Target port 28848 is not exposed`，容器尚未就绪时测试已经失败。
 - **Nacos 默认堆与测试需求不匹配**：服务发现断言不需要 Nacos 的默认 2 GiB 堆。镜像内进程收敛为 256 MiB 初始、512 MiB 上限，堆外预留同时收敛，给 Surefire 与 Docker VM 留出内存。
 - **Surefire 也必须受限**：Windows 宿主机只有 16 GiB，Docker VM 约占 7.5 GiB。一次定向测试曾因测试 JVM 默认堆上限约 4 GiB、220 个线程叠加 Nacos 容器而原生 OOM；验证命令将测试 JVM 限制为 768 MiB 堆、4 个处理器、512 KiB 栈。
 - **全量共用 JVM 仍会引入顺序相关波动**：最终集成树的首次全量运行中，Nacos 容器在 120 秒后未就绪，而同树定向测试随后 2/2 通过。Gateway 采用与 backend/user 相同的 `reuseForks=false`，让三个测试类各自启动受限 JVM，串行隔离容器、Reactor 与 Spring 上下文。
