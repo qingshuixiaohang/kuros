@@ -1,13 +1,14 @@
 # Kuros Web 当前状态
 
-> 快照日期：2026-10-22
+> 快照日期：2026-10-23（北京时间）
 >
-> 当前主线：`origin/main` @ `f4f156dcbe796feae1213224a2902451518086f0`
+> 本批次合并提交：`9b2bc8bdebf78f3a7f4b506ab57cf67e47df0b4b`（PR #168）。
 >
-> 集成分支：`codex/product-readiness`，以同一提交为基线承载 #159–#167 的本地变更。
+> #159–#167 全部关闭；截至核对时，GitHub 开放工单为 0。
 >
-> 本页只记录实际执行过的本地验证。PR 编号、合并提交和 CI 结果必须等外部流程产生后
-> 再补写，不能用计划或测试发现数量代替。
+> 以下结果是本批次的验证快照。接手时重新核对 Git 与 CI；当前开发计划见
+> [readiness-development-plan.md](readiness-development-plan.md)，模型交接见
+> [ds41-handoff.md](ds41-handoff.md)。
 
 ## 本轮目标
 
@@ -17,7 +18,7 @@
 
 ## 实现状态
 
-| Issue | 本地实现状态 | 已取得的定向证据 |
+| Issue | 实现状态（均已合并、关闭） | 已取得的定向证据 |
 |---|---|---|
 | #160 生产配置与认证 fail-closed | 完成 | 生产配置校验 4/4；生产验证码/内部 token 测试通过；`ProductionSmsSenderValidatorTest` 3/3 |
 | #161 帖子媒体生命周期 | 完成 | 媒体集成测试 4/4；清理与引用修复测试 6/6；Flyway 实际迁移到 V16 |
@@ -66,5 +67,12 @@
   尚未执行到断言；该环境限制不替代远端 CI 的结果。
 - 修复后的 CI run `39807774931` 五个作业全部通过：Frontend lint and build、User
   service tests、Gateway tests、Backend tests、Deployment configuration。
-- Review、合并 SHA 及 #160–#167 的关闭状态仍以 GitHub 实际结果为准；在完成合并前，
-  本页不能声明本轮已发布。
+- 最终 PR HEAD `270b7fa45535381048063f08c0a6753d276ebdc7` 的
+  [CI run 39809329604](https://github.com/qingshuixiaohang/kuros/actions/runs/39809329604)
+  五作业全部成功；Deployment 作业实际验证了启动、业务数据与文件持久化、搜索 CDC
+  和服务重启后的复验。
+- [PR #168](https://github.com/qingshuixiaohang/kuros/pull/168) 已于北京时间
+  2026-10-23 00:05:43 squash 合并为 `9b2bc8b`。远端 main 与待合并分支的文件树
+  已核对一致；#160–#167 自动关闭，父工单 #159 已补齐验收证据并关闭。
+- 当前 MVP 发布加固规格完成。公网生产部署尚未执行，真实短信适配器、凭据与 HTTPS
+  入口仍是部署前置；不能将本批次完成称为已上线。
