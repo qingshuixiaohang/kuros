@@ -188,14 +188,20 @@ test("未知声骸 slug 走不存在态，不回退到第一条冒充", async ({
   await expect(page.getByRole("heading", { name: "浮星祛暗" })).toHaveCount(0);
 });
 
-test("声骸详情接口失败时显示错误态而不是空白", async ({ page }) => {
+test("声骸详情接口失败后可重试恢复套装", async ({ page }) => {
   await mockEchoes(page);
+  let unavailable = true;
   await page.route("**/api/v1/echoes/floating-stars", async (route) => {
     if (!(await continueUnlessGet(route, "/api/v1/echoes/floating-stars"))) return;
-    await route.fulfill({ status: 500, body: "boom" });
+    if (unavailable) return route.fulfill({ status: 500, body: "boom" });
+    await route.fulfill({ json: { code: "SUCCESS", data: ECHO_LIST.data[0] } });
   });
   await page.goto("/echoes/floating-stars");
   await expect(page.getByText("声骸套装加载失败，请稍后重试。")).toBeVisible();
+  await expect(page.getByText("声骸套装不存在或已下架。")).toHaveCount(0);
+  unavailable = false;
+  await page.getByRole("button", { name: "重新加载" }).click();
+  await expect(page.getByRole("heading", { name: "浮星祛暗", level: 1 })).toBeVisible();
 });
 
 test("声骸详情非业务 404 显示错误态而不是不存在态", async ({ page }) => {
@@ -206,4 +212,56 @@ test("声骸详情非业务 404 显示错误态而不是不存在态", async ({ 
   });
   await page.goto("/echoes/floating-stars");
   await expect(page.getByText("声骸套装加载失败，请稍后重试。")).toBeVisible();
+});
+
+test("声骸详情等待响应时只显示加载状态", async ({ page }) => {
+  await mockEchoes(page);
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/v1/echoes/floating-stars", async (route) => {
+    if (!(await continueUnlessGet(route, "/api/v1/echoes/floating-stars"))) return;
+    await pending;
+    await route.fulfill({ json: { code: "SUCCESS", data: ECHO_LIST.data[0] } });
+  });
+  try {
+    await page.goto("/echoes/floating-stars");
+    await expect(page.locator("article.detail-page").getByRole("status")).toHaveText("正在加载声骸套装…");
+    await expect(page.getByText("声骸套装不存在或已下架。")).toHaveCount(0);
+  } finally {
+    release();
+  }
+  await expect(page.getByRole("heading", { name: "浮星祛暗", level: 1 })).toBeVisible();
+});
+
+test("声骸列表接口失败后可重试恢复套装", async ({ page }) => {
+  let unavailable = true;
+  await page.route("**/api/v1/echoes**", async (route) => {
+    if (!(await continueUnlessGet(route, "/api/v1/echoes"))) return;
+    if (unavailable) return route.fulfill({ status: 500, body: "boom" });
+    await route.fulfill({ json: ECHO_LIST });
+  });
+  await page.goto("/echoes");
+  const list = page.locator(".echo-table");
+  await expect(list.getByText("声骸图鉴加载失败，请稍后重试。")).toBeVisible({ timeout: 15_000 });
+  unavailable = false;
+  await list.getByRole("button", { name: "重新加载" }).click();
+  await expect(list.getByText("浮星祛暗")).toBeVisible();
+});
+
+test("声骸详情断网显示可恢复故障", async ({ page }) => {
+  await mockEchoes(page);
+  let unavailable = true;
+  await page.route("**/api/v1/echoes/floating-stars", async (route) => {
+    if (!(await continueUnlessGet(route, "/api/v1/echoes/floating-stars"))) return;
+    if (unavailable) return route.abort("failed");
+    await route.fulfill({ json: { code: "SUCCESS", data: ECHO_LIST.data[0] } });
+  });
+  await page.goto("/echoes/floating-stars");
+  await expect(page.getByText("声骸套装加载失败，请稍后重试。")).toBeVisible();
+  await expect(page.getByText("声骸套装不存在或已下架。")).toHaveCount(0);
+  unavailable = false;
+  await page.getByRole("button", { name: "重新加载" }).click();
+  await expect(page.getByRole("heading", { name: "浮星祛暗", level: 1 })).toBeVisible();
 });

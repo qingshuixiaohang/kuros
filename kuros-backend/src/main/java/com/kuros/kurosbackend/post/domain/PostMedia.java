@@ -29,6 +29,9 @@ public class PostMedia {
     @Column(name = "sort_order", nullable = false)
     private int sortOrder;
 
+    @Column(name = "inline_media", nullable = false)
+    private boolean inlineMedia;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -42,6 +45,12 @@ public class PostMedia {
         media.assetId = assetId;
         media.sortOrder = sortOrder;
         media.createdAt = now;
+        return media;
+    }
+
+    public static PostMedia inline(String postId, String assetId, int sortOrder, LocalDateTime now) {
+        PostMedia media = create(postId, assetId, sortOrder, now);
+        media.inlineMedia = true;
         return media;
     }
 

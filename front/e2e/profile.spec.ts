@@ -138,6 +138,36 @@ test("个人中心桌面操作可以进入编辑页并删除帖子", async ({ pa
   await expect(page).toHaveURL(/\/publish\?edit=10000000-0000-0000-0000-000000000001$/);
 });
 
+test("个人中心删帖后返回首页刷新同一会话的内容流缓存", async ({ page }) => {
+  await mockMyProfileApi(page);
+  let deleted = false;
+  await page.route("**/api/v1/posts?**", (route) =>
+    route.fulfill({ json: { data: deleted ? [] : [post], meta: { ...pageMeta, totalItems: deleted ? 0 : 1 } } }),
+  );
+  await page.route("**/api/v1/interactions/batch-states**", (route) => route.fulfill({ json: { data: { [post.id]: [0, 0] } } }));
+  await page.route("**/api/v1/auth/csrf", (route) => route.fulfill({ status: 204 }));
+  await page.route(`**/api/v1/posts/${post.id}`, (route) => {
+    if (route.request().method() !== "DELETE") return route.continue();
+    deleted = true;
+    return route.fulfill({ status: 204 });
+  });
+  await page.goto("/");
+  const feed = page.getByRole("region", { name: "社区内容流" });
+  await expect(feed.getByRole("heading", { name: post.title })).toBeVisible();
+  await page.getByRole("button", { name: "打开账户菜单" }).click();
+  await page.getByRole("menuitem", { name: "个人中心" }).click();
+  await expect(page).toHaveURL(/\/profile$/);
+  page.once("dialog", (dialog) => dialog.accept());
+  const remove = page.getByRole("button", { name: `删除《${post.title}》` });
+  await expect(remove).toBeVisible();
+  await remove.click();
+  await expect(page.getByText("帖子已删除", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "鸣潮社区首页", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(feed.getByText("没有找到相关帖子，换个关键词试试。")).toBeVisible();
+  await expect(feed.getByRole("heading", { name: post.title })).toHaveCount(0);
+});
+
 test("公开个人中心桌面端展示资料和帖子且没有横向滚动", async ({ page }) => {
   await page.route("**/api/v1/users/public-user", (route) =>
     route.fulfill({ json: { data: { id: "public-user", nickname: "今汐的留声机", avatarUrl: null, bio: "记录鸣潮实战", postCount: 1, likeCount: 88 } } }),

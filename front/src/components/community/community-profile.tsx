@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Award,
@@ -154,6 +155,7 @@ function ProfileHero({ overview }: { overview: ProfileOverview }) {
 function ProfilePostRow({ post, manageable = false, onDeleted }: { post: ApiPost; manageable?: boolean; onDeleted?: () => void }) {
   const slug = postSlug(post.id);
   const { notify } = useCommunityDemo();
+  const queryClient = useQueryClient();
   const [deleting, setDeleting] = useState(false);
 
   async function removePost() {
@@ -161,6 +163,10 @@ function ProfilePostRow({ post, manageable = false, onDeleted }: { post: ApiPost
     setDeleting(true);
     try {
       await deletePost(post.id);
+      queryClient.invalidateQueries({ queryKey: ["community-feed"] });
+      queryClient.invalidateQueries({ queryKey: ["community-posts"] });
+      queryClient.invalidateQueries({ queryKey: ["search-posts"] });
+      queryClient.invalidateQueries({ queryKey: ["hot-topics"] });
       notify("帖子已删除");
       onDeleted?.();
     } catch (error) {

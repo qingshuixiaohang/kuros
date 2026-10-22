@@ -55,6 +55,8 @@ class FeedTimelineIntegrationTest {
 
     @Autowired FeedTimelineStore timelineStore;
     @Autowired FeedService feedService;
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.kuros.kurosbackend.user.client.UserDirectoryFacade users;
     @Autowired CommunityPostRepository postRepository;
     @Autowired JdbcTemplate jdbcTemplate;
 
@@ -66,6 +68,14 @@ class FeedTimelineIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.when(users.toAuthor(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyMap()))
+                .thenAnswer(call -> new com.kuros.kurosbackend.shared.api.AuthorResponse(call.getArgument(0), "作者", null, null));
+        org.mockito.Mockito.when(users.following(org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(new com.kuros.kurosbackend.shared.api.PageResult<>(
+                        List.of(new com.kuros.kurosbackend.user.client.UserBriefDto(USER_B, "作者", null, null),
+                                new com.kuros.kurosbackend.user.client.UserBriefDto(USER_C, "作者", null, null)),
+                        new com.kuros.kurosbackend.shared.api.PageMeta(1, 50, 2, 1)));
         timelineStore.clear(USER_A);
         timelineStore.clear(USER_B);
         timelineStore.clear(USER_C);

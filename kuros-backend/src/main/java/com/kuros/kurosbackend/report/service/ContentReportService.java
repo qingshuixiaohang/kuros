@@ -22,8 +22,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class ContentReportService {
@@ -75,7 +81,8 @@ public class ContentReportService {
         } else {
             reports = reportRepository.findByStatus(parseStatus(statusValue), pageable);
         }
-        return new PageResult<>(reports.getContent().stream().map(this::toResponse).toList(),
+        TargetContexts contexts = loadTargetContexts(reports.getContent());
+        return new PageResult<>(reports.getContent().stream().map(report -> toResponse(report, contexts)).toList(),
                 new PageMeta(normalizedPage, normalizedPageSize, reports.getTotalElements(), reports.getTotalPages()));
     }
 
@@ -144,9 +151,55 @@ public class ContentReportService {
         throw new AuthRequestException("REPORT_ACTION_INVALID", "处理动作必须是 CONFIRM 或 REJECT");
     }
 
+    private TargetContexts loadTargetContexts(Collection<ContentReport> reports) {
+        Set<String> commentIds = reports.stream()
+                .filter(report -> report.getTargetType() == ReportTargetType.COMMENT)
+                .map(ContentReport::getTargetId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<String, CommunityCommentService.ReportTargetContext> comments =
+                commentService.findReportTargetContexts(commentIds);
+
+        Set<String> postIds = reports.stream()
+                .filter(report -> report.getTargetType() == ReportTargetType.POST)
+                .map(ContentReport::getTargetId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        comments.values().stream()
+                .map(CommunityCommentService.ReportTargetContext::postId)
+                .filter(Objects::nonNull)
+                .forEach(postIds::add);
+
+        return new TargetContexts(comments, postPublishingService.findReportTargetContexts(postIds));
+    }
+
     private ReportResponse toResponse(ContentReport report) {
+        return toResponse(report, new TargetContexts(Map.of(), Map.of()));
+    }
+
+    private ReportResponse toResponse(ContentReport report, TargetContexts contexts) {
+        PostPublishingService.ReportTargetContext post = null;
+        String targetExcerpt = null;
+        String targetPostId = null;
+        if (report.getTargetType() == ReportTargetType.POST) {
+            post = contexts.posts().get(report.getTargetId());
+            targetExcerpt = post == null ? null : post.excerpt();
+            targetPostId = post == null ? null : post.postId();
+        } else {
+            CommunityCommentService.ReportTargetContext comment = contexts.comments().get(report.getTargetId());
+            if (comment != null) {
+                targetExcerpt = comment.content();
+                targetPostId = comment.postId();
+                post = contexts.posts().get(comment.postId());
+            }
+        }
         return new ReportResponse(report.getId(), report.getReporterId(), report.getTargetType(), report.getTargetId(),
+                post == null ? null : post.title(), targetExcerpt, targetPostId,
                 report.getReason(), report.getStatus(), report.getHandledBy(), report.getHandledAt(),
                 report.getHandlingNote(), report.getCreatedAt());
+    }
+
+    private record TargetContexts(
+            Map<String, CommunityCommentService.ReportTargetContext> comments,
+            Map<String, PostPublishingService.ReportTargetContext> posts
+    ) {
     }
 }

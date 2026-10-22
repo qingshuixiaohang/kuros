@@ -107,6 +107,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <reuseForks>false</reuseForks>
+                    <forkCount>1</forkCount>
                     <argLine>-XX:ActiveProcessorCount=4 -Xms256m -Xmx768m -Xss512k -XX:MaxDirectMemorySize=512m</argLine>
                 </configuration>
             </plugin>

@@ -212,6 +212,7 @@ export function CommunityDemoProvider({ children }: { children: ReactNode }) {
               <label className="phone-field">
                 <span>+86</span>
                 <input
+                  aria-label="手机号"
                   autoComplete="tel"
                   inputMode="numeric"
                   maxLength={11}
@@ -223,6 +224,7 @@ export function CommunityDemoProvider({ children }: { children: ReactNode }) {
               </label>
               <label className="code-field">
                 <input
+                  aria-label="验证码"
                   inputMode="numeric"
                   maxLength={6}
                   onChange={(event) => setVerification(event.target.value.replace(/\D/g, ""))}

@@ -51,9 +51,12 @@ export function EchoesPage() {
           </p>
         ) : null}
         {echoesQuery.isError ? (
-          <p className="admin-empty" role="status">
-            声骸图鉴加载失败，请稍后重试。
-          </p>
+          <div className="empty-state">
+            <p role="status">声骸图鉴加载失败，请稍后重试。</p>
+            <button className="secondary-button" onClick={() => echoesQuery.refetch()} type="button">
+              重新加载
+            </button>
+          </div>
         ) : null}
         {!echoesQuery.isPending && !echoesQuery.isError && visible.length === 0 ? (
           <p className="admin-empty" role="status">
@@ -95,10 +98,21 @@ export function EchoDetailPage({ id }: { id: string }) {
             返回声骸图鉴
           </Link>
           <div className="empty-state">
-            <p>{echoQuery.isError ? "声骸套装加载失败，请稍后重试。" : "声骸套装不存在或已下架。"}</p>
-            <Link className="secondary-button" href="/echoes">
-              返回声骸图鉴
-            </Link>
+            {echoQuery.isPending ? (
+              <p role="status">正在加载声骸套装…</p>
+            ) : (
+              <>
+                <p>{echoQuery.isError ? "声骸套装加载失败，请稍后重试。" : "声骸套装不存在或已下架。"}</p>
+                {echoQuery.isError ? (
+                  <button className="secondary-button" onClick={() => echoQuery.refetch()} type="button">
+                    重新加载
+                  </button>
+                ) : null}
+                <Link className="secondary-button" href="/echoes">
+                  返回声骸图鉴
+                </Link>
+              </>
+            )}
           </div>
         </article>
       </CommunityPageFrame>

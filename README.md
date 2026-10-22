@@ -49,8 +49,8 @@ npm run dev
 
 服务配置的默认值全部指向 `localhost` + 宿主映射端口（MySQL 3307、Redis 6379、Nacos 8848、
 RocketMQ 9876、ES 9200、MinIO 9000），裸跑**不需要任何环境变量**；Docker 容器模式才用
-环境变量把它们覆盖成容器网络地址。登录用固定验证码 `123456`（user 服务 dev 默认值，见
-`kuros-user/src/main/resources/application.properties`）。
+环境变量把它们覆盖成容器网络地址。默认不启用固定验证码；需要本地演示登录时，在 `.env`
+显式设置 `APP_AUTH_DEV_CODE`。
 
 ### 全栈打包模式（演示/冒烟/出门前体检）：连应用容器一起起
 
@@ -61,7 +61,10 @@ docker compose --profile full up -d --build
 即原 14 服务全家桶行为（CI 冒烟即此模式）。两种模式共用同一组数据卷与端口，**不要同时启动**——
 先用 `docker compose --profile full down`（保留卷）再切换。
 
-本地演示登录如果需要固定验证码，请在 `.env` 中填写 `APP_AUTH_DEV_CODE=123456` 并设置 `APP_AUTH_DEV_CODE_EXPOSED=true`；生产或共享环境不要开启验证码回显。
+本地演示登录如果需要固定验证码，请在 `.env` 中显式填写 `APP_AUTH_DEV_CODE=123456`
+并设置 `APP_AUTH_DEV_CODE_EXPOSED=true`。Compose 不再提供固定码默认值；生产模板使用
+`production` profile、真实短信 provider 配置和必填内部密钥，并只公开 gateway/frontend
+端口。
 
 启动后访问：
 

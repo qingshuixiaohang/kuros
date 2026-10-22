@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { CommunityPageFrame, PageHeader } from "@/components/community/community-pages";
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { useNewsDetailQuery, useNewsListQuery } from "@/lib/community-queries";
+import { ApiError } from "@/lib/api";
 
 export function NewsPage() {
   const params = useSearchParams();
@@ -41,7 +42,14 @@ export function NewsPage() {
             正在整理资讯…
           </p>
         ) : null}
-        {newsQuery.isError ? <p className="admin-empty">资讯加载失败，请稍后重试。</p> : null}
+        {newsQuery.isError ? (
+          <div className="empty-state">
+            <p role="status">资讯加载失败，请稍后重试。</p>
+            <button className="secondary-button" onClick={() => newsQuery.refetch()} type="button">
+              重新加载
+            </button>
+          </div>
+        ) : null}
         {!newsQuery.isPending && !newsQuery.isError && visible.length === 0 ? <p className="admin-empty">当前分类下没有资讯。</p> : null}
         {visible.map((item) => (
           <Link href={"/news/" + item.slug} key={item.slug}>
@@ -67,6 +75,8 @@ export function NewsDetailPage({ id }: { id: string }) {
   // 接真 API 后这条由后端 NEWS_NOT_FOUND 保证，前端只需把失败态显示出来
   const newsQuery = useNewsDetailQuery(id);
   const item = newsQuery.data;
+  const unavailable =
+    newsQuery.isError && !(newsQuery.error instanceof ApiError && newsQuery.error.status === 404 && newsQuery.error.code === "NEWS_NOT_FOUND");
   const { notify } = useCommunityDemo();
   if (!item)
     return (
@@ -77,10 +87,21 @@ export function NewsDetailPage({ id }: { id: string }) {
             返回资讯列表
           </Link>
           <div className="empty-state">
-            <p>资讯不存在或已下架。</p>
-            <Link className="secondary-button" href="/news">
-              返回资讯列表
-            </Link>
+            {newsQuery.isPending ? (
+              <p role="status">正在加载资讯…</p>
+            ) : (
+              <>
+                <p>{unavailable ? "资讯加载失败，请稍后重试。" : "资讯不存在或已下架。"}</p>
+                {unavailable ? (
+                  <button className="secondary-button" onClick={() => newsQuery.refetch()} type="button">
+                    重新加载
+                  </button>
+                ) : null}
+                <Link className="secondary-button" href="/news">
+                  返回资讯列表
+                </Link>
+              </>
+            )}
           </div>
         </article>
       </CommunityPageFrame>

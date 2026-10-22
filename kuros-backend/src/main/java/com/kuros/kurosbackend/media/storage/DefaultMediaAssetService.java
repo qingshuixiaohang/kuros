@@ -9,6 +9,7 @@ import com.kuros.kurosbackend.shared.exception.ForbiddenException;
 import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.media.repository.MediaAssetRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -18,7 +19,6 @@ import java.time.LocalDateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -148,46 +148,41 @@ public class DefaultMediaAssetService implements MediaAssetService {
         mediaAssetRepository.save(asset);
     }
 
-    /**
-     * 清理过期的临时媒体资产（上传后尚未关联帖子，但仍可由元数据发现）。
-     * 定时任务调用（后续 XXL-JOB 切片会接入）。
-     *
-     * 为什么逐项 try/catch 而不是整批一个事务（可靠性加固）：
-     * 原实现把 delete 循环包在方法里，任何一个文件删除失败就抛出方法，
-     * 整批剩余文件这次都不处理——下次定时任务还会在同一个位置崩，
-     * 清理永远跑不完。而临时媒体资产会持续产生，跑不完就意味着无限堆积。
-     *
-     * 失败项保持 TEMPORARY 而不是 markDeleted：delete 失败时对象还在，
-     * 标成 DELETED 会让它再也进不了清理范围，成为无法收敛的残留对象。保持原状态
-     * 等下次重试才是可自愈的。
-     *
-     * 返回值语义：实际成功删除的文件数。全部失败返回 0 而不抛异常——
-     * 清理是 best-effort 的后台任务，存储整体不可用是它要处理的正常
-     * 故障，不该让定时任务框架判定作业本身失败。
-     */
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public int cleanupTemporaryAssets(LocalDateTime cutoff) {
-        List<MediaAsset> expired = mediaAssetRepository.findByStatusAndCreatedAtBefore(MediaAssetStatus.TEMPORARY, cutoff);
-        if (expired.isEmpty()) {
-            return 0;
+        int repaired = mediaAssetRepository.repairDeletedAssetsWithPublishedReferences();
+        if (repaired > 0) {
+            log.warn("已修复仍被已发布帖子引用的删除媒体资产：count={}", repaired);
         }
-        List<MediaAsset> cleaned = new ArrayList<>();
-        for (MediaAsset asset : expired) {
-            try {
-                storageStrategy.delete(asset.getStorageKey());
-            } catch (RuntimeException exception) {
-                // 单个文件失败只跳过它，不中断整批；保持 TEMPORARY 等下次重试
-                log.warn("临时媒体资产清理跳过（下次重试）：storageKey={}，原因={}",
-                        asset.getStorageKey(), exception.getMessage());
-                continue;
+        int cleaned = 0;
+        String afterId = "";
+        while (true) {
+            List<MediaAsset> candidates = mediaAssetRepository.findCleanupCandidates(cutoff, afterId, PageRequest.of(0, 100));
+            if (candidates.isEmpty()) return cleaned;
+            for (MediaAsset asset : candidates) {
+                try {
+                    // Commit loss of visibility before touching nontransactional object storage.
+                    if (mediaAssetRepository.claimCleanup(asset.getId(), cutoff) == 1
+                            && deleteStoredObject(asset)) cleaned++;
+                } catch (RuntimeException exception) {
+                    log.warn("媒体清理跳过，等待下次重试：assetId={}", asset.getId(), exception);
+                }
             }
-            asset.markDeleted();
-            cleaned.add(asset);
+            afterId = candidates.get(candidates.size() - 1).getId();
+            if (candidates.size() < 100) return cleaned;
         }
-        if (!cleaned.isEmpty()) {
-            mediaAssetRepository.saveAll(cleaned);
+    }
+
+    private boolean deleteStoredObject(MediaAsset asset) {
+        try {
+            storageStrategy.delete(asset.getStorageKey());
+            mediaAssetRepository.recordStorageDeletion(asset.getId(), LocalDateTime.now());
+            return true;
+        } catch (RuntimeException exception) {
+            log.warn("媒体对象删除未完成，保留记录等待重试：assetId={}", asset.getId(), exception);
+            return false;
         }
-        return cleaned.size();
     }
 
     // ==================== 私有方法：文件校验 ====================

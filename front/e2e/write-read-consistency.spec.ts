@@ -164,6 +164,45 @@ async function seedLogin(page: Page) {
 }
 
 test.describe("写后读一致性", () => {
+  test("首页关注真实API作者时提交作者ID", async ({ page }) => {
+    await seedLogin(page);
+    await mockBackend(page);
+    let followed = false;
+    await page.route("**/api/v1/users/author-1/follow", (route) => {
+      if (route.request().method() === "POST") followed = true;
+      return route.fulfill({ json: { data: { followed, followerCount: followed ? 1 : 0 } } });
+    });
+    await page.goto("/");
+    const card = page.locator("article.post-card").filter({ hasText: "写后读一致性测试帖" });
+    const follow = card.getByRole("button", { name: "＋关注", exact: true });
+    await expect(follow).toBeVisible();
+    await follow.click();
+    await expect.poll(() => followed).toBe(true);
+    await expect(card.getByRole("button", { name: "已关注", exact: true })).toBeVisible();
+  });
+
+  test("详情互动查询失败显示未知状态并可重试恢复已赞", async ({ page }) => {
+    await seedLogin(page);
+    const state = await mockBackend(page);
+    state[POST_ID].liked = true;
+    let unavailable = true;
+    await page.route(`**/api/v1/posts/${POST_ID}/interactions`, (route) =>
+      unavailable
+        ? route.fulfill({ status: 500, json: { code: "INTERNAL_ERROR" } })
+        : route.fulfill({ json: { code: "SUCCESS", data: { postId: POST_ID, ...state[POST_ID] } } }),
+    );
+    await page.goto(`/guides/${POST_ID}`);
+    const rail = page.getByRole("complementary", { name: "帖子互动" });
+    await expect(rail.getByText("互动状态暂不可用，请重试。")).toBeVisible();
+    await expect(rail.getByRole("button", { name: "点赞", exact: true })).toHaveCount(0);
+    await expect(rail.getByRole("button", { name: "收藏", exact: true })).toHaveCount(0);
+    unavailable = false;
+    const retry = rail.getByRole("button", { name: "重新加载互动状态" });
+    await expect(retry).toBeVisible();
+    await retry.click();
+    await expect(rail.getByRole("button", { name: "取消点赞" })).toBeEnabled();
+  });
+
   test("详情页点赞后返回首页，首页卡片显示已赞", async ({ page }) => {
     await seedLogin(page);
     const state = await mockBackend(page);

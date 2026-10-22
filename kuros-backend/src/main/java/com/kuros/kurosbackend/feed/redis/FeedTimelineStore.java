@@ -13,6 +13,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.time.Duration;
 
 /**
  * Feed Timeline 的 Redis ZSet 存储。
@@ -143,6 +144,43 @@ public class FeedTimelineStore {
         return removed == null ? 0 : removed;
     }
 
+    public int capacity() {
+        return maxSize;
+    }
+
+    public boolean hasFollowingSnapshot(String userId, String snapshot) {
+        return snapshot.equals(redisTemplate.opsForValue().get("feed:following:" + userId))
+                && (snapshot.isEmpty() || Boolean.TRUE.equals(redisTemplate.hasKey(timelineKey(userId))));
+    }
+
+    public void saveFollowingSnapshot(String userId, String snapshot) {
+        redisTemplate.opsForValue().set("feed:following:" + userId, snapshot, Duration.ofSeconds(ttlSeconds));
+    }
+
+    public void retainAuthors(String userId, Set<String> authors) {
+        String key = timelineKey(userId);
+        Set<String> members = redisTemplate.opsForZSet().range(key, 0, -1);
+        if (members == null || members.isEmpty()) return;
+        List<String> removed = members.stream().filter(member -> {
+            int separator = member.indexOf(AUTHOR_SEPARATOR);
+            return separator < 0 || !authors.contains(member.substring(0, separator));
+        }).toList();
+        if (!removed.isEmpty()) redisTemplate.opsForZSet().remove(key, removed.toArray());
+    }
+
+    public record BackfillPost(String postId, String authorId, LocalDateTime publishedAt) {}
+
+    public void backfill(String userId, List<BackfillPost> posts) {
+        if (posts.isEmpty()) return;
+        Set<ZSetOperations.TypedTuple<String>> entries = posts.stream()
+                .map(post -> ZSetOperations.TypedTuple.of(encodeMember(post.authorId(), post.postId()), toEpochMillis(post.publishedAt())))
+                .collect(java.util.stream.Collectors.toSet());
+        String key = timelineKey(userId);
+        redisTemplate.opsForZSet().add(key, entries);
+        redisTemplate.opsForZSet().removeRange(key, 0, -(maxSize + 1));
+        redisTemplate.expire(key, Duration.ofSeconds(ttlSeconds));
+    }
+
     /**
      * 读 timeline：按时间倒序取 offset..offset+limit-1 的 postId 列表。
      *
@@ -170,16 +208,15 @@ public class FeedTimelineStore {
     }
 
     /**
-     * 游标翻页读 timeline（切片 #13 / rp-04）：返回严格排在游标 (cursorScore, cursorPostId) 之后、
-     * 按时间倒序（score DESC，同分 postId DESC）的最多 limit 个条目。
+     * 游标翻页读 timeline（切片 #13 / rp-04）：返回严格排在游标 (cursorScore, cursorMember) 之后、
+     * 按时间倒序（score DESC，同分 Redis member DESC）的最多 limit 个条目。
      *
      * 为什么用游标而不是 offset？offset 翻页（{@link #readTimeline}）要 ZREVRANGE 跳过前 offset 个成员，
      * 深度越大跳得越多；游标用 ZREVRANGEBYSCORE 直接定位到「分数低于游标」的位置起取 limit 个，翻到多深都是 O(log N + limit)。
      *
      * 同分（同一发布毫秒）怎么去重不丢不重？
-     * Redis 对同分成员按「字典序倒序」排列，故全序是 (score DESC, postId DESC)。以游标项为界：
-     * 同分且 postId &gt;= cursorPostId 的成员属于「上一页已返回」（含游标项本身），跳过；
-     * 同分且 postId &lt; cursorPostId 的才是下一页。为覆盖这段同分边界，多取一个 limit 作缓冲再过滤。
+     * Redis 对同分成员按完整 member 字典序倒序排列。复合 member 是 authorId:postId，
+     * 因此游标必须保存完整 member；只保存 postId 会在同分跨作者时破坏边界。
      * 前提假设：同一毫秒的帖子数远小于 limit（score 是发布 epoch millis，单用户关注流内同毫秒暴量不现实）。
      *
      * **复合 member 下同分比较必须先 decode**：member 是 {@code authorId:postId}，
@@ -195,15 +232,15 @@ public class FeedTimelineStore {
      * 既省一次往返，也避免「调用方拼不出 member」这个不可能优雅解决的接口问题。
      *
      * @param cursorScore 游标分数（上一页最后一条的 score）；null 表示第一页（从最新起）
-     * @param cursorPostId 游标 postId（同分兜底）；null 表示第一页
+     * @param cursorMember 游标在 Redis ZSet 中的完整 member（同分兜底）；null 表示第一页
      * @param limit       本页最多返回条数
      */
-    public List<TimelineEntry> readTimelineByCursor(String userId, Long cursorScore, String cursorPostId, int limit) {
+    public List<TimelineEntry> readTimelineByCursor(String userId, Long cursorScore, String cursorMember, int limit) {
         if (limit <= 0) {
             return List.of();
         }
         String key = timelineKey(userId);
-        boolean firstPage = cursorScore == null || cursorPostId == null;
+        boolean firstPage = cursorScore == null || cursorMember == null;
         // max 用闭区间（含游标分数）以便捕获同分边界的下一页成员，随后按 postId 过滤掉已返回的
         double max = firstPage ? Double.POSITIVE_INFINITY : cursorScore.doubleValue();
         // 多取一个 limit 作同分边界缓冲：最坏情况上一页整页都与游标同分，需跳过至多 limit 个已返回成员
@@ -220,13 +257,12 @@ public class FeedTimelineStore {
             if (member == null || score == null) {
                 continue;
             }
-            // 先解码再比较：member 是 authorId:postId，同分边界必须按 postId 判
+            // 同分边界必须按 Redis 实际排序键（完整 member）比较，再解码给调用方使用。
             String postId = decodePostId(member);
-            // 跳过游标项本身及同分块中「已返回」（postId >= cursorPostId）的边界成员
-            if (!firstPage && score == max && postId.compareTo(cursorPostId) >= 0) {
+            if (!firstPage && score == max && member.compareTo(cursorMember) >= 0) {
                 continue;
             }
-            page.add(new TimelineEntry(postId, score.longValue()));
+            page.add(new TimelineEntry(postId, member, score.longValue()));
             if (page.size() == limit) {
                 break;
             }
@@ -234,8 +270,8 @@ public class FeedTimelineStore {
         return page;
     }
 
-    /** timeline 里的一条记录：帖子 ID + 它在 ZSet 中的 score（下一页游标要用）。 */
-    public record TimelineEntry(String postId, long score) {
+    /** timeline 里的一条记录：帖子 ID、完整 ZSet member 与 score（下一页游标要用）。 */
+    public record TimelineEntry(String postId, String member, long score) {
     }
 
     /**

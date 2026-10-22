@@ -1,11 +1,15 @@
 package com.kuros.kurosbackend.post.service;
 
 import com.kuros.kurosbackend.TestDatabases;
+import com.kuros.kurosbackend.media.domain.MediaAsset;
+import com.kuros.kurosbackend.media.repository.MediaAssetRepository;
 import com.kuros.kurosbackend.post.api.CreatePostRequest;
 import com.kuros.kurosbackend.post.api.PostDetailResponse;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -15,6 +19,7 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -39,6 +44,7 @@ class PostExcerptSummarizeTest {
     static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
 
     private static final String TEST_USER_ID = "10000000-0000-0000-0000-000000000001";
+    private static final String STORAGE_KEY = "50f219b7-195a-412f-b16a-43f32bdb36a9.jpg";
 
     @DynamicPropertySource
     static void redisProperties(DynamicPropertyRegistry registry) {
@@ -50,12 +56,24 @@ class PostExcerptSummarizeTest {
 
     @Autowired
     private PostPublishingService publishingService;
+    @Autowired
+    private MediaAssetRepository mediaAssets;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @BeforeEach
+    void setUp() {
+        jdbcTemplate.update("DELETE FROM post_media");
+        jdbcTemplate.update("DELETE FROM media_assets");
+        mediaAssets.save(MediaAsset.temporary(
+                TEST_USER_ID, STORAGE_KEY, "O7.jpg", "image/jpeg", 8, LocalDateTime.now()));
+    }
 
     @Test
     void 图片开头的正文摘要不应包含Markdown图片语法和裸URL() {
         CreatePostRequest request = new CreatePostRequest(
                 "GUIDE", "攻略", "图片帖摘要测试", "",
-                "![O7.jpg](http://localhost:8080/media/50f219b7-195a-412f-b16a-43f32bdb36a9.jpg)\n\n这是正文说明文字。",
+                "![O7.jpg](/media/" + STORAGE_KEY + ")\n\n这是正文说明文字。",
                 List.of(), List.of()
         );
         PostDetailResponse published = publishingService.publish(request, TEST_USER_ID);
@@ -70,7 +88,7 @@ class PostExcerptSummarizeTest {
     void 纯图片无文字的帖子摘要应回退为图片名() {
         CreatePostRequest request = new CreatePostRequest(
                 "GENERAL", "心得分享", "纯图帖摘要测试", "",
-                "![O7.jpg](http://localhost:8080/media/50f219b7-195a-412f-b16a-43f32bdb36a9.jpg)",
+                "![O7.jpg](/media/" + STORAGE_KEY + ")",
                 List.of(), List.of()
         );
         PostDetailResponse published = publishingService.publish(request, TEST_USER_ID);

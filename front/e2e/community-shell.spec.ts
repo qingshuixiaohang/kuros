@@ -115,7 +115,30 @@ test("首页内容流在有配图时展示可访问的帖子媒体", async ({ pa
 });
 
 test("首页多图帖子以宫格缩略图展示并新标签打开帖子", async ({ page }) => {
-  await page.route("**/api/v1/posts?*", (route) => route.abort());
+  await page.route("**/api/v1/posts?*", (route) =>
+    route.fulfill({
+      json: {
+        data: [
+          {
+            id: "multi-image-post",
+            type: "GUIDE",
+            category: "配队攻略",
+            title: "多图帖子",
+            excerpt: "验证宫格缩略图",
+            mediaUrls: ["/art/guide-sword.webp", "/art/guide-tower.webp", "/art/guide-coast.webp"],
+            author: { id: "author-1", nickname: "潮声档案员", avatarUrl: null, bio: null },
+            publishedAt: "2026-09-16T10:00:00",
+            viewCount: 10,
+            likeCount: 3,
+            favoriteCount: 1,
+            commentCount: 2,
+            tags: ["配队"],
+          },
+        ],
+        meta: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
+      },
+    }),
+  );
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/");
 

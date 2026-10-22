@@ -26,9 +26,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class CommunityCommentService {
@@ -130,6 +133,23 @@ public class CommunityCommentService {
             }
             CacheInvalidationAfterCommit.run(() -> twoLevelCache.evict(CacheNames.POST_DETAIL, comment.getPostId()));
         });
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, ReportTargetContext> findReportTargetContexts(Collection<String> commentIds) {
+        if (commentIds == null || commentIds.isEmpty()) return Map.of();
+        List<String> normalizedIds = commentIds.stream().filter(Objects::nonNull).distinct().toList();
+        return commentRepository.findAllById(normalizedIds).stream()
+                .collect(Collectors.toMap(
+                        CommunityComment::getId,
+                        comment -> new ReportTargetContext(
+                                comment.getPostId(),
+                                comment.getStatus() == CommentStatus.DELETED ? "该评论已删除" : comment.getContent()
+                        )
+                ));
+    }
+
+    public record ReportTargetContext(String postId, String content) {
     }
 
     private CommunityPost ensurePublishedPost(String postId) {

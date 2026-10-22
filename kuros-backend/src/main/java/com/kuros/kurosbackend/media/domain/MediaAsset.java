@@ -43,6 +43,9 @@ public class MediaAsset {
     @Column(name = "attached_at")
     private LocalDateTime attachedAt;
 
+    @Column(name = "storage_deleted_at")
+    private LocalDateTime storageDeletedAt;
+
     protected MediaAsset() {
     }
 
@@ -84,4 +87,5 @@ public class MediaAsset {
     public MediaAssetStatus getStatus() { return status; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getAttachedAt() { return attachedAt; }
+    public LocalDateTime getStorageDeletedAt() { return storageDeletedAt; }
 }

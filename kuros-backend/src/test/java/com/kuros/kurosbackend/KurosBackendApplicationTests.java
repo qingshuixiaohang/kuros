@@ -106,6 +106,9 @@ class KurosBackendApplicationTests {
     @Autowired
     private StringRedisTemplate redisTemplate;
 
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
     @BeforeEach
     void flushRedis() {
         // 每个测试前清空 Redis，保证测试隔离（H2 已经是内存模式，每次上下文重建时自动清空）
@@ -632,6 +635,79 @@ class KurosBackendApplicationTests {
         mockMvc.perform(get("/api/v1/posts").param("keyword", "多图实战记录"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].media[0].id").value(firstAssetId));
+    }
+
+    @Test
+    @DirtiesContext
+    void 删除帖子后游客不能继续读取关联图片() throws Exception {
+        Cookie owner = login("13800000041");
+        var upload = mockMvc.perform(multipart("/api/v1/files/images")
+                        .file(new MockMultipartFile("file", "lifecycle.png", "image/png", minimalPng()))
+                        .cookie(owner, CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
+                .andExpect(status().isCreated()).andReturn();
+        String body = upload.getResponse().getContentAsString();
+        String assetId = readJsonString(body, "assetId");
+        String mediaPath = java.net.URI.create(readJsonString(body, "url")).getPath();
+        var created = mockMvc.perform(post("/api/v1/posts")
+                        .cookie(owner, CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GENERAL\",\"category\":\"同人\",\"title\":\"媒体生命周期\",\"content\":\"正文\",\"mediaAssetIds\":[\"" + assetId + "\"]}"))
+                .andExpect(status().isCreated()).andReturn();
+        mockMvc.perform(get(mediaPath)).andExpect(status().isOk());
+        mockMvc.perform(delete("/api/v1/posts/" + readJsonString(created.getResponse().getContentAsString(), "id"))
+                        .cookie(owner, CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get(mediaPath)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DirtiesContext
+    void 正文图片保持可读但不混入相册且编辑移除后失效() throws Exception {
+        Cookie owner = login("13800000042");
+        var upload = mockMvc.perform(multipart("/api/v1/files/images")
+                        .file(new MockMultipartFile("file", "inline.png", "image/png", minimalPng()))
+                        .cookie(owner, CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
+                .andExpect(status().isCreated()).andReturn();
+        String imageUrl = readJsonString(upload.getResponse().getContentAsString(), "url");
+        String mediaPath = java.net.URI.create(imageUrl).getPath();
+        var created = mockMvc.perform(post("/api/v1/posts")
+                        .cookie(owner, CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"正文图\",\"content\":\"![正文图](" + imageUrl + ")\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.media", hasSize(0))).andReturn();
+        String postId = readJsonString(created.getResponse().getContentAsString(), "id");
+        imageStorageService.cleanupTemporaryAssets(LocalDateTime.now().plusMinutes(1));
+        mockMvc.perform(get(mediaPath)).andExpect(status().isOk());
+        mockMvc.perform(put("/api/v1/posts/" + postId)
+                        .cookie(owner, CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"正文图\",\"content\":\"已移除图片\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get(mediaPath)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DirtiesContext
+    void 历史临时图片仍被已发布正文引用时清理必须保留() throws Exception {
+        Cookie owner = login("13800000043");
+        var upload = mockMvc.perform(multipart("/api/v1/files/images")
+                        .file(new MockMultipartFile("file", "legacy-inline.png", "image/png", minimalPng()))
+                        .cookie(owner, CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN))
+                .andExpect(status().isCreated()).andReturn();
+        String imageUrl = readJsonString(upload.getResponse().getContentAsString(), "url");
+        String assetId = readJsonString(upload.getResponse().getContentAsString(), "assetId");
+        var created = mockMvc.perform(post("/api/v1/posts")
+                        .cookie(owner, CSRF_COOKIE).header("X-XSRF-TOKEN", CSRF_TOKEN)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"type\":\"GUIDE\",\"category\":\"配队攻略\",\"title\":\"历史正文图\",\"content\":\"![正文图](" + imageUrl + ")\"}"))
+                .andExpect(status().isCreated()).andReturn();
+        String postId = readJsonString(created.getResponse().getContentAsString(), "id");
+        // Reproduce metadata written before inline images had explicit associations.
+        jdbcTemplate.update("delete from post_media where post_id = ?", postId);
+        jdbcTemplate.update("update media_assets set status = 'TEMPORARY' where id = ?", assetId);
+        imageStorageService.cleanupTemporaryAssets(LocalDateTime.now().plusMinutes(1));
+        mockMvc.perform(get(java.net.URI.create(imageUrl).getPath())).andExpect(status().isOk());
     }
 
     @Test

@@ -66,6 +66,7 @@ export function GuidesApiPage() {
   const categories = ["全部", "配队攻略", "深塔攻略", "角色培养", "新手攻略"];
   const result = useCommunityPostQuery({ category, keyword: query, tag, page, pageSize: 10, sort });
   const apiUnavailable = Boolean(result.error);
+  const loading = result.isPending;
   const visibleItems = apiUnavailable ? filterFallback(category, query, tag) : (result.data?.items.map(toGuide) ?? []);
   const totalItems = apiUnavailable ? visibleItems.length : (result.data?.meta?.totalItems ?? visibleItems.length);
   const totalPages = apiUnavailable ? 1 : (result.data?.meta?.totalPages ?? 1);
@@ -125,12 +126,14 @@ export function GuidesApiPage() {
             <option value="hot">热门内容</option>
           </select>
         </label>
-        <span className="result-count" role={result.isLoading ? "status" : undefined}>
-          {result.isLoading ? "正在同步内容…" : "共 " + totalItems + " 篇"}
+        <span className="result-count" role={loading ? "status" : undefined}>
+          {loading ? "正在同步内容…" : "共 " + totalItems + " 篇"}
         </span>
       </div>
       <section className="guide-list-page">
-        {visibleItems.length ? (
+        {loading ? (
+          <p className="empty-state">正在加载攻略…</p>
+        ) : visibleItems.length ? (
           visibleItems.map((guide) => <GuideListItem guide={guide} key={guide.id} />)
         ) : (
           <p className="empty-state" role="status">

@@ -28,7 +28,7 @@ export function CommunityAdminReportsPage() {
   const isAdmin = loggedIn && user?.role === "ADMIN";
   const reportsQuery = useAdminReportsQuery({ status: filter, enabled: isAdmin });
   const handleMutation = useHandleReportMutation({ status: filter });
-  const reports = reportsQuery.data ?? [];
+  const reports = reportsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const loading = reportsQuery.isPending;
   // 403 要有专属文案：管理端最常见的失败就是"登录了但不是管理员"，
   // 通用错误提示会让用户以为自己网断了。ApiError 带 status，这里判一下
@@ -121,7 +121,7 @@ export function CommunityAdminReportsPage() {
         )}
         {loading ? (
           <p className="admin-empty">正在整理举报记录…</p>
-        ) : reports.length === 0 ? (
+        ) : error ? null : reports.length === 0 ? (
           <p className="admin-empty">当前筛选下没有举报记录。</p>
         ) : (
           <div className="report-list">
@@ -135,8 +135,25 @@ export function CommunityAdminReportsPage() {
                     </span>
                     <time>{report.createdAt.slice(0, 16).replace("T", " ")}</time>
                   </div>
-                  <strong>目标 ID：{report.targetId}</strong>
-                  <small>举报人：{report.reporterId}</small>
+                  {report.targetTitle && report.targetPostId ? (
+                    <Link
+                      aria-label={`查看目标：${report.targetTitle}`}
+                      className="report-target"
+                      href={`/guides/${encodeURIComponent(report.targetPostId)}${report.targetType === "COMMENT" ? "#comments" : ""}`}
+                    >
+                      <strong>{report.targetTitle}</strong>
+                      {report.targetExcerpt && <span>{report.targetExcerpt}</span>}
+                    </Link>
+                  ) : (
+                    <div className="report-target">
+                      <strong>{report.targetTitle ?? `目标 ID：${report.targetId}`}</strong>
+                      {report.targetExcerpt && <span>{report.targetExcerpt}</span>}
+                    </div>
+                  )}
+                  <small>
+                    {report.targetTitle && report.targetPostId ? `目标 ID：${report.targetId} · ` : ""}
+                    举报人：{report.reporterId}
+                  </small>
                   {report.handlingNote && <p>处理备注：{report.handlingNote}</p>}
                 </div>
                 {report.status === "PENDING" && (
@@ -163,6 +180,18 @@ export function CommunityAdminReportsPage() {
                 )}
               </article>
             ))}
+            {reportsQuery.isFetchNextPageError && (
+              <p className="admin-inline-error" role="alert">
+                后续举报加载失败，请重试。
+              </p>
+            )}
+            {reportsQuery.hasNextPage && (
+              <div className="report-pagination">
+                <button disabled={reportsQuery.isFetchingNextPage} type="button" onClick={() => void reportsQuery.fetchNextPage()}>
+                  {reportsQuery.isFetchingNextPage ? "正在加载…" : "加载更多举报"}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </section>

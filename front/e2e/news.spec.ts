@@ -91,9 +91,65 @@ test("未知资讯 slug 走不存在态，不回退到第一条冒充", async ({
   await expect(page.getByRole("heading", { name: "鸣潮 2.4 版本前瞻特别节目总结" })).toHaveCount(0);
 });
 
-test("资讯详情接口失败时显示错误态而不是空白", async ({ page }) => {
+test("资讯详情接口失败后可重试恢复正文", async ({ page }) => {
   await mockNews(page);
-  await page.route("**/api/v1/news/version-preview", (route) => route.fulfill({ status: 500, body: "boom" }));
+  let unavailable = true;
+  await page.route("**/api/v1/news/version-preview", (route) =>
+    unavailable ? route.fulfill({ status: 500, body: "boom" }) : route.fulfill({ json: { code: "SUCCESS", data: NEWS_LIST.data[0] } }),
+  );
   await page.goto("/news/version-preview");
-  await expect(page.getByText("资讯不存在或已下架。")).toBeVisible();
+  await expect(page.getByText("资讯加载失败，请稍后重试。")).toBeVisible();
+  await expect(page.getByText("资讯不存在或已下架。")).toHaveCount(0);
+  unavailable = false;
+  await page.getByRole("button", { name: "重新加载" }).click();
+  await expect(page.getByRole("heading", { name: NEWS_LIST.data[0].title, level: 1 })).toBeVisible();
 });
+
+test("资讯详情等待响应时只显示加载状态", async ({ page }) => {
+  await mockNews(page);
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/v1/news/version-preview", async (route) => {
+    await pending;
+    await route.fulfill({ json: { code: "SUCCESS", data: NEWS_LIST.data[0] } });
+  });
+  try {
+    await page.goto("/news/version-preview");
+    await expect(page.locator("article.detail-page").getByRole("status")).toHaveText("正在加载资讯…");
+    await expect(page.getByText("资讯不存在或已下架。")).toHaveCount(0);
+  } finally {
+    release();
+  }
+  await expect(page.getByRole("heading", { name: NEWS_LIST.data[0].title, level: 1 })).toBeVisible();
+});
+
+test("资讯列表接口失败后可重试恢复条目", async ({ page }) => {
+  await mockNews(page);
+  let unavailable = true;
+  await page.route(/\/api\/v1\/news\?/, (route) => (unavailable ? route.fulfill({ status: 500, body: "boom" }) : route.fulfill({ json: NEWS_LIST })));
+  await page.goto("/news");
+  const list = page.locator(".news-page-list");
+  await expect(list.getByText("资讯加载失败，请稍后重试。")).toBeVisible({ timeout: 15_000 });
+  unavailable = false;
+  await list.getByRole("button", { name: "重新加载" }).click();
+  await expect(list.getByRole("heading", { name: NEWS_LIST.data[0].title })).toBeVisible();
+});
+
+for (const failure of ["断网", "非业务404"]) {
+  test(`资讯详情${failure}显示可恢复故障`, async ({ page }) => {
+    await mockNews(page);
+    let unavailable = true;
+    await page.route("**/api/v1/news/version-preview", (route) => {
+      if (!unavailable) return route.fulfill({ json: { code: "SUCCESS", data: NEWS_LIST.data[0] } });
+      return failure === "断网" ? route.abort("failed") : route.fulfill({ status: 404, json: { code: "ROUTE_NOT_FOUND" } });
+    });
+    await page.goto("/news/version-preview");
+    await expect(page.getByText("资讯加载失败，请稍后重试。")).toBeVisible();
+    await expect(page.getByText("资讯不存在或已下架。")).toHaveCount(0);
+    unavailable = false;
+    await page.getByRole("button", { name: "重新加载" }).click();
+    await expect(page.getByRole("heading", { name: NEWS_LIST.data[0].title, level: 1 })).toBeVisible();
+  });
+}

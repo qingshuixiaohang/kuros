@@ -4,15 +4,15 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BadgeCheck, Eye, Heart, MessageSquare, MoreHorizontal } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { ApiFallbackNote } from "@/components/community/api-fallback-note";
+import { FloatingFocusManager, useClick, useDismiss, useFloating, useInteractions, useRole } from "@floating-ui/react";
+import { useEffect, useRef, useState } from "react";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
 import { CommunityHeroCarousel, CommunityImageCarousel } from "@/components/community/community-carousel";
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
-import { ApiError, fetchFollowingFeedByCursor, fetchPostInteractionsBatch, fetchPosts } from "@/lib/api";
+import { ApiError, fetchPostInteractionsBatch } from "@/lib/api";
 import { useFavoriteMutation, useLikeMutation } from "@/lib/community-queries";
-import { guides } from "@/lib/mock";
+import { useCommunityFeedQuery } from "@/lib/feed-queries";
 import { DEMO_AUTHOR_ID_BY_NAME, toGuide } from "@/lib/post-view";
 import type { Guide } from "@/types/community";
 const bannerSlides = [
@@ -66,10 +66,24 @@ function PostMedia({ guide, href }: { guide: Guide; href: string }) {
     />
   );
 }
-function PostCard({ guide, interaction: initialInteraction }: { guide: Guide; interaction?: { liked: boolean; favorited: boolean } | null }) {
+function PostCard({
+  guide,
+  interaction: initialInteraction,
+  interactionUnavailable = false,
+}: {
+  guide: Guide;
+  interaction?: { liked: boolean; favorited: boolean } | null;
+  interactionUnavailable?: boolean;
+}) {
   const { liked, bookmarked, toggleLike, toggleBookmark, notify, requestLogin } = useCommunityDemo();
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const { context: menuContext, refs: menuRefs } = useFloating({ open: menuOpen, onOpenChange: setMenuOpen });
+  const { setFloating: setMenuFloating, setReference: setMenuReference } = menuRefs;
+  const menuClick = useClick(menuContext);
+  const menuDismiss = useDismiss(menuContext, { outsidePressEvent: "pointerdown" });
+  const menuRole = useRole(menuContext, { role: "menu" });
+  const { getReferenceProps: getMenuTriggerProps, getFloatingProps: getMenuProps } = useInteractions([menuClick, menuDismiss, menuRole]);
   const postId = postIdBySlug[guide.id] ?? (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(guide.id) ? guide.id : undefined);
   // H-2：互动状态由 Feed 一次批量拉取后传下来，不再每卡自己发请求。
   // 原来的实现是每个 PostCard 各发一次 /posts/{id}/interactions，
@@ -89,16 +103,32 @@ function PostCard({ guide, interaction: initialInteraction }: { guide: Guide; in
   // 后本页卡片仍显示旧值。mutation 的 onSuccess 已经 invalidate 了
   // feed-interaction-states，重取足以驱动 UI，本地不需要第二份真相。
   const interaction = initialInteraction ? { postId: postId ?? "", likeCount: parseLikeCount(guide.likes), favoriteCount: 0, ...initialInteraction } : null;
-  const isBookmarked = interaction?.favorited ?? bookmarked.includes(guide.id);
+  const interactionPending = Boolean(postId && !interaction && !interactionUnavailable);
+  const interactionDisabled = interactionUnavailable || Boolean(postId && !interaction);
+  const isBookmarked = interactionUnavailable ? false : interaction ? interaction.favorited : postId ? false : bookmarked.includes(guide.id);
   const likeMutation = useLikeMutation(postId ?? "");
   const favoriteMutation = useFavoriteMutation(postId ?? "");
+  const menuWasOpen = useRef(false);
+  useEffect(() => {
+    if (menuWasOpen.current && !menuOpen) {
+      const frame = requestAnimationFrame(() => {
+        const reference = menuRefs.reference.current;
+        if (reference instanceof HTMLElement) reference.focus();
+      });
+      menuWasOpen.current = menuOpen;
+      return () => cancelAnimationFrame(frame);
+    }
+    menuWasOpen.current = menuOpen;
+    return undefined;
+  }, [menuOpen, menuRefs.reference]);
   function change(kind: "like" | "favorite") {
     requestLogin(async () => {
-      if (!postId || !interaction) {
+      if (!postId) {
         if (kind === "like") toggleLike(guide.id);
         else toggleBookmark(guide.id);
         return;
       }
+      if (!interaction) return;
       // 收藏和点赞一样走 mutation：onSuccess 会 invalidate 首页批量状态，
       // 去详情页时读到的是新值，不再"首页收藏了、详情页显示未收藏"
       // 两个 mutation 的变量类型不同，分开写而不是塞进同一个联合变量——
@@ -109,7 +139,7 @@ function PostCard({ guide, interaction: initialInteraction }: { guide: Guide; in
       else await favoriteMutation.mutateAsync(interaction.favorited ? "unfavorite" : "favorite");
     });
   }
-  const isLiked = interaction?.liked ?? liked.includes(guide.id);
+  const isLiked = interactionUnavailable ? false : interaction ? interaction.liked : postId ? false : liked.includes(guide.id);
 
   const likeLabel = interaction ? feedCount(interaction.likeCount) : guide.likes;
   const detailHref = `/guides/${guide.id}`;
@@ -132,33 +162,48 @@ function PostCard({ guide, interaction: initialInteraction }: { guide: Guide; in
           </strong>
           <time>{guide.publishedAt}</time>
         </div>
-        <CommunityFollowButton className="follow-button" fallbackKey={guide.author} targetUserId={DEMO_AUTHOR_ID_BY_NAME[guide.author]} />
+        <CommunityFollowButton className="follow-button" fallbackKey={guide.author} targetUserId={guide.authorId ?? DEMO_AUTHOR_ID_BY_NAME[guide.author]} />
         <div className="more-wrap">
-          <button aria-expanded={menuOpen} aria-label="更多操作" className="more-button" onClick={() => setMenuOpen(!menuOpen)} type="button">
+          <button aria-label="更多操作" className="more-button" ref={setMenuReference} type="button" {...getMenuTriggerProps()}>
             <MoreHorizontal size={20} />
           </button>
           {menuOpen && (
-            <div className="post-menu">
-              <button
-                onClick={() => {
-                  change("favorite");
-                  setMenuOpen(false);
-                }}
-                type="button"
+            <FloatingFocusManager context={menuContext} modal={false} returnFocus>
+              <div
+                aria-label="帖子操作"
+                className="post-menu"
+                ref={setMenuFloating}
+                {...getMenuProps({
+                  "aria-labelledby": undefined,
+                  onBlur: (event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget)) setMenuOpen(false);
+                  },
+                })}
               >
-                {isBookmarked ? "取消收藏" : "收藏帖子"}
-              </button>
-              <button
-                onClick={() => {
-                  if (postId) setReportOpen(true);
-                  else notify("当前内容暂不支持举报。");
-                  setMenuOpen(false);
-                }}
-                type="button"
-              >
-                举报反馈
-              </button>
-            </div>
+                <button
+                  disabled={interactionDisabled}
+                  onClick={() => {
+                    change("favorite");
+                    setMenuOpen(false);
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  {isBookmarked ? "取消收藏" : "收藏帖子"}
+                </button>
+                <button
+                  onClick={() => {
+                    if (postId) setReportOpen(true);
+                    else notify("当前内容暂不支持举报。");
+                    setMenuOpen(false);
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  举报反馈
+                </button>
+              </div>
+            </FloatingFocusManager>
           )}
         </div>
       </div>
@@ -183,7 +228,14 @@ function PostCard({ guide, interaction: initialInteraction }: { guide: Guide; in
           <MessageSquare size={17} />
           {guide.replies}
         </Link>
-        <button className={isLiked ? "is-active" : ""} onClick={() => change("like")} type="button">
+        <button
+          aria-busy={interactionPending || undefined}
+          aria-pressed={interactionDisabled ? undefined : isLiked}
+          className={isLiked ? "is-active" : ""}
+          disabled={interactionDisabled}
+          onClick={() => change("like")}
+          type="button"
+        >
           <Heart fill={isLiked ? "currentColor" : "none"} size={18} />
           {likeLabel}
         </button>
@@ -194,28 +246,19 @@ function PostCard({ guide, interaction: initialInteraction }: { guide: Guide; in
     </article>
   );
 }
-function guideFromListItem(post: Parameters<typeof toGuide>[0]) {
-  const guide = toGuide(post);
-  const demoMedia = guides.find((item) => item.id === guide.id || item.apiId === guide.id)?.mediaUrls;
-  return guide.mediaUrls?.length ? guide : { ...guide, mediaUrls: demoMedia };
-}
 export function CommunityFeed({ query }: { query: string }) {
   const params = useSearchParams();
   const router = useRouter();
-  const { requestLogin } = useCommunityDemo();
+  const { requestLogin, user, sessionRestoring } = useCommunityDemo();
   const tab = params.get("tab") === "following" ? "following" : params.get("tab") === "latest" ? "latest" : "recommend";
-  const [items, setItems] = useState<Guide[]>(guides);
-  const [loadedKey, setLoadedKey] = useState("");
-  const [apiUnavailable, setApiUnavailable] = useState(false);
-  /* 关注流的失败要如实呈现：401 是未登录，其余是后端故障——都不能伪装成"没关注人"的空态。 */
-  const [feedIssue, setFeedIssue] = useState<null | { kind: "unauthorized" | "error" }>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-  /* slice-13/rp-06: following tab → cursor pagination ("加载更多" appends, no total count) */
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const requestKey = tab + "::" + query + "::" + reloadKey;
-  const sort = tab === "recommend" ? "hot" : "latest";
+  const feedQuery = useCommunityFeedQuery({
+    tab,
+    keyword: query,
+    viewerId: user?.id ?? "guest",
+    enabled: !sessionRestoring,
+  });
+  const items = feedQuery.data?.items.map(toGuide) ?? [];
+  const requestKey = tab + "::" + query;
   /* H-2/H-1：整页互动状态走 react-query（key 含 requestKey），
      这样点赞 mutation 的 invalidateQueries 能让它重新拉取——
      原先是 useState + useEffect，invalidate 叫不到它，首页点赞后
@@ -232,78 +275,17 @@ export function CommunityFeed({ query }: { query: string }) {
     staleTime: 30_000,
   });
   const interactionStates = interactionStatesQuery.data ?? new Map<string, { liked: boolean; favorited: boolean }>();
-  useEffect(() => {
-    let active = true;
-    /* slice-12: following tab → /api/v1/feed/following (Redis ZSet timeline); recommend/latest → GET /api/v1/posts */
-    /* slice-13: following tab switches to cursor mode (limit triggers cursor), first page cursor=null */
-    const request =
-      tab === "following"
-        ? fetchFollowingFeedByCursor({ limit: 20 }).then((result) => {
-            if (active) {
-              setNextCursor(result.nextCursor);
-              setHasMore(result.hasMore);
-            }
-            return result.items;
-          })
-        : fetchPosts({ keyword: query, sort, pageSize: 20 });
-    request
-      .then((posts) => {
-        if (!active) return;
-        setItems(posts.map(guideFromListItem));
-        setApiUnavailable(false);
-        setFeedIssue(null);
-        setLoadedKey(requestKey);
-      })
-      .catch((error) => {
-        if (!active) return;
-        if (tab === "following") {
-          setFeedIssue({ kind: error instanceof ApiError && error.status === 401 ? "unauthorized" : "error" });
-          setItems([]);
-          setHasMore(false);
-          setNextCursor(null);
-          setApiUnavailable(false);
-        } else {
-          const keyword = query.trim().toLowerCase();
-          const fallback = guides.filter((guide) => (guide.title + guide.excerpt + guide.category + guide.tags.join("")).toLowerCase().includes(keyword));
-          setItems(tab === "latest" ? [...fallback].reverse() : fallback);
-          setApiUnavailable(true);
-          setFeedIssue(null);
-        }
-        setLoadedKey(requestKey);
-      });
-    return () => {
-      active = false;
-    };
-  }, [query, reloadKey, requestKey, sort, tab]);
-  /* "加载更多"：透传上一页 nextCursor 拉下一页，追加到现有列表（按 id 去重），hasMore=false 后隐藏按钮 */
-  function loadMore() {
-    if (tab !== "following" || !hasMore || !nextCursor || loadingMore) return;
-    setLoadingMore(true);
-    fetchFollowingFeedByCursor({ cursor: nextCursor, limit: 20 })
-      .then((result) => {
-        setItems((current) => {
-          const seen = new Set(current.map((guide) => guide.id));
-          const appended = result.items.map(guideFromListItem).filter((guide) => !seen.has(guide.id));
-          return [...current, ...appended];
-        });
-        setNextCursor(result.nextCursor);
-        setHasMore(result.hasMore);
-      })
-      .catch(() => {
-        setHasMore(false);
-      })
-      .finally(() => setLoadingMore(false));
-  }
-  const loading = loadedKey !== requestKey;
+  const interactionUnavailable = interactionStatesQuery.isError;
+  const loading = feedQuery.isPending;
   const visible = items;
   const tabs = [
     { key: "recommend", label: "默认", href: "/" },
     { key: "latest", label: "最新发布", href: "/?tab=latest" },
     { key: "following", label: "关注", href: "/?tab=following" },
   ];
-  const emptyState = feedIssue ? (
+  const emptyState = feedQuery.isError ? (
     <div className="empty-state">
-      {feedIssue.kind === "unauthorized" ? (
+      {tab === "following" && feedQuery.error instanceof ApiError && feedQuery.error.status === 401 ? (
         <>
           <p>登录后查看关注的创作者动态</p>
           <button className="secondary-button" onClick={() => requestLogin()} type="button">
@@ -312,8 +294,8 @@ export function CommunityFeed({ query }: { query: string }) {
         </>
       ) : (
         <>
-          <p>关注流加载失败，请稍后重试。</p>
-          <button className="secondary-button" onClick={() => setReloadKey((key) => key + 1)} type="button">
+          <p>{tab === "following" ? "关注流加载失败，请稍后重试。" : "帖子加载失败，请稍后重试。"}</p>
+          <button className="secondary-button" onClick={() => feedQuery.refetch()} type="button">
             重新加载
           </button>
         </>
@@ -345,13 +327,22 @@ export function CommunityFeed({ query }: { query: string }) {
         </div>
       ) : visible.length ? (
         <>
+          {interactionUnavailable ? (
+            <div className="feed-status" role="status">
+              <span>互动状态暂不可用，请重试。</span>
+              <button className="secondary-button" onClick={() => interactionStatesQuery.refetch()} type="button">
+                重新加载互动状态
+              </button>
+            </div>
+          ) : null}
           {visible.map((guide) => (
-            <PostCard guide={guide} key={guide.id} interaction={interactionStates.get(guide.id) ?? null} />
+            <PostCard guide={guide} interaction={interactionStates.get(guide.id) ?? null} interactionUnavailable={interactionUnavailable} key={guide.id} />
           ))}
+          {feedQuery.isFetchNextPageError ? <p role="status">更多动态加载失败，请重试。</p> : null}
           {tab === "following" &&
-            (hasMore ? (
-              <button className="feed-load-more" disabled={loadingMore} onClick={loadMore} type="button">
-                {loadingMore ? "正在加载更多…" : "加载更多"}
+            (feedQuery.hasNextPage ? (
+              <button className="feed-load-more" disabled={feedQuery.isFetching} onClick={() => feedQuery.fetchNextPage()} type="button">
+                {feedQuery.isFetchingNextPage ? "正在加载更多…" : feedQuery.isFetchNextPageError ? "重试加载更多" : "加载更多"}
               </button>
             ) : (
               <p className="feed-end-note">已经到底啦，关注的动态都看完了。</p>
@@ -360,7 +351,6 @@ export function CommunityFeed({ query }: { query: string }) {
       ) : (
         emptyState
       )}
-      {apiUnavailable && tab !== "following" && <ApiFallbackNote onRetry={() => setReloadKey((key) => key + 1)} />}
     </section>
   );
 }

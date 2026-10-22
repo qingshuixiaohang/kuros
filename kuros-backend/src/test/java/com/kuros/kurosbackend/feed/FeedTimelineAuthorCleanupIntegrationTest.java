@@ -68,12 +68,22 @@ class FeedTimelineAuthorCleanupIntegrationTest {
 
     @Autowired FeedTimelineStore timelineStore;
     @Autowired FeedService feedService;
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.kuros.kurosbackend.user.client.UserDirectoryFacade users;
     @Autowired CommunityPostRepository postRepository;
     @Autowired JdbcTemplate jdbcTemplate;
     @Autowired StringRedisTemplate redisTemplate;
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.when(users.toAuthor(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyMap()))
+                .thenAnswer(call -> new com.kuros.kurosbackend.shared.api.AuthorResponse(call.getArgument(0), "作者", null, null));
+        org.mockito.Mockito.when(users.following(org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(new com.kuros.kurosbackend.shared.api.PageResult<>(
+                        List.of(new com.kuros.kurosbackend.user.client.UserBriefDto(AUTHOR_B, "作者", null, null),
+                                new com.kuros.kurosbackend.user.client.UserBriefDto(AUTHOR_C, "作者", null, null)),
+                        new com.kuros.kurosbackend.shared.api.PageMeta(1, 50, 2, 1)));
         timelineStore.clear(FOLLOWER);
         jdbcTemplate.update("DELETE FROM post_media");
         jdbcTemplate.update("DELETE FROM post_tags");
@@ -248,5 +258,32 @@ class FeedTimelineAuthorCleanupIntegrationTest {
                 .as("复合键下游标翻页必须与全量倒序完全一致")
                 .containsExactlyElementsOf(expected);
         assertThat(ids).as("7 条帖子都应被遍历到").hasSize(7);
+    }
+
+    @Test
+    void cursorPagination_handlesSameScoreAcrossDifferentAuthors() {
+        LocalDateTime same = LocalDateTime.of(2026, 9, 21, 10, 0);
+        double score = same.toInstant(java.time.ZoneOffset.UTC).toEpochMilli();
+        String key = "feed:timeline:" + FOLLOWER;
+        redisTemplate.opsForZSet().add(key, "z-author:post-2", score);
+        redisTemplate.opsForZSet().add(key, "z-author:post-1", score);
+        redisTemplate.opsForZSet().add(key, "a-author:post-4", score);
+        redisTemplate.opsForZSet().add(key, "a-author:post-3", score);
+
+        List<String> expected = timelineStore.readTimeline(FOLLOWER, 0, 10);
+        var firstPage = timelineStore.readTimelineByCursor(FOLLOWER, null, null, 2);
+        var secondPage = timelineStore.readTimelineByCursor(
+                FOLLOWER,
+                firstPage.get(firstPage.size() - 1).score(),
+                firstPage.get(firstPage.size() - 1).member(),
+                2
+        );
+        List<String> traversed = java.util.stream.Stream.concat(firstPage.stream(), secondPage.stream())
+                .map(FeedTimelineStore.TimelineEntry::postId)
+                .toList();
+
+        assertThat(traversed)
+                .as("同分不同作者的复合 member 必须按 Redis 实际成员顺序继续翻页")
+                .containsExactlyElementsOf(expected);
     }
 }

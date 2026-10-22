@@ -124,6 +124,33 @@ test.describe("关注流降级路径", () => {
 });
 
 test.describe("关注流正常路径", () => {
+  test("关注流追加失败保留首屏并可重试且不重复帖子", async ({ page }) => {
+    await mockFeeds(page);
+    await page.route("**/api/v1/auth/me", (route) => route.fulfill({ json: { data: { id: "viewer-1", nickname: "读者", role: "USER" } } }));
+    let unavailable = true;
+    await page.route("**/api/v1/feed/following**", (route) => {
+      const cursor = new URL(route.request().url()).searchParams.get("cursor");
+      if (!cursor) return route.fulfill({ json: feedPage([FEED_POST_1], "cursor-2", true) });
+      if (unavailable) return route.fulfill({ status: 500, json: { code: "INTERNAL_ERROR" } });
+      return route.fulfill({ json: feedPage([FEED_POST_1, FEED_POST_2], null, false) });
+    });
+    await page.goto("/?tab=following");
+    const feed = page.getByRole("region", { name: "社区内容流" });
+    await expect(feed.getByRole("heading", { name: FEED_POST_1.title })).toBeVisible();
+    await feed.getByRole("button", { name: "加载更多", exact: true }).click();
+    await expect(feed.getByText("更多动态加载失败，请重试。")).toBeVisible();
+    await expect(feed.getByRole("heading", { name: FEED_POST_1.title })).toHaveCount(1);
+    await expect(feed.getByText("已经到底啦，关注的动态都看完了。")).toHaveCount(0);
+    unavailable = false;
+    const retry = feed.getByRole("button", { name: "重试加载更多" });
+    await expect(retry).toBeVisible();
+    await retry.click();
+    await expect(feed.getByRole("heading", { name: FEED_POST_2.title })).toBeVisible();
+    await expect(feed.getByRole("heading", { name: FEED_POST_1.title })).toHaveCount(1);
+    await expect(feed.getByRole("heading", { name: FEED_POST_2.title })).toHaveCount(1);
+    await expect(feed.getByText("已经到底啦，关注的动态都看完了。")).toBeVisible();
+  });
+
   test("已登录展示首屏内容、加载更多翻页并透传游标", async ({ page }) => {
     const seenCursors: (string | null)[] = [];
     await page.route("**/api/v1/feed/following**", async (route) => {

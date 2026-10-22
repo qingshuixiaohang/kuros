@@ -107,11 +107,14 @@ export function usePostInteractionsQuery(postId: string | undefined) {
  */
 export function useCommentsQuery(options: { postId: string; sort: "latest" | "hot"; pageSize?: number }) {
   const { postId, sort, pageSize = 20 } = options;
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ["post-comments", postId, sort, pageSize],
-    queryFn: async () => {
-      const result = await fetchComments(postId, { page: 1, pageSize, sort });
-      return { items: result.items, totalItems: result.meta?.totalItems ?? result.items.length };
+    queryFn: ({ pageParam }) => fetchComments(postId, { page: pageParam, pageSize, sort }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      const meta = lastPage.meta;
+      if (!meta || meta.page >= meta.totalPages) return null;
+      return meta.page + 1;
     },
     enabled: Boolean(postId),
     // 与同文件的 useSearchPostsQuery / usePostInteractionsQuery 一致：
@@ -178,6 +181,7 @@ export function usePublishPostMutation(editPostId?: string) {
       // hot-topics 也在失效集合里：首页右栏热门话题按标签聚合，新帖的标签
       // 应该有机会进入 top-5。漏了它，发完帖回首页右栏在 staleTime 内还是旧榜
       queryClient.invalidateQueries({ queryKey: ["community-posts"] });
+      queryClient.invalidateQueries({ queryKey: ["community-feed"] });
       queryClient.invalidateQueries({ queryKey: ["search-posts"] });
       queryClient.invalidateQueries({ queryKey: ["hot-topics"] });
       queryClient.invalidateQueries({ queryKey: ["post-interactions", post.id] });
@@ -195,9 +199,15 @@ export function usePublishPostMutation(editPostId?: string) {
  */
 export function useAdminReportsQuery(options: { status?: ReportStatus; enabled: boolean }) {
   const { status, enabled } = options;
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ["admin-reports", status ?? "ALL"],
-    queryFn: async () => fetchAdminReports(status),
+    queryFn: ({ pageParam }) => fetchAdminReports(status, pageParam, 20),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      const meta = lastPage.meta;
+      if (!meta || meta.page >= meta.totalPages) return null;
+      return meta.page + 1;
+    },
     enabled,
   });
 }
@@ -316,6 +326,7 @@ export function useFollowUserMutation(targetUserId?: string) {
       // 多打一次批量请求纯属噪音。失效集合要按"这个写操作会影响哪些读"
       // 推导，不是把邻居的 key 抄一遍。
       queryClient.invalidateQueries({ queryKey: ["user-follow", targetUserId ?? ""] });
+      queryClient.invalidateQueries({ queryKey: ["community-feed"] });
     },
   });
 }
@@ -331,6 +342,7 @@ export function useFollowUserMutation(targetUserId?: string) {
 function invalidatePostInteractionViews(queryClient: ReturnType<typeof useQueryClient>, postId: string) {
   queryClient.invalidateQueries({ queryKey: ["post-interactions", postId] });
   queryClient.invalidateQueries({ queryKey: ["community-posts"] });
+  queryClient.invalidateQueries({ queryKey: ["community-feed"] });
   queryClient.invalidateQueries({ queryKey: ["search-posts"] });
   queryClient.invalidateQueries({ queryKey: ["feed-interaction-states"] });
 }
