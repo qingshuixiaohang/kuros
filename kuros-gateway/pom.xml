@@ -100,6 +100,16 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <!-- 与 Nacos Testcontainer 串行运行时收敛测试 JVM，避免 16 GiB 开发机
+                 同时提交默认约 4 GiB 堆、Nacos 容器堆和大量 I/O 线程。 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <reuseForks>false</reuseForks>
+                    <argLine>-XX:ActiveProcessorCount=4 -Xms256m -Xmx768m -Xss512k -XX:MaxDirectMemorySize=512m</argLine>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 

@@ -28,6 +28,9 @@ public final class NacosContainers {
 
     public static GenericContainer<?> newNacos() {
         return new GenericContainer<>("nacos/nacos-server:v3.1.1")
+                // 固定映射必须显式声明容器端口；Testcontainers 的 HTTP 等待策略
+                // 只检查它登记的暴露端口，不能仅依赖镜像元数据。
+                .withExposedPorts(8848, 9848)
                 .withEnv("MODE", "standalone")
                 // v3 镜像强制要求鉴权三件套才能启动；鉴权开关默认关闭（dev 语义，与 compose 一致）。
                 // 镜像版本选 v3.1.1：SCA 2025.1.0.0 实际捆绑 nacos-client 3.1.1，
@@ -35,6 +38,13 @@ public final class NacosContainers {
                 .withEnv("NACOS_AUTH_TOKEN", "VGhpc0lzTXlDdXN0b21TZWNyZXRLZXkwMTIzNDU2Nzg=")
                 .withEnv("NACOS_AUTH_IDENTITY_KEY", "serverIdentity")
                 .withEnv("NACOS_AUTH_IDENTITY_VALUE", "kuros")
+                // 镜像默认给 Nacos 2g 堆；集成测试只需服务发现，
+                // 与 Surefire 共享 16GB 宿主机时必须收敛，否则 Windows 页面文件耗尽后容器无法就绪。
+                .withEnv("JVM_XMS", "256m")
+                .withEnv("JVM_XMX", "512m")
+                .withEnv("JVM_XMN", "128m")
+                .withEnv("JVM_MS", "64m")
+                .withEnv("JVM_MMS", "128m")
                 .withCreateContainerCmdModifier(cmd -> cmd.withPortBindings(
                         new Ports(
                                 new PortBinding(Ports.Binding.bindPort(API_PORT), ExposedPort.tcp(8848)),
