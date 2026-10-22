@@ -62,3 +62,11 @@ gh issue close <number> --comment "..."
 临时 worktree 通过 junction 复用主工作区的 `node_modules` 时，Turbopack 会拒绝项目
 文件系统根之外的链接。此时使用仓库支持的 Webpack 构建路径完成生产构建，并在 PR
 中记录该环境限制。
+
+### Windows Testcontainers 临时目录
+
+如果 Maven 测试在业务断言前因 `sun.nio.ch.UnixDomainSockets` 报
+`SocketException: Invalid argument: connect`，先把当前 PowerShell 的 `TEMP` 和
+`TMP` 指向工作区内的短路径再重跑，例如
+`G:\kuros-web\.scratch\tmp`。这是宿主编排环境的临时目录问题，不应直接归类为
+应用回归；修复环境后仍需取得真实测试结果，并在 PR 中区分本地证据与 CI 复验。
