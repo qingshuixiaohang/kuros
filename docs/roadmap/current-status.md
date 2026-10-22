@@ -60,9 +60,11 @@
 - 首次 CI run `39803598450` 中 4 个作业通过；backend tests 未通过，结果为 240 个测试、
   1 failure、2 errors、21 skipped。
 - 失败集中在两项测试夹具：关注流测试未隔离拆分后的用户目录调用；摘要测试引用的媒体
-  资产未登记到数据库。对应夹具修复已完成本地静态核对，待推送并在远端 CI 复验。
+  资产未登记到数据库。对应夹具已在提交 `fb4911b` 修复。
 - 修复后 `mvnw -DskipTests test-compile` 通过。本机定向 Testcontainers 测试仍被 Windows
   JVM 的 `Unexpected failure opening I/O selector` / `Invalid argument: connect` 阻断，
   尚未执行到断言；该环境限制不替代远端 CI 的结果。
-- 提交、推送、手动 CI、Review、合并及 #160–#167 的关闭状态必须以 GitHub 实际结果
-  为准；在五个 CI 作业全部通过并完成合并前，本页不能声明本轮已发布。
+- 修复后的 CI run `39807774931` 五个作业全部通过：Frontend lint and build、User
+  service tests、Gateway tests、Backend tests、Deployment configuration。
+- Review、合并 SHA 及 #160–#167 的关闭状态仍以 GitHub 实际结果为准；在完成合并前，
+  本页不能声明本轮已发布。
