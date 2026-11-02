@@ -7,35 +7,21 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+## 工作流入口
 
-## Project development workflow
+- 准备需求、拆分或派发任务时，读 `docs/agents/issue-tracker.md` 的「准备与派发」；按任务规模选择阶段，保留规格与依赖。
+- Superagent Worker 开工时读 `docs/agents/autonomous-agent.md`；准备阶段由派发方完成，Worker 依据原始 Issue 实现。
+- 推送前读 `docs/agents/issue-tracker.md` 的「本地验证分级」及「效果证据」。审查 PR 时读 `docs/agents/review-checklist.md`。
+- 涉及业务术语时读 `GLOSSARY.md`；压缩或交接前落盘当前阶段、基准提交、检查结果和剩余事项。
 
-For every new feature, follow the repository workflow in `docs/agents/issue-tracker.md` strictly: `grill-with-docs` → `to-spec` → `to-tickets` → `implement` with TDD → `code-review` → commit/PR/Issue update. Context compaction must preserve the current phase and resume from the written artifacts; it is not a reason to skip a phase.
+## 实现与审查共用准则
 
-## Unattended execution (dsh-superagent)
+1. 新增公共能力前，沿调用路径搜索同类实现。前端从 `front/AGENTS.md` 的模块索引开始；后端先看同模块及 shared。存在相近候选但选择新建时，解释契约或职责差异。
+2. 新增判空、默认值、配置清洗或 catch 前，确认输入来源和真实契约（校验、类型、schema、调用方）。只处理真实可能的失败；必要配置缺失明确报错，合法可选配置可用有依据的默认值。
+3. 外部输入用 `unknown` 表达未验证状态并在边界收窄；内部代码复用已建立的契约。TypeScript 类型不是外部数据的运行时保证。
+4. 抽象用于封装真实重复、变化边界、外部依赖或复杂性。先考虑直接实现；新增接口、策略或工厂说明当前用途，调用点数量本身不构成理由。
+5. catch 用于恢复、清理、转换边界错误或补充必要上下文；没有处理策略时让异常到达已有处理层。修改异常行为前先读该模块的异常处理器与调用方。
+6. 按业务顺序组织主路径，以准确命名和适当提取降低跳转；注释解释约束与取舍。遵守现行 lint，审查时关注嵌套背后的复杂性，不为层数机械拆方法。
+7. 改动聚焦已授权结果；保留必要的安全检查、失败语义和测试。范围外的整理另记任务；测试更新应解释原断言为何变化。
 
-When the work runs **without a person present** — an Issue that mentions the agent account, executed by the `dsh-superagent` worker in its own git worktree — follow `docs/agents/autonomous-agent.md` instead of the full workflow above. It states which phases are skipped (no `grill-with-docs`, `to-spec`, `to-tickets` or `retro`), the files and operations that are off limits, the checks that must run before pushing, and the required PR and report format.
-
-Sessions with a person present are unaffected and still follow the full workflow.
-
-## 仓库事实（写代码前先确认，别自己猜）
-
-- **异常处理**：`kuros-backend` 与 `kuros-user` 各有 `shared/web/ApiExceptionHandler.java` 统一处理异常。Service 层不要再 try-catch 业务异常后包一层返回。
-- **参数校验**：当前仓库没有使用 `@Valid` / `jakarta.validation` 注解（全仓 0 处）。新增校验前先看同模块现有写法并保持一致，不要单独引入一套新范式。
-- **前端请求**：所有 HTTP 都走 `@/lib/api` 导出的函数，组件里不直接调 `fetch`。数据获取用 `@tanstack/react-query`，hook 集中在 `front/src/lib/community-queries.ts`。
-- **类型来源**：后端 DTO 的 TS 类型在 `front/src/lib/api.ts`；领域视图模型与格式化在 `front/src/lib/post-view.ts`。
-- **测试**：vitest；测试文件放在被测文件同级的 `__tests__/` 目录。
-- **必填配置**：缺少必需的环境变量或配置时应当启动失败，不要给默认值兜底。
-
-## 代码风格：反过度工程
-
-抽象的判据是存量代码的重复，不是对未来的猜测。
-
-1. 内部函数不再校验参数；校验只在边界入口（Controller / API 层）做一次。
-2. 类型系统已排除的分支不写运行时检查；`any` / `unknown` 兜底必须写明理由。
-3. 抽象来自真实重复：只有已存在 ≥2 个调用点且差异真实，才抽接口、策略或工厂。单一实现不抽接口；PR 描述要指出那 ≥2 个调用点。
-4. 不为"将来可能需要"预留参数、配置项或抽象层。
-5. 新增 `try/catch` 必须写明捕获什么异常、捕获后做了哪件不同的事；否则删除。
-6. 注释写 why（非显然的约束、坑、来源），不写 what。
-7. 早返回优先，嵌套不超过 3 层（lint 当前允许 4 层，存量清理后收紧）。
-8. 新增工具函数前先查 `front/src/lib/`（见 `front/AGENTS.md` 的积木清单）；PR 描述写一句"为什么不用现有实现"。
+这些准则指导实现与审查，不是文件访问或命令执行的安全沙箱。
