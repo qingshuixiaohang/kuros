@@ -16,7 +16,7 @@ TUI 主 agent 与维护者讨论需求；Superagent Router 负责路由，Worker
 使用可用的 Matt skills 支持相应阶段；缺少某个 skill 时按上述产物要求工作，报告缺失，不虚称已调用。编写或修改 agent 消费的文档时使用 `writing-for-agents`，重点检查触发条件、步骤、完成条件和重复内容。
 
 - `needs-triage`：仍在讨论；`ready-for-agent`：具备上述派发条件。标签本身不触发执行。
-- 派发时在提交的正文或评论中写 `@qingshuixiaohan-dotcom`。准备中的 Issue 不加 @；已有工单的后续评论可能直接到达 Worker，不把原线程当成无副作用的草稿区。
+- 首次创建 Issue 时可在正文写 `@qingshuixiaohan-dotcom` 派发；已创建的 Issue 必须新增一条带 @ 的评论，编辑旧正文补 @ 不会被此原型接收。准备中的 Issue 不加 @；已有工单的后续评论可能直接到达 Worker，不把原线程当成无副作用的草稿区。
 - 依赖工单合并后再派下游任务。同改一个模块或竞争同一测试资源的任务优先串行；增加 worker 数量不能消除依赖。
 - 仓库规范用链接引用；Issue 补充任务特有的行为、边界、验收和运行前提，不复制通用检查表。
 
