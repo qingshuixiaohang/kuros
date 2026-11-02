@@ -118,3 +118,4 @@ npm run build
 cd .\kuros-backend
 .\mvnw.cmd spring-boot:run
 ```
+<!-- dsh-superagent pipeline smoke test -->
