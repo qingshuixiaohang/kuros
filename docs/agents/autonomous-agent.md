@@ -32,25 +32,29 @@
 - 分支：`agent/<工单短名>`（superagent 的 prepare 已按此创建，不要另开分支）
 - 提交信息：`<type>(<scope>): <中文摘要>`，与仓库现有风格一致（`fix` / `feat` / `docs` / `refactor` / `test` / `chore`）
 - PR 标题：`<type>(<scope>): <摘要>`
-- PR 正文必须包含三段，缺一不可：
+- PR 正文必须包含四段，缺一不可：
   1. **改了什么** —— 文件级清单
   2. **验了什么** —— 逐条命令 + 真实结果
-  3. **已知限制 / 风险** —— 没验的、可能被影响的
+  3. **复用说明** —— 为什么不用 `front/AGENTS.md` 积木清单里的现有实现（查过没有则写「无」）
+  4. **已知限制 / 风险** —— 没验的、可能被影响的
 - PR 正文首行写 `Fixes #<issue 编号>`。
 - 不开启 auto-merge，由维护者合并。
 
 ## 必须跑的验证
 
-按 `issue-tracker.md`「本地验证分级」执行，命令都在本 worktree 内跑：
+推送前按 `issue-tracker.md` 的「本地验证分级」表执行（**命令与分级以那张表为唯一权威**，本文件不复述）。无人值守场景的增量是：
 
-| 改动类型 | 命令 |
-|---|---|
-| 前端代码（`front/`） | `npm run lint` → `npx tsc --noEmit` → `npm run test`（改动涉及组件/工具函数时）→ `npm run build` |
-| 前端工具链/依赖/配置 | 上一行全部 + `npm run format:check` |
-| 后端（`kuros-*`） | `./mvnw -q test-compile` + 定向测试 `-Dtest=<改动的测试类>`；触碰 Flyway 迁移或 `shared/` 公共类时，必须实际运行受影响的测试类 |
-| 纯文档（`docs/`、README、AGENTS） | 不跑构建，通读 diff 确认链接与命令仍准确 |
+- 命令在**本工单的 worktree 里**执行，不是主工作区。
+- `docker` / `docker-compose` 在本环境被禁用（已配置 `blockedCommands`）；需要起容器才能验证的改动，报告 `blocked`，不要尝试绕过。
+- 实际执行过的命令与输出摘要必须写进 PR 正文和 Issue 回写评论；没跑就不要声称跑过。
 
-**实际执行过的命令与输出摘要必须写进 PR 正文和 Issue 回写评论；没跑就不要声称跑过。**
+## 需要类型信息的 lint 规则（尚未启用）
+
+`@typescript-eslint/no-unnecessary-condition` 能直接拦住"类型已排除还判空"这类过度防御，但它要求 type-aware linting，且会在存量代码上报出一批问题。启用前先跑一次基线并单独提 PR，**不要在本工单里顺手打开**。
+
+## 维护者侧
+
+这一单的审查按 `review-checklist.md` 逐条执行；其中"复用说明"与"夹带检查"依赖本文件上面的范围纪律。
 
 ## 报告纪律
 

@@ -1,0 +1,71 @@
+name: Agent 任务单（dsh-superagent）
+description: 交给无人值守 agent 执行的任务：目标、现状、边界、验收标准齐备
+title: "[agent] "
+labels: ["ready-for-agent"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > 提交前确认：正文里要 **@ 智能体账号**（例如 `@qingshuixiaohang-dotcom`），否则它收不到这一单。
+        > 它不会向你追问需求，只会在无法继续时报告一个具体问题。所以下面的字段要写实。
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目标
+      description: 一句话说清要达成的结果，不要写实现方案
+      placeholder: 例：把首页表单的提交按钮文案从「提交」改成「保存并继续」
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: 现状
+      description: 现在是什么样。贴文件路径、代码片段、报错或截图
+      placeholder: |
+        文件：front/src/components/community/community-post-detail.tsx
+        现状：按钮文案是「提交」
+    validations:
+      required: true
+
+  - type: textarea
+    id: boundary
+    attributes:
+      label: 边界
+      description: 只改什么、绝对不碰什么。这一栏越具体，它跑偏的概率越低
+      placeholder: |
+        只允许改：front/src/components/community/xxx.tsx
+        不要动：样式、i18n、依赖、其它组件
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收
+      description: 逐条可勾选的判据。必须能由命令或行为判断真假
+      value: |
+        - [ ] 命令 `npm run lint` 通过
+        - [ ] 命令 `npx tsc --noEmit` 通过
+        - [ ] 命令 `npm run test` 通过
+        - [ ] diff 只包含上述文件，改动行数与目标相称
+    validations:
+      required: true
+
+  - type: input
+    id: reuse
+    attributes:
+      label: 已有实现
+      description: 仓库里可供复用的同类实现；填「无」表示已查过
+      placeholder: 例：front/src/lib/post-view.ts 的 formatPublishedAt
+    validations:
+      required: true
+
+  - type: input
+    id: pr_prefix
+    attributes:
+      label: PR 标题前缀
+      placeholder: 例：fix(front): / docs: / feat(front):
+    validations:
+      required: true
