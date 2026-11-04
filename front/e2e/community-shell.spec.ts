@@ -159,9 +159,13 @@ test("首页 Banner 支持桌面端层叠轮播并在移动端收起侧卡", asy
   const banner = page.getByRole("region", { name: "社区头图轮播" });
   await expect(banner).toBeVisible();
   await expect(banner.locator(".community-banner-slide--current img")).toBeVisible();
+  await expect(banner.getByRole("heading", { name: "鸣潮" })).toBeVisible();
+  await expect(banner.getByText("版本情报 · 攻略与漂泊者记录")).toBeVisible();
   await expect(banner.locator(".community-banner-slide--previous")).toHaveCSS("opacity", "1");
   await banner.getByRole("button", { name: "下一张 Banner" }).click();
   await expect(banner.getByRole("tab", { name: "社区头图轮播第 2 张" })).toHaveAttribute("aria-current", "true");
+  await expect(banner.getByRole("heading", { name: "心灵海" })).toBeVisible();
+  await expect(banner.getByText("探索地图 · 标记你的下一处回响")).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(banner.locator(".community-banner-slide--previous")).toHaveCSS("opacity", "0");

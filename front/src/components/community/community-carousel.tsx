@@ -9,11 +9,23 @@ export type CarouselImage = { src: string; alt: string };
 
 function CarouselImageView({ image, priority = false }: { image: CarouselImage; priority?: boolean }) {
   if (image.src.startsWith("/art/")) {
-    return <Image alt={image.alt} fill priority={priority} sizes="(max-width: 720px) 100vw, 820px" src={image.src} />;
+    return (
+      <span className="community-carousel-image-frame">
+        <Image aria-hidden alt="" className="community-carousel-image-backdrop" fill sizes="(max-width: 720px) 100vw, 820px" src={image.src} />
+        <Image alt={image.alt} className="community-carousel-image-primary" fill priority={priority} sizes="(max-width: 720px) 100vw, 820px" src={image.src} />
+      </span>
+    );
   }
   // Uploaded media is a user-controlled backend URL, so it cannot safely be preconfigured in Next's image allowlist.
   // eslint-disable-next-line @next/next/no-img-element
-  return <img alt={image.alt} loading={priority ? "eager" : "lazy"} src={image.src} />;
+  return (
+    <span className="community-carousel-image-frame">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img aria-hidden alt="" className="community-carousel-image-backdrop" src={image.src} />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img alt={image.alt} className="community-carousel-image-primary" loading={priority ? "eager" : "lazy"} src={image.src} />
+    </span>
+  );
 }
 
 function useReducedMotion() {
@@ -222,6 +234,10 @@ export function CommunityHeroCarousel({ label, slides }: { label: string; slides
                 sizes="(max-width: 720px) 100vw, 880px"
                 src={slide.src}
               />
+              <div className="community-banner-copy">
+                <h2>{slide.title}</h2>
+                <p>{slide.description}</p>
+              </div>
             </article>
           );
         })}

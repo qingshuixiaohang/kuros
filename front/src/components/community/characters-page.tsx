@@ -6,6 +6,7 @@ import { ArrowLeft, ChevronRight, Sparkles, Wrench } from "lucide-react";
 import { useState } from "react";
 import { CommunityPageFrame, PageHeader } from "@/components/community/community-pages";
 import { ApiError, fetchCharacter, fetchCharacterPage, type ApiCharacter } from "@/lib/api";
+import { characterArtwork } from "@/lib/official-art";
 
 const roles = ["全部角色", "输出", "协同", "辅助"];
 const elements = ["全部属性", "湮灭", "导电", "热熔", "冷凝", "气动", "衍射"];
@@ -58,7 +59,7 @@ export function CharactersPage() {
       />
 
       {/* 角色定位 */}
-      <div aria-label="角色定位筛选" className="catalog-tabs" role="group">
+      <div aria-label="角色定位筛选" className="catalog-tabs catalog-tabs--roles" role="group">
         {roles.map((item) => (
           <button aria-pressed={role === item} className={role === item ? "is-active" : ""} key={item} onClick={() => resetPage(setRole)(item)} type="button">
             {item}
@@ -67,51 +68,57 @@ export function CharactersPage() {
       </div>
 
       {/* 属性筛选 */}
-      <div aria-label="属性筛选" className="catalog-tabs catalog-tabs--sub" role="group">
+      <div className="catalog-filter-row">
         <span className="catalog-tabs-label">属性</span>
-        {elements.map((item) => (
-          <button
-            aria-pressed={element === item}
-            className={element === item ? "is-active" : ""}
-            key={item}
-            onClick={() => resetPage(setElement)(item)}
-            type="button"
-          >
-            {item}
-          </button>
-        ))}
+        <div aria-label="属性筛选" className="catalog-filter-options" role="group">
+          {elements.map((item) => (
+            <button
+              aria-pressed={element === item}
+              className={element === item ? "is-active" : ""}
+              key={item}
+              onClick={() => resetPage(setElement)(item)}
+              type="button"
+            >
+              {item}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* 武器筛选 */}
-      <div aria-label="武器筛选" className="catalog-tabs catalog-tabs--sub" role="group">
+      <div className="catalog-filter-row">
         <span className="catalog-tabs-label">武器</span>
-        {weapons.map((item) => (
-          <button
-            aria-pressed={weapon === item}
-            className={weapon === item ? "is-active" : ""}
-            key={item}
-            onClick={() => resetPage(setWeapon)(item)}
-            type="button"
-          >
-            {item}
-          </button>
-        ))}
+        <div aria-label="武器筛选" className="catalog-filter-options" role="group">
+          {weapons.map((item) => (
+            <button
+              aria-pressed={weapon === item}
+              className={weapon === item ? "is-active" : ""}
+              key={item}
+              onClick={() => resetPage(setWeapon)(item)}
+              type="button"
+            >
+              {item}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* 稀有度筛选 */}
-      <div aria-label="稀有度筛选" className="catalog-tabs catalog-tabs--sub" role="group">
+      <div className="catalog-filter-row">
         <span className="catalog-tabs-label">稀有度</span>
-        {rarities.map((item) => (
-          <button
-            aria-pressed={rarity === item}
-            className={rarity === item ? "is-active" : ""}
-            key={item}
-            onClick={() => resetPage(setRarity)(item)}
-            type="button"
-          >
-            {item}
-          </button>
-        ))}
+        <div aria-label="稀有度筛选" className="catalog-filter-options" role="group">
+          {rarities.map((item) => (
+            <button
+              aria-pressed={rarity === item}
+              className={rarity === item ? "is-active" : ""}
+              key={item}
+              onClick={() => resetPage(setRarity)(item)}
+              type="button"
+            >
+              {item}
+            </button>
+          ))}
+        </div>
       </div>
 
       {characters.isPending ? (
@@ -129,11 +136,12 @@ export function CharactersPage() {
         </div>
       ) : (
         <>
+          <p className="catalog-result-count">当前收录 {characters.data?.meta?.totalItems ?? items.length} 位共鸣者</p>
           <section className="character-grid">
             {items.map((item) => (
               <article className="character-card" key={item.id}>
                 <Link className="character-image" href={"/characters/" + item.slug}>
-                  <Image alt={item.name + "角色立绘"} fill sizes="(max-width: 620px) 50vw, 260px" src={item.imageUrl} />
+                  <Image alt={item.name + "角色立绘"} fill sizes="(max-width: 620px) 50vw, 260px" src={characterArtwork(item.name, item.imageUrl)} unoptimized />
                 </Link>
                 <div className="character-copy">
                   <div>
@@ -222,7 +230,7 @@ export function CharacterDetailPage({ slug }: { slug: string }) {
                 </Link>
               </div>
               <div className="entity-image">
-                <Image alt={character.data.name + "角色立绘"} fill sizes="300px" src={character.data.imageUrl} />
+                <Image alt={character.data.name + "角色立绘"} fill sizes="300px" src={characterArtwork(character.data.name, character.data.imageUrl)} unoptimized />
               </div>
             </div>
 

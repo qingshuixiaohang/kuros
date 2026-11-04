@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, Bell, ChevronRight, Share2 } from "lucide-react";
 import { useState } from "react";
@@ -7,6 +8,7 @@ import { CommunityPageFrame, PageHeader } from "@/components/community/community
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { useNewsDetailQuery, useNewsListQuery } from "@/lib/community-queries";
 import { ApiError } from "@/lib/api";
+import { newsArtwork } from "@/lib/official-art";
 
 export function NewsPage() {
   const params = useSearchParams();
@@ -54,8 +56,11 @@ export function NewsPage() {
         {visible.map((item) => (
           <Link href={"/news/" + item.slug} key={item.slug}>
             <article>
-              <time>{item.date}</time>
+                <div className="news-list-art">
+                  <Image alt={item.title + "配图"} fill sizes="(max-width: 620px) 82px, 128px" src={newsArtwork(item.slug, item.title)} />
+                </div>
               <div>
+                  <time>{item.date}</time>
                 <span>{item.category}</span>
                 <h2>{item.title}</h2>
                 <p>{item.summary}</p>
@@ -117,6 +122,9 @@ export function NewsDetailPage({ id }: { id: string }) {
           <span className="guide-type">{item.category}</span>
           <h1>{item.title}</h1>
           <p>{item.date} · 社区资讯整理</p>
+        </div>
+        <div className="news-detail-art">
+          <Image alt={item.title + "官方配图"} fill priority sizes="(max-width: 900px) 100vw, 820px" src={newsArtwork(item.slug, item.title)} />
         </div>
         <main className="article-body news-detail-body">
           {item.content.map((paragraph) => (

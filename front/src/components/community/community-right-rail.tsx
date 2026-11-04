@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { fetchPosts } from "@/lib/api";
 import { useNewsListQuery } from "@/lib/community-queries";
+import { topicArtwork } from "@/lib/official-art";
 const quickTools = [
   { title: "养成计算器", href: "/tools/calculator", iconSrc: "/icons/upgrade-calculator.webp" },
   { title: "声骸图鉴", href: "/echoes", iconSrc: "/icons/echo-archive.webp" },
@@ -100,7 +101,7 @@ export function RightRail() {
             {hotTopics.data.map(({ tag, count, cover }) => (
               <Link className="topic-card" href={"/search?q=" + encodeURIComponent(tag)} key={tag}>
                 <span className="topic-thumb">
-                  <Image alt="" fill sizes="44px" src={cover ?? "/art/guide-coast.webp"} />
+                  <Image alt="" fill sizes="44px" src={cover ?? topicArtwork(tag)} unoptimized />
                 </span>
                 <span className="topic-copy">
                   <strong>#{tag}</strong>
