@@ -1,0 +1,48 @@
+name: PR Check (frontend)
+
+# 轻量门禁：只跑前端静态检查、单测与构建，不拉起 compose 全栈。
+# 背景：ci.yml 自 2026-10-03 起改为仅手动触发（12 容器全栈太贵），
+# 导致 PR 没有机器兜底。本工作流给每个前端 PR 提供 3~5 分钟的确定性检查，
+# 供无人值守 agent 与人工提交共用。大节点的全量体检仍走 ci.yml 手动触发。
+
+on:
+  pull_request:
+    paths:
+      - 'front/**'
+      - '.github/workflows/pr-check.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Lint · Types · Format · Test · Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: front
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Format check
+        run: npm run format:check
+      - name: Unit tests
+        run: npm run test
+      - name: Build
+        run: npm run build
