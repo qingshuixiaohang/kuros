@@ -141,7 +141,13 @@ export function CharactersPage() {
             {items.map((item) => (
               <article className="character-card" key={item.id}>
                 <Link className="character-image" href={"/characters/" + item.slug}>
-                  <Image alt={item.name + "角色立绘"} fill sizes="(max-width: 620px) 50vw, 260px" src={characterArtwork(item.name, item.imageUrl)} unoptimized />
+                  <Image
+                    alt={item.name + "角色立绘"}
+                    fill
+                    sizes="(max-width: 620px) 50vw, 260px"
+                    src={characterArtwork(item.name, item.imageUrl)}
+                    unoptimized
+                  />
                 </Link>
                 <div className="character-copy">
                   <div>
@@ -230,7 +236,13 @@ export function CharacterDetailPage({ slug }: { slug: string }) {
                 </Link>
               </div>
               <div className="entity-image">
-                <Image alt={character.data.name + "角色立绘"} fill sizes="300px" src={characterArtwork(character.data.name, character.data.imageUrl)} unoptimized />
+                <Image
+                  alt={character.data.name + "角色立绘"}
+                  fill
+                  sizes="300px"
+                  src={characterArtwork(character.data.name, character.data.imageUrl)}
+                  unoptimized
+                />
               </div>
             </div>
 

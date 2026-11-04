@@ -17,7 +17,6 @@ function CarouselImageView({ image, priority = false }: { image: CarouselImage; 
     );
   }
   // Uploaded media is a user-controlled backend URL, so it cannot safely be preconfigured in Next's image allowlist.
-  // eslint-disable-next-line @next/next/no-img-element
   return (
     <span className="community-carousel-image-frame">
       {/* eslint-disable-next-line @next/next/no-img-element */}

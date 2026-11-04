@@ -190,7 +190,13 @@ function ProfilePostRow({ post, manageable = false, onDeleted }: { post: ApiPost
           </div>
         </div>
         <div className="profile-post-thumbnail">
-          <Image alt="" fill sizes="140px" src={post.coverImageUrl ?? DEMO_COVER_BY_SLUG[slug] ?? "/art/guide-coast.webp"} unoptimized={Boolean(post.coverImageUrl)} />
+          <Image
+            alt=""
+            fill
+            sizes="140px"
+            src={post.coverImageUrl ?? DEMO_COVER_BY_SLUG[slug] ?? "/art/guide-coast.webp"}
+            unoptimized={Boolean(post.coverImageUrl)}
+          />
         </div>
         <ChevronRight className="profile-row-arrow" size={17} />
       </Link>

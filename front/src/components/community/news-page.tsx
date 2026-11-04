@@ -56,11 +56,11 @@ export function NewsPage() {
         {visible.map((item) => (
           <Link href={"/news/" + item.slug} key={item.slug}>
             <article>
-                <div className="news-list-art">
-                  <Image alt={item.title + "配图"} fill sizes="(max-width: 620px) 82px, 128px" src={newsArtwork(item.slug, item.title)} />
-                </div>
+              <div className="news-list-art">
+                <Image alt={item.title + "配图"} fill sizes="(max-width: 620px) 82px, 128px" src={newsArtwork(item.slug, item.title)} />
+              </div>
               <div>
-                  <time>{item.date}</time>
+                <time>{item.date}</time>
                 <span>{item.category}</span>
                 <h2>{item.title}</h2>
                 <p>{item.summary}</p>

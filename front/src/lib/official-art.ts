@@ -83,7 +83,7 @@ export function echoSetArtwork(slug: string) {
 }
 
 export function communityAvatar(avatarUrl: string | null | undefined, identity: string) {
-  return avatarUrl?.startsWith("/") ? avatarUrl : avatarByIdentity[identity] ?? defaultAvatar;
+  return avatarUrl?.startsWith("/") ? avatarUrl : (avatarByIdentity[identity] ?? defaultAvatar);
 }
 
 export function newsArtwork(slug: string, title: string) {
