@@ -13,6 +13,7 @@ export interface Guide {
   author: string;
   /** 后端作者 ID；演示数据可省略并按昵称映射。 */
   authorId?: string;
+  avatarUrl?: string | null;
   authorMark: string;
   avatarTone: AvatarTone;
   publishedAt: string;

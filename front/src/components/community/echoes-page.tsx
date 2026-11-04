@@ -1,9 +1,11 @@
 "use client";
+import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, ChevronRight, Search, Sparkles } from "lucide-react";
+import { ArrowLeft, ChevronRight, Search } from "lucide-react";
 import { useState } from "react";
 import { CommunityPageFrame, PageHeader } from "@/components/community/community-pages";
 import { useEchoDetailQuery, useEchoListQuery } from "@/lib/community-queries";
+import { echoSetArtwork } from "@/lib/official-art";
 
 /** 视角 tab。切 tab 只换显示列，数据始终是全量列表——不是数据过滤。 */
 const VIEW_TABS = ["套装", "单体声骸", "掉落位置"];
@@ -20,7 +22,7 @@ export function EchoesPage() {
       <PageHeader
         section="图鉴 / 声骸"
         title="声骸图鉴"
-        description="查询套装效果、适配角色与常见掉落位置。"
+        description="查询套装效果、适配角色与常见掉落位置；图片展示相关官方声骸与强敌。"
         action={
           <Link className="primary-button" href="/search?q=声骸">
             <Search size={16} />
@@ -65,10 +67,10 @@ export function EchoesPage() {
         ) : null}
         {visible.map((item) => (
           <div className="echo-row" key={item.id}>
-            <div>
-              <span className="echo-symbol">
-                <Sparkles size={16} />
-              </span>
+            <div className="echo-row-identity">
+              <Link aria-label={"查看" + item.name + "套装"} className="echo-set-thumb" href={"/echoes/" + item.slug}>
+                <Image alt={item.name + "图鉴配图"} fill sizes="54px" src={echoSetArtwork(item.slug)} />
+              </Link>
               <strong>{item.name}</strong>
             </div>
             <p>{mode === "掉落位置" ? item.location : item.effect}</p>
@@ -128,6 +130,9 @@ export function EchoDetailPage({ id }: { id: string }) {
           <span className="guide-type">{echo.role}向套装</span>
           <h1>{echo.name}</h1>
           <p>{echo.description}</p>
+        </div>
+        <div className="echo-detail-art">
+          <Image alt={echo.name + "图鉴配图"} fill sizes="(max-width: 900px) 100vw, 720px" src={echoSetArtwork(echo.slug)} />
         </div>
         <section className="entity-note">
           <h2>套装信息</h2>

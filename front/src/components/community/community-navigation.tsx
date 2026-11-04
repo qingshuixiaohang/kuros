@@ -27,6 +27,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import { useCommunityDemo } from "@/components/community/community-interactions";
+import { CommunityAvatar } from "@/components/community/community-avatar";
 import { fetchMyProfile } from "@/lib/api";
 const channels = [
   { label: "推荐", icon: Home, href: "/" },
@@ -60,12 +61,28 @@ function GameLogo() {
 export function Sidebar({ drawer = false }: { drawer?: boolean }) {
   const path = usePathname();
   const params = useSearchParams();
+  const router = useRouter();
+  const { loggedIn, requestLogin, sessionRestoring } = useCommunityDemo();
   return (
     <aside className={"sidebar " + (drawer ? "drawer-sidebar" : "")} aria-label="社区频道">
       <GameLogo />
       <nav className="channel-list">
         {channels.map(({ label, icon: Icon, href }) => (
-          <Link className={"channel-item " + (isActive(label, path, params) ? "is-active" : "")} href={href} key={label}>
+          <Link
+            className={"channel-item " + (isActive(label, path, params) ? "is-active" : "")}
+            href={href}
+            key={label}
+            onClick={(event) => {
+              if (label !== "关注") return;
+              event.preventDefault();
+              if (sessionRestoring) return;
+              if (!loggedIn) {
+                requestLogin(() => router.push(href));
+                return;
+              }
+              router.push(href);
+            }}
+          >
             <Icon size={22} strokeWidth={1.6} />
             <span>{label}</span>
           </Link>
@@ -228,12 +245,12 @@ export function TopNavigation({ query, onQueryChange, onMenu }: { query: string;
                 aria-label="打开账户菜单"
                 title="账户菜单"
               >
-                <span className="login-avatar">漂</span>
+                <CommunityAvatar avatarUrl={user?.avatarUrl} className="login-avatar" identity={user?.id ?? "guest"} size={34} />
               </button>
               {accountOpen && (
                 <div className="account-menu" role="menu" aria-label="账户面板">
                   <div className="account-menu-head">
-                    <span className="account-menu-avatar">漂</span>
+                    <CommunityAvatar avatarUrl={user?.avatarUrl} className="account-menu-avatar" identity={user?.id ?? "guest"} size={52} />
                     <div>
                       <strong>{user?.nickname ?? "漂泊者"}</strong>
                       <small title={user?.id}>UID: {user?.id}</small>
@@ -267,7 +284,7 @@ export function TopNavigation({ query, onQueryChange, onMenu }: { query: string;
             </div>
           ) : (
             <button className="top-login" onClick={() => requestLogin()} type="button">
-              <span className="login-avatar">漂</span>
+              <CommunityAvatar avatarUrl={null} className="login-avatar" identity="guest" size={34} />
               <span>登录</span>
             </button>
           )}

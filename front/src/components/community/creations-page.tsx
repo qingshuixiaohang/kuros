@@ -49,6 +49,7 @@ export function CreationsPage() {
                   loading={index === 0 ? "eager" : "lazy"}
                   sizes="(max-width: 620px) 50vw, 420px"
                   src={view.mediaUrls[0]}
+                  unoptimized
                 />
               </div>
             ) : null}

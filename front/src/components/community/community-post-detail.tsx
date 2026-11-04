@@ -19,6 +19,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
 import { CommunityImageCarousel } from "@/components/community/community-carousel";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
+import { CommunityAvatar } from "@/components/community/community-avatar";
 import {
   useCommentsQuery,
   useCreateCommentMutation,
@@ -40,6 +41,7 @@ type CommentItem = {
   parentId: string | null;
   authorId?: string;
   author: string;
+  avatarUrl?: string | null;
   mark: string;
   tone: Guide["avatarTone"];
   date: string;
@@ -64,6 +66,7 @@ function commentFromApi(comment: ApiComment, authorName: string, index: number):
     parentId: comment.parentId,
     authorId: comment.author.id,
     author: comment.author.nickname,
+    avatarUrl: comment.author.avatarUrl,
     mark: comment.author.nickname.slice(0, 1),
     tone: comment.author.id === "10000000-0000-0000-0000-000000000001" ? "blue" : "dark",
     date: comment.createdAt.slice(5, 16).replace("T", " "),
@@ -191,7 +194,7 @@ function PostAuthorCard({ guide, authorId, sections }: { guide: Guide; authorId?
     <aside aria-label="帖子上下文" className="post-context-rail">
       <section className="post-author-card">
         <div className="post-author-card-top">
-          <div className={"author-avatar author-avatar--" + guide.avatarTone}>{guide.authorMark}</div>
+          <CommunityAvatar avatarUrl={guide.avatarUrl} className={"author-avatar author-avatar--" + guide.avatarTone} identity={guide.author} />
           <div>
             <strong>{guide.author}</strong>
             <span>
@@ -461,7 +464,7 @@ function PostComments({ postId, authorName, onReport }: { postId: string; author
             className={"comment-item" + (comment.parentId ? " comment-item--reply" : "") + (comment.pinned ? " comment-item--pinned" : "")}
             key={comment.id}
           >
-            <div className={"author-avatar author-avatar--" + comment.tone}>{comment.mark}</div>
+            <CommunityAvatar avatarUrl={comment.avatarUrl} className={"author-avatar author-avatar--" + comment.tone} identity={comment.author} />
             <div className="comment-item-main">
               <div className="comment-item-meta">
                 <strong>
@@ -600,6 +603,7 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
           mediaUrls:
             apiMediaUrls ?? (post.mediaUrls?.length ? post.mediaUrls : post.coverImageUrl ? [post.coverImageUrl] : extractMarkdownImages(post.content)),
           author: post.author.nickname,
+          avatarUrl: post.author.avatarUrl,
           authorMark: post.author.nickname.slice(0, 1),
           avatarTone: "dark",
           publishedAt: post.publishedAt,
@@ -690,7 +694,7 @@ export function GuidePostDetailPage({ slug }: { slug: string }) {
             <h1>{guide.title}</h1>
             <p>{guide.excerpt}</p>
             <div className="detail-author">
-              <div className={"author-avatar author-avatar--" + guide.avatarTone}>{guide.authorMark}</div>
+              <CommunityAvatar avatarUrl={guide.avatarUrl} className={"author-avatar author-avatar--" + guide.avatarTone} identity={guide.author} />
               <div>
                 <strong>{guide.author}</strong>
                 <small>攻略作者 · {guide.views} 阅读</small>
