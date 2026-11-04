@@ -352,6 +352,7 @@ services:
   # 宿主 8082（避开 gateway 8080 / nacos 8081）；不参与业务链路，仅排障用
   rocketmq-dashboard:
     image: apacherocketmq/rocketmq-dashboard:latest
+    profiles: ["observability"]
     restart: unless-stopped
     environment:
       JAVA_OPTS: "-Drocketmq.namesrv.addr=rocketmq-namesrv:9876 -Dserver.port=8080"
