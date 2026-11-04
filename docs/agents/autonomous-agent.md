@@ -1,63 +1,40 @@
-# 无人值守 Agent 执行约定
+# 无人值守 Worker 执行约定
 
-适用于**没有人在场**执行任务的 agent —— 当前为 `dsh-superagent` 的 worker 会话。
-有人在场的会话仍按 `issue-tracker.md` 的硬性流程执行；本文件只补充"无人值守车道"的差异，**不替代**它。
+适用于 Superagent 派发的单工单。需求准备由派发方按 `issue-tracker.md` 完成；Worker 保留实现、验证、自审和交付步骤。Worker 可以通过源线程提出问题并接收后续回答，也可以使用适合任务的 skills 和子代理。
 
-## 何时适用
+## 执行步骤与完成条件
 
-- 任务由 GitHub Issue 派发，Issue 正文由维护者 @ 了智能体账号；
-- 执行环境是**每工单独立的 git worktree**，执行过程中无法与维护者对话，只能报告 `blocked` 并提一个具体问题。
+1. 读原始 Issue、关联规格和后续消息，以及根和所属目录的 AGENTS.md。确认目标、验收、依赖和授权边界；缺产品取舍时向源对话提一个具体问题，等回答后继续。
+2. 检查运行器创建的 worktree、分支、origin URL 与基准 SHA。新任务应从成功更新后的 main 创建；准备失败就报告，不能静默使用旧引用。恢复工单时保留当前分支和未提交工作，不重置或重建。
+3. 沿输入、调用方和测试查明现状，搜索相近实现。按根 AGENTS.md 的共用准则实现；行为变化使用能体现预期的测试，修 bug 先验证复现。
+4. 在本工单 worktree 按 `issue-tracker.md` 的验证分级执行；记录命令、工作目录、提交 SHA、结果与未验证原因。必要检查未完成时保持草稿或 blocked，不报告 ready。
+5. 从 Issue 和规范两方面自审 diff。提交并推送本工单分支，创建 PR，提供下述证据。确认 PR 属于正确仓库与分支，并绑定工单。
+6. 检查相关 CI 和 review 反馈，修复可操作问题；合并前 main 若已变化，评估更新和重新验证。报告 ready 表示改动可供审查，不代表已合并或已部署。
 
-## 与主流程的差异（唯一允许的偏离）
+长任务保留压缩摘要和交接记录；后台任务按插件机制运行。遇到外部决定或缺少资源时报告 blocked，写明证据、已尝试办法、需要的人类操作；不用人为估计剩余时间。
 
-| 主流程步骤 | 无人值守车道怎么办 |
-|---|---|
-| `grill-with-docs` 澄清需求 | **跳过**。Issue 正文就是需求来源。缺关键信息时不要猜，报告 `blocked`，只提一个问题 |
-| `to-spec` / `to-tickets` | **跳过**。一单一个可独立验收的垂直切片，不做跨 Issue 拆解 |
-| `implement` + TDD | **保留**。改动有测试覆盖时，先写失败测试再实现 |
-| `code-review` | **保留**。提交前自查 diff，只保留与 Issue 范围相关的改动 |
-| `commit / PR / Issue` | **保留**。见下方"提交与 PR"，并在 Issue 回写一条评论 |
-| `retro` | **跳过**。改进项留给人维护者 |
+## 范围与运行前提
 
-## 范围纪律
+- 修改完成 Issue 目标所需的文件，实际范围明显超出约定时先取得确认。依赖、公共契约、迁移、部署配置属于需明确授权的高影响变更，不是永久禁止的任务类型。
+- 仅推送工单分支；禁止直推 main、force push 或重写无关分支。自动合并关闭，合并由维护者或其明确授权的主 agent 执行。
+- 凭据不进入仓库。保留 Next 自动生成的 AGENTS 块；与本任务无关的自动改动应审查，而非一律提交。
+- Docker 等能力以运行器实际配置为准。被禁用或不可用时不绕过；需要容器的任务先请求环境准备，或明确交付未完成的验证。
+- worktree、命令 shim 和提示词只是组织与约束，不是 OS 权限隔离。
 
-- 只改 Issue 要求所需的文件。**不顺手重构、不重排格式、不动无关文件**。
-- 默认**不新增依赖、不升级版本**；确需变动时报告 `blocked` 并说明理由与替代方案。
-- **禁止改动**：`docker/`、`compose.yml`、`storage/`、`.github/workflows/`、各服务的 `src/main/resources/db/migration/`、任何密钥/凭据文件、`.scratch/`。
-- **禁止操作**：`git push --force`、rebase 已推送的分支、关闭或修改他人 Issue 的标签、开启 auto-merge、删除分支或 worktree。
-- 根 `AGENTS.md` / `front/AGENTS.md` 里的 `BEGIN:nextjs-agent-rules` 块由 `next dev` 自动写回；跟随提交即可，不要手工删除。
+## 运行器基线配置
 
-## 提交与 PR
+仓库提供 `scripts/prepare-superagent.sh`。当前机器将其部署在 `G:\dsh\launcher\prepare-superagent.sh`，执行设置为 `sh /mnt/g/dsh/launcher/prepare-superagent.sh`；其他机器需按实际路径部署。默认母仓库 `/opt/dsh/work/kuros`，可通过 `DSH_SUPERAGENT_BASE_REPO` 指定。
 
-- 分支：`agent/<工单短名>`（superagent 的 prepare 已按此创建，不要另开分支）
-- 提交信息：`<type>(<scope>): <中文摘要>`，与仓库现有风格一致（`fix` / `feat` / `docs` / `refactor` / `test` / `chore`）
-- PR 标题：`<type>(<scope>): <摘要>`
-- PR 正文必须包含四段，缺一不可：
-  1. **改了什么** —— 文件级清单
-  2. **验了什么** —— 逐条命令 + 真实结果
-  3. **复用说明** —— 为什么不用 `front/AGENTS.md` 积木清单里的现有实现（查过没有则写「无」）
-  4. **已知限制 / 风险** —— 没验的、可能被影响的
-- PR 正文首行写 `Fixes #<issue 编号>`。
-- 不开启 auto-merge，由维护者合并。
+脚本使用 flock 串行处理 fetch、确定 SHA 和创建分支；fetch 失败即停止。基准记录在 `$(git rev-parse --absolute-git-dir)/dsh-base-commit`，不污染工作区。需要 git、flock 和可用的远端读取权限；仅用于新 Assignment，恢复现有工单不重跑创建步骤。运行器是否重试以插件机制为准，不能用重置工单绕过失败。
 
-## 必须跑的验证
+## PR 交付
 
-推送前按 `issue-tracker.md` 的「本地验证分级」表执行（**命令与分级以那张表为唯一权威**，本文件不复述）。无人值守场景的增量是：
+正文包含：
 
-- 命令在**本工单的 worktree 里**执行，不是主工作区。
-- `docker` / `docker-compose` 在本环境被禁用（已配置 `blockedCommands`）；需要起容器才能验证的改动，报告 `blocked`，不要尝试绕过。
-- 实际执行过的命令与输出摘要必须写进 PR 正文和 Issue 回写评论；没跑就不要声称跑过。
+- **结果与关联**：用户可观察到的变化，关联 Issue；完成整单用 `Fixes #N`，部分交付用 `Refs #N`。
+- **验证证据**：按 `issue-tracker.md` 记录检查与效果证据，明确哪些未验证。声明行遵循团队沟通要求，不要求 Fixes 与声明同时占首行。
+- **取舍与风险**：有相近复用候选却另建能力，或新增抽象/异常转换时，说明真实理由；其余无需机械填写“无”。写明剩余限制。
 
-## 需要类型信息的 lint 规则（尚未启用）
+界面、API、缺陷任务的验收材料见 `issue-tracker.md`「效果证据」。汇报在源对话提供 PR 链接和需要人采取的操作；可以继续解决的普通进度保持内部记录。
 
-`@typescript-eslint/no-unnecessary-condition` 能直接拦住"类型已排除还判空"这类过度防御，但它要求 type-aware linting，且会在存量代码上报出一批问题。启用前先跑一次基线并单独提 PR，**不要在本工单里顺手打开**。
-
-## 维护者侧
-
-这一单的审查按 `review-checklist.md` 逐条执行；其中"复用说明"与"夹带检查"依赖本文件上面的范围纪律。
-
-## 报告纪律
-
-- 完成且有 PR → 报告 `ready`，附 PR 编号与链接。
-- 无法继续 → 报告 `blocked`，一句话说清缺什么，**只提一个具体问题**。
-- 没有可做的事（问题不成立、已修复、超出范围）→ 报告 `dropped`，写明原因。
+审查者按 `review-checklist.md` 审核，并独立判断报告是否由实际证据支持。

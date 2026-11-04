@@ -1,74 +1,66 @@
 # Issue 追踪约定
 
-本项目使用 GitHub Issues 管理需求、技术任务和缺陷：
+GitHub Issues 保存需求和决策，PR 承载实现、验证和审查。默认分支为 `main`。
 
-- 仓库：[qingshuixiaohang/kuros](https://github.com/qingshuixiaohang/kuros)
-- 默认分支：`main`
-- GitHub Issues 是唯一的任务记录入口；讨论结论应回写到对应 Issue。
-- Pull Request 用于承载代码变更和 Review，不替代需求 Issue。
+## 准备与派发
 
-## 推荐生命周期
+TUI 主 agent 与维护者讨论需求；Superagent Router 负责路由，Worker 负责单个工单的实现。两者的子代理调度不是同一条执行路径。
 
-`needs-triage` → 规格澄清 → `ready-for-agent` → 实现与测试 → Code Review → 合并并关闭 Issue
+| 任务 | 准备方式与完成条件 |
+|---|---|
+| 明确的小修复、文档调整 | 查清现状；Issue 写明目标、范围、可观察的验收结果即可派发 |
+| 中等功能 | 澄清业务取舍，形成 Issue 或简短规格；影响的接口与失败行为已说明 |
+| 跨模块功能 | 使用 `grill-with-docs` → `to-spec` → `to-tickets`；规格落盘，每张票可独立验收，依赖和集成顺序明确 |
+| 探索性需求 | 先研究或原型；关键产品或技术取舍确认后再派实现单 |
 
-每个实现任务尽量是一个可独立验收的垂直切片，例如“登录弹窗 + 登录接口 + 登录态展示”，而不是只按前端、后端拆成两个无法验收的任务。
+使用可用的 Matt skills 支持相应阶段；缺少某个 skill 时按上述产物要求工作，报告缺失，不虚称已调用。编写或修改 agent 消费的文档时使用 `writing-for-agents`，重点检查触发条件、步骤、完成条件和重复内容。
 
-## 功能开发硬性流程
+- `needs-triage`：仍在讨论；`ready-for-agent`：具备上述派发条件。标签本身不触发执行。
+- 首次创建 Issue 时可在正文写 `@qingshuixiaohan-dotcom` 派发；已创建的 Issue 必须新增一条带 @ 的评论，编辑旧正文补 @ 不会被此原型接收。准备中的 Issue 不加 @；已有工单的后续评论可能直接到达 Worker，不把原线程当成无副作用的草稿区。
+- 依赖工单合并后再派下游任务。同改一个模块或竞争同一测试资源的任务优先串行；增加 worker 数量不能消除依赖。
+- 仓库规范用链接引用；Issue 补充任务特有的行为、边界、验收和运行前提，不复制通用检查表。
 
-后续新增功能必须严格遵循 `ask-matt` 主流程，不因对话变长或实现方便而跳步：
+## 实现、交接和合并
 
-1. `grill-with-docs`：澄清需求、边界和验收标准，并把关键决定写入 `GLOSSARY.md` 或 ADR。
-2. `to-spec`：多会话功能先形成可实现的规格；单会话小改动也要在 Issue 中写清范围。
-3. `to-tickets`：拆成可独立验收的垂直 Issue，声明依赖和阻塞边。
-4. `implement` + `TDD`：按 Issue 工作，先写失败测试，再实现最小行为，最后补边界测试。多工单并行时可用 `implement-spec`：它把工单读作任务图，为就绪工单并行启动子代理（各自独立 worktree），全部合到一个集成分支后统一 `code-review`。
-5. `code-review`：提交前从规范和规格两个维度审查差异，修复发现的问题。
-6. `commit / PR / Issue`：提交、推送 PR，回写测试结果、已知限制和关联关系。
-7. `retro`：会话收尾复盘——改进的是 agent 的工作环境而非代码：机械性错误固化为确定性检查（linter 规则 / pre-commit / CI 任务），判断性错误写入编码规范；本文件与 GLOSSARY.md 是复盘结论的落点。
+Worker 按 [无人值守执行约定](autonomous-agent.md) 工作。有人在场直接实现时，也按任务规模准备需求，按下表验证，并按 [审查清单](review-checklist.md) 审查。
 
-如果上下文接近上限，必须先在阶段边界执行 `compact` 或 `handoff`，保留当前规格、Issue、测试和未完成项；恢复后从最近的阶段继续，不得凭记忆跳过 `to-spec`、`to-tickets`、TDD 或 Review。已有历史代码可以保持原状，但从下一项功能开始执行本流程。
+行为变更先用有意义的失败用例复现，再实现和补边界验证。纯文档、可逆的非行为调整不为了流程制造测试。提交前的审查覆盖规范和 Issue 的实际要求。
 
-## 本地验证分级（AI 快验约定，2026-10-03 起）
+上下文压缩或交接前，记录当前 Issue、基准提交、决策、已跑检查和未完成项；恢复后从书面记录继续。Worker 可按任务需要使用实现、诊断、TDD 等 skills。
 
-**PR 轻量门禁（2026-11-01 增补）**：`.github/workflows/pr-check.yml` 在**每个前端 PR** 上自动跑 `lint` + `tsc --noEmit` + `format:check` + `test` + `build`（约 3~5 分钟，不拉 compose 栈），弥补 ci.yml 手动化后 PR 没有机器兜底的缺口。下方分级表仍是推送**前**的本地自检要求；门禁通过不等于可以跳过本地验证。
+结果或必要问题回到源 Issue/PR。当前 TUI 主 agent 没有常驻通知桥接：维护者可看 GitHub 通知或面板，再让 TUI 主 agent 查询和审查。不能承诺无人触发时持续监控。
 
-**验证权威与分工（2026-10-03 调整）**：CI 已改为**仅手动触发**（见 `.github/workflows/ci.yml` 顶部注释），日常验证改为三级——① AI 按下面的分级表做本地快验；② 耗时全量验证（全量 `mvnw test`、Playwright 全套、compose 冒烟）由 AI 按需在本地执行（需用户开着 Docker Desktop），或用户在 IDEA 里自行运行；③ 大节点（切片收口、部署上线前、合并重大 PR 前）到 Actions 页面手动跑一轮 CI 全量，当"出门前体检"。AI 在推送前的本地验证按改动类型**分级**执行，目的只有一个：用最少的本地时间换"第一轮就绿"，避免推送后才发现低级错误。
+合并由维护者决定，或由主 agent 在明确授权范围内代执行。Review 与 merge 是不同动作；自动合并默认关闭。合并前确认最新目标分支上的兼容性及相关检查。每完成 3～5 单，或出现明显返工后，复盘人工介入、阻塞、耗时和返工原因，只把反复出现的问题固化为规则。
 
-| 改动类型 | AI 推送前的本地验证 | 原因 |
-|---|---|---|
-| 纯文档（docs/、README、CONTEXT、ADR、Issue 回写） | 不跑构建，通读 diff 即可 | 文档错误不影响运行，CI 全绿照常 |
-| 前端代码（front/，未动依赖） | `npm run lint` + `npm run build`；若改动组件的 e2e spec 也有增改，顺带跑对应 spec | 本地 2~3 分钟能挡住绝大多数前端错误 |
-| 后端代码（kuros-*，未动依赖与配置） | `mvnw test-compile` + 只跑改动域的定向测试（`-Dtest=改动的测试类`） | 定向测试把反馈从 CI 的 20+ 分钟压到几分钟；全量留给 CI |
-| 后端高危面：Flyway 新迁移、shared/ 公共类、鉴权/拦截器配置 | 上行之外必须实际跑受影响的测试类（H2+Testcontainers，需 Docker Desktop 开着） | 这类错误影响所有调用方，是 CI 红灯的最大来源 |
-| 依赖/构建配置（pom.xml、package.json、compose.yml、ci.yml、Dockerfile） | `mvnw test-compile` 或前端 build，加 `docker compose config --quiet`；compose.yml 大改尽量本地起一次栈 | 配置错误最贵（构建跑到一半才炸），值得多花几分钟 |
-| 极小改动（单文件几行、无逻辑分支） | 可以什么都不跑，直接推送；如属重要路径，推送后补一次定向验证 | 本地验证的价值是省"红一轮再修"的往返，改动越小越不值得本地跑 |
-| 前端测试工具链（新增 vitest/prettier/eslint 规则、改 vitest.config） | `npm run test` + `npm run format:check` + `npx tsc --noEmit`，并跑一次 `next build` | 工具链改动影响的是**所有**文件的判定结果，不跑一遍就不知道之前绿的还绿不绿；配置类错误（如 prettier 的 endOfLine 与 core.autocrlf 打架）只在全量 check 时才暴露 |
+## 本地验证分级
 
-## 常用命令
+下表是本地验证的唯一清单。前端命令在 `front/` 执行；后端在对应 `kuros-*` 模块执行，Linux 用 `./mvnw`，Windows 用 `mvnw.cmd`。脚本名称以当前 `package.json` 为准。
 
-```powershell
-gh issue list --state open
-gh issue view <number> --comments
-gh issue create --title "..." --body "..."
-gh issue comment <number> --body "..."
-gh issue close <number> --comment "..."
-```
+| 改动类型 | 验证要求 |
+|---|---|
+| 纯文档 | 通读 diff，核对引用路径、命令和声明；无需应用构建 |
+| 前端代码 | lint、类型检查、相关单测和 build；交互变化实际运行对应浏览器场景 |
+| 后端代码 | test-compile 与改动域的定向测试；选择失败行为和边界的相关用例 |
+| 鉴权、公共类、数据迁移、事务或并发 | 上述检查之外验证受影响调用方和失败路径；依赖容器的测试需实际运行 |
+| 依赖、构建、部署配置 | 运行对应模块构建及配置验证；Compose 变更运行 `docker compose config --quiet`，影响启动时验证实际启动 |
+| 前端测试工具链 | test、format:check、类型检查及 build，验证存量判定未意外变化 |
+| 极小非行为改动 | 选覆盖该改动的最小检查，说明省略其余检查的理由；行数少不豁免安全和行为验证 |
 
-提交前先同步 Issue 状态；实现完成后在 Issue 中补充测试结果、已知限制和关联 PR。
+`.github/workflows/pr-check.yml` 为命中路径的前端 PR 自动执行检查；全栈 `.github/workflows/ci.yml` 仍手动触发。检查名与路径过滤以 YAML 为准。CI 通过与本地证据互补；没有执行的检查标为未验证，不把未触发视为通过。
+
+### 效果证据
+
+- 页面：提供预览启动命令、地址、进入路径、操作步骤和预期结果；视觉变更附截图或说明无法截图的限制。
+- API：提供请求样例、预期响应、失败场景与相关测试。
+- Bug：提供原复现步骤、修复后的行为和回归证据。
+- PR 中标明证据对应的提交 SHA。预览没启动时写可复现的本地步骤，不编造在线地址。
 
 ### 最终集成浏览器证据
 
-发布前必须从包含全部待发布切片的最终集成树实际执行 Playwright 全量套件。
-`playwright test --list` 只用于发现计数，不能替代通过证据。Windows 16GB 主机优先使用
-单 worker，避免 Next.js 冷编译时并发争用造成超时。
+发布前从包含全部待发布切片的最终集成树实际运行 Playwright 全量套件。`--list` 只是发现计数，不是通过证据。Windows 16GB 主机优先单 worker，减少冷编译争用。
 
-临时 worktree 通过 junction 复用主工作区的 `node_modules` 时，Turbopack 会拒绝项目
-文件系统根之外的链接。此时使用仓库支持的 Webpack 构建路径完成生产构建，并在 PR
-中记录该环境限制。
+临时 worktree 通过 junction 复用 `node_modules` 时，Turbopack 可能拒绝根外链接；使用仓库支持的 Webpack 路径并记录环境限制。
 
 ### Windows Testcontainers 临时目录
 
-如果 Maven 测试在业务断言前因 `sun.nio.ch.UnixDomainSockets` 报
-`SocketException: Invalid argument: connect`，先把当前 PowerShell 的 `TEMP` 和
-`TMP` 指向工作区内的短路径再重跑，例如
-`G:\kuros-web\.scratch\tmp`。这是宿主编排环境的临时目录问题，不应直接归类为
-应用回归；修复环境后仍需取得真实测试结果，并在 PR 中区分本地证据与 CI 复验。
+Maven 若在业务断言前因 `sun.nio.ch.UnixDomainSockets` 报 `SocketException: Invalid argument: connect`，先把当前进程 TEMP/TMP 指向短路径（例如 `G:\kuros-web\.scratch\tmp`）再试。区分环境错误与应用回归，修复环境后仍需真实结果。
