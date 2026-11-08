@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { CommunityPageFrame } from "@/components/community/community-pages";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
+import { CommunityAvatar } from "@/components/community/community-avatar";
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import {
   deletePost,
@@ -35,8 +36,7 @@ import {
   type PublicProfile,
 } from "@/lib/api";
 import { DEMO_COVER_BY_SLUG, DEMO_SLUG_BY_POST_ID } from "@/lib/post-view";
-
-const fallbackAvatar = "/art/修-守岸人 唤取动画.webp";
+import { communityAvatar } from "@/lib/official-art";
 
 const profileTabs = [
   { key: "posts", label: "帖子", icon: FileText },
@@ -54,10 +54,6 @@ function postSlug(postId: string) {
 function formatDate(value: string) {
   return value.length >= 10 ? value.slice(5, 10).replace("-", "/") : value;
 }
-function safeAvatar(avatarUrl: string | null) {
-  return avatarUrl?.startsWith("/") ? avatarUrl : fallbackAvatar;
-}
-
 function ProfileHomeLink() {
   return (
     <Link className="profile-follow-button profile-home-link" href="/profile">
@@ -93,7 +89,7 @@ function ProfileHero({ overview }: { overview: ProfileOverview }) {
     <section aria-label="个人资料概览" className="profile-hero">
       <div className="profile-identity">
         <div className="profile-avatar">
-          <Image alt={`${profile.nickname}头像`} fill sizes="116px" src={safeAvatar(profile.avatarUrl)} />
+          <Image alt={`${profile.nickname}头像`} fill sizes="116px" src={communityAvatar(profile.avatarUrl, profile.nickname)} />
         </div>
         <div className="profile-copy">
           <div className="profile-name-line">
@@ -126,7 +122,7 @@ function ProfileHero({ overview }: { overview: ProfileOverview }) {
       </div>
       <div className="profile-game-card">
         <div className="profile-game-card-top">
-          <div className="profile-mini-avatar">潮</div>
+          <CommunityAvatar avatarUrl={profile.avatarUrl} className="profile-mini-avatar" identity={profile.nickname} size={34} />
           <div>
             <strong>{profile.nickname}</strong>
             <small>鸣潮社区档案</small>
@@ -179,7 +175,7 @@ function ProfilePostRow({ post, manageable = false, onDeleted }: { post: ApiPost
   return (
     <div className="profile-post-row">
       <Link className="profile-post-row-main" href={`/guides/${slug}`} rel="noopener noreferrer" target="_blank">
-        <div className="author-avatar author-avatar--dark">{post.author.nickname.slice(0, 1)}</div>
+        <CommunityAvatar avatarUrl={post.author.avatarUrl} className="author-avatar author-avatar--dark" identity={post.author.nickname} />
         <div className="profile-post-row-copy">
           <div className="profile-post-row-meta">
             <strong>{post.author.nickname}</strong>
@@ -194,7 +190,13 @@ function ProfilePostRow({ post, manageable = false, onDeleted }: { post: ApiPost
           </div>
         </div>
         <div className="profile-post-thumbnail">
-          <Image alt="" fill sizes="140px" src={post.coverImageUrl ?? DEMO_COVER_BY_SLUG[slug] ?? "/art/guide-coast.webp"} />
+          <Image
+            alt=""
+            fill
+            sizes="140px"
+            src={post.coverImageUrl ?? DEMO_COVER_BY_SLUG[slug] ?? "/art/guide-coast.webp"}
+            unoptimized={Boolean(post.coverImageUrl)}
+          />
         </div>
         <ChevronRight className="profile-row-arrow" size={17} />
       </Link>
@@ -234,7 +236,7 @@ function ProfileEmpty({ icon: Icon, title, description }: { icon: LucideIcon; ti
 function FollowingRow({ profile }: { profile: ProfileOverview["following"]["items"][number] }) {
   return (
     <Link className="profile-following-row" href={`/users/${encodeURIComponent(profile.id)}`}>
-      <div className="author-avatar author-avatar--blue">{profile.nickname.slice(0, 1)}</div>
+      <CommunityAvatar avatarUrl={profile.avatarUrl} className="author-avatar author-avatar--blue" identity={profile.nickname} />
       <div>
         <strong>{profile.nickname}</strong>
         <span>{profile.bio || "鸣潮漂泊者"}</span>
@@ -464,7 +466,7 @@ function PublicProfileHero({ profile }: { profile: PublicProfile }) {
     <section className="profile-hero">
       <div className="profile-identity">
         <div className="profile-avatar">
-          <Image alt={`${profile.nickname}头像`} fill sizes="116px" src={safeAvatar(profile.avatarUrl)} />
+          <Image alt={`${profile.nickname}头像`} fill sizes="116px" src={communityAvatar(profile.avatarUrl, profile.nickname)} />
         </div>
         <div className="profile-copy">
           <div className="profile-name-line">
@@ -494,7 +496,7 @@ function PublicProfileHero({ profile }: { profile: PublicProfile }) {
       </div>
       <div className="profile-game-card">
         <div className="profile-game-card-top">
-          <div className="profile-mini-avatar">潮</div>
+          <CommunityAvatar avatarUrl={profile.avatarUrl} className="profile-mini-avatar" identity={profile.nickname} size={34} />
           <div>
             <strong>{profile.nickname}</strong>
             <small>鸣潮社区档案</small>

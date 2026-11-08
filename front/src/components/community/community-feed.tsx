@@ -2,11 +2,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BadgeCheck, Eye, Heart, MessageSquare, MoreHorizontal } from "lucide-react";
+import { ArrowRight, BadgeCheck, Eye, Heart, MessageSquare, MoreHorizontal, UsersRound } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { FloatingFocusManager, useClick, useDismiss, useFloating, useInteractions, useRole } from "@floating-ui/react";
 import { useEffect, useRef, useState } from "react";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
+import { CommunityAvatar } from "@/components/community/community-avatar";
 import { CommunityHeroCarousel, CommunityImageCarousel } from "@/components/community/community-carousel";
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
@@ -51,7 +52,7 @@ function PostMedia({ guide, href }: { guide: Guide; href: string }) {
       <div className="post-media-grid" style={{ gridTemplateColumns: `repeat(${Math.min(sources.length, 3)}, 1fr)` }}>
         {sources.slice(0, 6).map((src, index) => (
           <Link className="post-media-grid-item" href={href} key={src + index} rel="noopener noreferrer" target="_blank">
-            <Image alt={`${guide.title}配图 ${index + 1}`} fill sizes="160px" src={src} />
+            <Image alt={`${guide.title}配图 ${index + 1}`} fill sizes="160px" src={src} unoptimized />
           </Link>
         ))}
       </div>
@@ -153,7 +154,7 @@ function PostCard({
   return (
     <article className="post-card">
       <div className="post-header">
-        <div className={`author-avatar author-avatar--${guide.avatarTone}`}>{guide.authorMark}</div>
+        <CommunityAvatar avatarUrl={guide.avatarUrl} className={`author-avatar author-avatar--${guide.avatarTone}`} identity={guide.author} />
         <div className="author-info">
           <strong>
             {guide.author}
@@ -246,16 +247,36 @@ function PostCard({
     </article>
   );
 }
+function FollowingLoginGate({ onLogin }: { onLogin: () => void }) {
+  return (
+    <div className="following-login-gate">
+      <div className="following-login-gate__copy">
+        <span className="following-login-gate__eyebrow">
+          <UsersRound size={15} /> 漂泊者的关注流
+        </span>
+        <h2>跟上你关注的创作者</h2>
+        <p>登录后，这里会汇集他们新发布的攻略、探索记录和版本讨论。</p>
+        <button className="following-login-gate__button" onClick={onLogin} type="button">
+          登录后继续 <ArrowRight size={16} />
+        </button>
+      </div>
+      <div aria-hidden="true" className="following-login-gate__art">
+        <Image alt="" fill sizes="300px" src="/art/official/characters/changli-profile.jpg" />
+        <span>FOLLOW THE WAVES</span>
+      </div>
+    </div>
+  );
+}
 export function CommunityFeed({ query }: { query: string }) {
   const params = useSearchParams();
   const router = useRouter();
-  const { requestLogin, user, sessionRestoring } = useCommunityDemo();
+  const { loggedIn, requestLogin, user, sessionRestoring } = useCommunityDemo();
   const tab = params.get("tab") === "following" ? "following" : params.get("tab") === "latest" ? "latest" : "recommend";
   const feedQuery = useCommunityFeedQuery({
     tab,
     keyword: query,
     viewerId: user?.id ?? "guest",
-    enabled: !sessionRestoring,
+    enabled: !sessionRestoring && (tab !== "following" || loggedIn),
   });
   const items = feedQuery.data?.items.map(toGuide) ?? [];
   const requestKey = tab + "::" + query;
@@ -285,21 +306,10 @@ export function CommunityFeed({ query }: { query: string }) {
   ];
   const emptyState = feedQuery.isError ? (
     <div className="empty-state">
-      {tab === "following" && feedQuery.error instanceof ApiError && feedQuery.error.status === 401 ? (
-        <>
-          <p>登录后查看关注的创作者动态</p>
-          <button className="secondary-button" onClick={() => requestLogin()} type="button">
-            去登录
-          </button>
-        </>
-      ) : (
-        <>
-          <p>{tab === "following" ? "关注流加载失败，请稍后重试。" : "帖子加载失败，请稍后重试。"}</p>
-          <button className="secondary-button" onClick={() => feedQuery.refetch()} type="button">
-            重新加载
-          </button>
-        </>
-      )}
+      <p>{tab === "following" ? "关注流加载失败，请稍后重试。" : "帖子加载失败，请稍后重试。"}</p>
+      <button className="secondary-button" onClick={() => feedQuery.refetch()} type="button">
+        重新加载
+      </button>
     </div>
   ) : (
     <div className="empty-state">
@@ -316,12 +326,28 @@ export function CommunityFeed({ query }: { query: string }) {
       <Banner />
       <div className="feed-tabs">
         {tabs.map((item) => (
-          <button className={tab === item.key ? "is-active" : ""} key={item.key} onClick={() => router.push(item.href)} type="button">
+          <button
+            aria-current={tab === item.key ? "page" : undefined}
+            className={tab === item.key ? "is-active" : ""}
+            key={item.key}
+            onClick={() => {
+              if (item.key === "following" && !loggedIn) {
+                requestLogin(() => router.push(item.href));
+                return;
+              }
+              router.push(item.href);
+            }}
+            type="button"
+          >
             {item.label}
           </button>
         ))}
       </div>
-      {loading ? (
+      {tab === "following" && !sessionRestoring && !loggedIn ? (
+        <FollowingLoginGate onLogin={() => requestLogin()} />
+      ) : tab === "following" && feedQuery.error instanceof ApiError && feedQuery.error.status === 401 ? (
+        <FollowingLoginGate onLogin={() => requestLogin()} />
+      ) : loading ? (
         <div className="feed-status" role="status">
           正在整理漂泊者的最新内容…
         </div>

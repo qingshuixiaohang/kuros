@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CommunityPageFrame, PageHeader } from "@/components/community/community-pages";
 import { fetchCharacterPage, type ApiCharacter } from "@/lib/api";
+import { toolArtwork } from "@/lib/official-art";
 import { toolItems } from "@/lib/mock";
 
 export function ToolsPage() {
@@ -18,6 +19,9 @@ export function ToolsPage() {
           return (
             <Link href={href} key={tool.slug}>
               <article className="tool-page-card">
+                <div className="tool-page-art">
+                  <Image alt={tool.title + "鸣潮素材"} fill sizes="(max-width: 620px) 100vw, 360px" src={toolArtwork(tool.slug)} />
+                </div>
                 <span>
                   <Image alt="" fill sizes="64px" src={tool.iconSrc} />
                 </span>
