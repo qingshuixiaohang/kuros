@@ -1,4 +1,4 @@
-# ADR 0005: Feed 流——Redis ZSet Timeline + Push-on-publish
+# 0005. Feed 流：Redis ZSet Timeline + Push-on-publish
 
 **状态**: 已接受（2026-09-21）  
 **上下文**: 切片 #12「Feed 流（ZSet Timeline + Push/Pull 混合）」  

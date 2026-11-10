@@ -3,14 +3,15 @@
 这是项目工作区：Next.js 前端（react-query 接真实 API，含按页面定义的降级）+ Spring
 Boot 后端微服务群。
 
-当前完成状态、已合并发布批次和实际测试基线以
-[`docs/roadmap/current-status.md`](docs/roadmap/current-status.md) 为准。历史和审计文档
-保留旧快照，不用于判断当前进度。
+查看[文档导航](docs/README.md)可找到架构决策、开发复盘和使用说明。当前进度请核对
+[GitHub Issue](https://github.com/qingshuixiaohang/kuros/issues) 和
+[合并记录](https://github.com/qingshuixiaohang/kuros/pulls?q=is%3Apr+is%3Amerged)；
+历史文档中的测试数字是当时的快照。
 
 ## 目录
 
 - `front/`：Next.js + TypeScript 前端
-- `docs/`：产品计划、规格、工单、学习复盘与人为准备事项
+- `docs/`：架构决策、技术规格、工单和学习复盘
 - `kuros-backend/`：内容服务（帖子/评论/互动/举报/媒体），Spring Boot + Maven
 - `kuros-user/`：用户域微服务（认证/会话/RBAC/资料/关注），切片 #10 拆出，独立库 `kuros_user`
 - `kuros-gateway/`：Spring Cloud Gateway 统一入口（占 8080 正门，`lb://` 路由）
