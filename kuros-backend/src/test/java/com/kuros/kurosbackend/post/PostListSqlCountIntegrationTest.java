@@ -64,6 +64,8 @@ class PostListSqlCountIntegrationTest {
         // Feign 直连桩，用户域不经网络，避免干扰 SQL 计数
         registry.add("app.feign.kuros-user.url", userDirectory::baseUrl);
         registry.add("app.internal.token", () -> "test-internal-token");
+        registry.add("spring.jpa.properties.hibernate.session_factory.statement_inspector",
+                PostListSqlInspector.class::getName);
     }
 
     @Autowired
@@ -91,12 +93,42 @@ class PostListSqlCountIntegrationTest {
 
         String authorId = "10000000-0000-0000-0000-000000000001";
         for (int i = 0; i < POST_COUNT; i++) {
+            List<String> tags = i < 2 ? List.of("guide", "beginner") : List.of();
             publishingService.publish(new CreatePostRequest(
                     "GUIDE", "配队攻略", "SQL 计数测试帖 " + i,
-                    "摘要 " + i, "正文 " + i, List.of(), List.of()
+                    "摘要 " + i, "正文 " + i, tags, List.of()
             ), authorId);
         }
         statistics.clear();
+    }
+
+    @Test
+    void 精确计数不连接标签且分页元数据不受多标签帖子影响() {
+        PostListSqlInspector.clear();
+
+        var result = postService.findPublished(1, 10, "latest", null, null, null);
+
+        assertThat(result.items()).hasSize(10);
+        assertThat(result.meta().totalItems()).isEqualTo(POST_COUNT);
+        assertThat(result.meta().totalPages()).isEqualTo(5);
+
+        String countSql = PostListSqlInspector.statements().stream()
+                .filter(sql -> sql.toLowerCase().contains("select count("))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Expected pagination count SQL"))
+                .toLowerCase();
+        assertThat(countSql).doesNotContain("left join post_tags", "distinct");
+    }
+
+    @Test
+    void 标签筛选精确计数且结果保留帖子的完整标签() {
+        var result = postService.findPublished(1, 10, "hot", "GUIDE", "guide", null);
+
+        assertThat(result.items()).hasSize(2);
+        assertThat(result.meta().totalItems()).isEqualTo(2);
+        assertThat(result.meta().totalPages()).isEqualTo(1);
+        assertThat(result.items()).allSatisfy(item ->
+                assertThat(item.tags()).containsExactlyInAnyOrder("guide", "beginner"));
     }
 
     @Test

@@ -25,17 +25,27 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, St
      * 把整页的 tags 拉齐，SQL 数降为常数。
      *
      * distinct 不可省：collection fetch join 会因 tags 笛卡尔积产生重复行，
-     * 不 distinct 会让分页条数虚增、Page 元数据错乱。
+     * 不 distinct 会让分页条数虚增。总数查询独立统计帖子，不经过标签关联。
      */
-    @Query("""
-            select distinct p from CommunityPost p
-            left join fetch p.tags
-            where p.status = :status
-              and (:category is null or p.category = :category)
-              and (:tag is null or exists (select t from p.tags t where t.name = :tag))
-              and (:keyword is null or lower(p.title) like lower(concat('%', :keyword, '%'))
-                   or lower(p.excerpt) like lower(concat('%', :keyword, '%')))
-            """)
+    @Query(
+            value = """
+                    select distinct p from CommunityPost p
+                    left join fetch p.tags
+                    where p.status = :status
+                      and (:category is null or p.category = :category)
+                      and (:tag is null or exists (select t from p.tags t where t.name = :tag))
+                      and (:keyword is null or lower(p.title) like lower(concat('%', :keyword, '%'))
+                           or lower(p.excerpt) like lower(concat('%', :keyword, '%')))
+                    """,
+            countQuery = """
+                    select count(p) from CommunityPost p
+                    where p.status = :status
+                      and (:category is null or p.category = :category)
+                      and (:tag is null or exists (select t from p.tags t where t.name = :tag))
+                      and (:keyword is null or lower(p.title) like lower(concat('%', :keyword, '%'))
+                           or lower(p.excerpt) like lower(concat('%', :keyword, '%')))
+                    """
+    )
     Page<CommunityPost> findVisiblePosts(
             @Param("status") PostStatus status,
             @Param("category") String category,
