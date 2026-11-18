@@ -3,6 +3,7 @@ package com.kuros.kurosbackend.post;
 import com.kuros.kurosbackend.TestDatabases;
 import com.kuros.kurosbackend.UserDirectoryStub;
 import com.kuros.kurosbackend.post.api.CreatePostRequest;
+import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.post.service.CommunityPostService;
 import com.kuros.kurosbackend.post.service.PostPublishingService;
 import jakarta.persistence.EntityManager;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -80,12 +82,27 @@ class PostListSqlCountIntegrationTest {
     @Autowired
     private StringRedisTemplate redisTemplate;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private CommunityPostRepository postRepository;
+
     private Statistics statistics;
 
     @BeforeEach
     void setUp() {
         Objects.requireNonNull(redisTemplate.getConnectionFactory())
                 .getConnection().serverCommands().flushDb();
+
+        // 每个用例都要从确定的数据集开始：否则 @BeforeEach 的造数会叠加，
+        // totalItems 断言会随执行顺序变化（实测首测读到 54 而不是 50）。
+        jdbcTemplate.update("DELETE FROM post_media");
+        jdbcTemplate.update("DELETE FROM post_tags");
+        jdbcTemplate.update("DELETE FROM comments");
+        jdbcTemplate.update("DELETE FROM post_likes");
+        jdbcTemplate.update("DELETE FROM post_favorites");
+        postRepository.deleteAll();
 
         SessionFactory sessionFactory = entityManager.getEntityManagerFactory().unwrap(SessionFactory.class);
         statistics = sessionFactory.getStatistics();
@@ -122,7 +139,8 @@ class PostListSqlCountIntegrationTest {
 
     @Test
     void 标签筛选精确计数且结果保留帖子的完整标签() {
-        var result = postService.findPublished(1, 10, "hot", "GUIDE", "guide", null);
+        // 分类必须与建帖时的实际分类一致；传 "GUIDE"（帖子类型）会得到 0 条，测不到计数。
+        var result = postService.findPublished(1, 10, "hot", "配队攻略", "guide", null);
 
         assertThat(result.items()).hasSize(2);
         assertThat(result.meta().totalItems()).isEqualTo(2);
