@@ -134,7 +134,7 @@ class PostListSqlCountIntegrationTest {
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("Expected pagination count SQL"))
                 .toLowerCase();
-        assertThat(countSql).doesNotContain("left join post_tags", "distinct");
+        assertThat(countSql).doesNotContain("left join post_tags", "distinct", "category", "title", "excerpt", "post_tags");
     }
 
     @Test
@@ -147,6 +147,43 @@ class PostListSqlCountIntegrationTest {
         assertThat(result.meta().totalPages()).isEqualTo(1);
         assertThat(result.items()).allSatisfy(item ->
                 assertThat(item.tags()).containsExactlyInAnyOrder("guide", "beginner"));
+    }
+
+    @Test
+    void 动态计数只保留已提供的条件且短页可省略计数() {
+        PostListSqlInspector.clear();
+        var fullPage = postService.findPublished(1, 1, "latest", "配队攻略", "guide", null);
+        assertThat(fullPage.meta().totalItems()).isEqualTo(2);
+        String countSql = PostListSqlInspector.statements().stream()
+                .filter(sql -> sql.toLowerCase().contains("select count("))
+                .findFirst().orElseThrow().toLowerCase();
+        assertThat(countSql).contains("category", "post_tags").doesNotContain("title", "excerpt");
+
+        PostListSqlInspector.clear();
+        var shortPage = postService.findPublished(1, 10, "latest", "配队攻略", "guide", null);
+        assertThat(shortPage.meta().totalItems()).isEqualTo(2);
+        assertThat(PostListSqlInspector.statements()).noneMatch(sql -> sql.toLowerCase().contains("select count("));
+    }
+
+    @Test
+    void 动态计数与所有筛选组合的列表结果一致() {
+        assertFilteredTotal(null, null, null, 50);
+        assertFilteredTotal("配队攻略", null, null, 50);
+        assertFilteredTotal(null, "guide", null, 2);
+        assertFilteredTotal(null, null, "摘要 0", 1);
+        assertFilteredTotal("配队攻略", "guide", null, 2);
+        assertFilteredTotal("配队攻略", null, "摘要 0", 1);
+        assertFilteredTotal(null, "guide", "摘要 0", 1);
+        assertFilteredTotal("配队攻略", "guide", "摘要 0", 1);
+        assertFilteredTotal("不存在", "guide", "摘要 0", 0);
+        assertThat(postService.findPublished(99, 10, "latest", null, null, null).meta().totalItems())
+                .isEqualTo(50);
+    }
+
+    private void assertFilteredTotal(String category, String tag, String keyword, int expected) {
+        var result = postService.findPublished(1, 1, "latest", category, tag, keyword);
+        assertThat(result.meta().totalItems()).isEqualTo(expected);
+        assertThat(result.items()).hasSize(expected == 0 ? 0 : 1);
     }
 
     @Test
