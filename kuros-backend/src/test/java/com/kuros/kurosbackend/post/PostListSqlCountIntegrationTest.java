@@ -116,6 +116,11 @@ class PostListSqlCountIntegrationTest {
                     "摘要 " + i, "正文 " + i, tags, List.of()
             ), authorId);
         }
+        var deletedPost = publishingService.publish(new CreatePostRequest(
+                "GUIDE", "配队攻略", "已删除计数测试帖",
+                "已删除摘要", "已删除正文", List.of(), List.of()
+        ), authorId);
+        publishingService.delete(deletedPost.id(), authorId);
         statistics.clear();
     }
 
@@ -163,6 +168,12 @@ class PostListSqlCountIntegrationTest {
         var shortPage = postService.findPublished(1, 10, "latest", "配队攻略", "guide", null);
         assertThat(shortPage.meta().totalItems()).isEqualTo(2);
         assertThat(PostListSqlInspector.statements()).noneMatch(sql -> sql.toLowerCase().contains("select count("));
+
+        PostListSqlInspector.clear();
+        var hotFullPage = postService.findPublished(1, 1, "hot", "配队攻略", "guide", null);
+        assertThat(hotFullPage.items()).hasSize(1);
+        assertThat(hotFullPage.meta().totalItems()).isEqualTo(2);
+        assertThat(PostListSqlInspector.statements()).anyMatch(sql -> sql.toLowerCase().contains("select count("));
     }
 
     @Test
@@ -171,11 +182,16 @@ class PostListSqlCountIntegrationTest {
         assertFilteredTotal("配队攻略", null, null, 50);
         assertFilteredTotal(null, "guide", null, 2);
         assertFilteredTotal(null, null, "摘要 0", 1);
+        assertFilteredTotal(null, null, "SQL 计数测试帖 0", 1);
         assertFilteredTotal("配队攻略", "guide", null, 2);
         assertFilteredTotal("配队攻略", null, "摘要 0", 1);
         assertFilteredTotal(null, "guide", "摘要 0", 1);
         assertFilteredTotal("配队攻略", "guide", "摘要 0", 1);
         assertFilteredTotal("不存在", "guide", "摘要 0", 0);
+        var lastPage = postService.findPublished(5, 10, "latest", null, null, null);
+        assertThat(lastPage.items()).hasSize(10);
+        assertThat(lastPage.meta().totalItems()).isEqualTo(POST_COUNT);
+        assertThat(lastPage.meta().totalPages()).isEqualTo(5);
         assertThat(postService.findPublished(99, 10, "latest", null, null, null).meta().totalItems())
                 .isEqualTo(50);
     }
