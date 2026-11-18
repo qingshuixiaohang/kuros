@@ -1,0 +1,32 @@
+feat(backend): 新增 echoes 声骸域——/echoes 不再读 mock 数组
+
+前端审计 H-9 的第二块（news 域见 4b0641d，同款模式）。
+
+此前 echoSets 是 front/src/lib/mock.ts 里 4 条硬编码数据，/echoes 列表页与
+/echoes/[id] 详情页都读它——改声骸数据要改前端代码重新发版。
+
+按 TDD 做：先写 EchoApiIntegrationTest 5 用例全红（401，端点不存在且
+未进白名单），再建域到全绿。
+
+新增内容：
+- V14__echo_sets.sql：echo_sets 单表。声骸字段是扁平的（效果/位置/定位
+  各一个字符串），不像资讯正文需要分段，拆子表只会多一次 join
+- guide_slug 刻意可空且不设外键：mock 里每条声骸的 guideId 指向 mock
+  攻略 slug，而真攻略走 posts 表。存跨域硬引用会让 echoes 依赖 posts 的
+  种子数据，且用户删帖就让图鉴悬空。可空让「未关联攻略」是一等公民——
+  前端按钮只在有值时才渲染，不会生成必然 404 的链接
+- EchoSet 实体沿用 game_characters / news_articles 的形状约定：slug 对外、
+  UUID 主键、enabled 软开关、sort_order 稳定排序
+- EchoCatalogService：分页上限 50（同 news/character），未知/未上线 slug
+  一律 ResourceNotFoundException("ECHO_NOT_FOUND")
+- EchoController：GET /api/v1/echoes（支持 role 过滤）、GET /{slug}
+- SaTokenConfigure 公开 GET 白名单加 /api/v1/echoes/**——批量互动状态端点
+  踩过同样的坑：漏这条游客打开 /echoes 直接 401
+
+测试用 H2 而非 MySQL 容器：声骸是纯只读静态内容，不碰 Redis/MQ（项目
+「只开需要的服务」纪律）。库名走 TestDatabases 唯一化。
+
+验证（RED→GREEN）：
+- EchoApiIntegrationTest 5/5（先红：5 例全 401；后绿）
+- NewsApiIntegrationTest 4/4、KurosBackendApplicationTests 38/38、
+  InteractionBatchStateIntegrationTest 8/8——无回归

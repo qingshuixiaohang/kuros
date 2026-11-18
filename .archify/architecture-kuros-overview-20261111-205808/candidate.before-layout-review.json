@@ -1,0 +1,485 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Kuros 项目架构总览",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/qingshuixiaohang/kuros.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "d04efa476f8f424b5b31b920c788dfadb15f66f9"
+    },
+    "output": ".archify/architecture-kuros-overview-20261111-205808/kuros-architecture.html",
+    "views": [
+      {
+        "id": "request-entry",
+        "label": "请求入口",
+        "focus": ["browser", "frontend", "gateway", "user", "content"],
+        "note": "浏览器先到 Next.js，再进入 Gateway；认证与关注去用户服务，其余业务去内容服务。"
+      },
+      {
+        "id": "shared-state",
+        "label": "共享状态",
+        "focus": ["user", "content", "mysql", "redis", "storage"],
+        "note": "MySQL 保存权威记录，Redis 承载共享会话、缓存、互动计数与 Feed。"
+      },
+      {
+        "id": "async-search",
+        "label": "异步与搜索",
+        "focus": ["content", "mysql", "canal", "rocketmq", "elasticsearch"],
+        "note": "互动事件与 MySQL binlog 变更经 RocketMQ 回到内容服务，再投影到 Elasticsearch。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "browser",
+      "type": "external",
+      "label": "浏览器",
+      "sublabel": "使用 Cookie 与 React Query",
+      "tag": "用户入口",
+      "icon": "person",
+      "pos": [40, 380],
+      "size": [138, 82],
+      "sources": [
+        {
+          "path": "front/src/lib/api.ts",
+          "line": 131,
+          "end_line": 143,
+          "label": "浏览器请求与凭证"
+        }
+      ]
+    },
+    {
+      "id": "frontend",
+      "type": "frontend",
+      "label": "Next.js 前端",
+      "sublabel": "社区界面 + 查询缓存",
+      "tag": "端口 3000",
+      "pos": [250, 360],
+      "size": [180, 100],
+      "sources": [
+        {
+          "path": "front/src/lib/api.ts",
+          "line": 1,
+          "end_line": 8,
+          "label": "API 基地址"
+        },
+        {
+          "path": "front/src/components/community/community-provider.tsx",
+          "line": 1,
+          "end_line": 14,
+          "label": "React Query"
+        }
+      ]
+    },
+    {
+      "id": "gateway",
+      "type": "security",
+      "label": "Kuros Gateway",
+      "sublabel": "统一入口 + lb:// 路由",
+      "tag": "端口 8080",
+      "pos": [520, 360],
+      "size": [190, 100],
+      "sources": [
+        {
+          "path": "kuros-gateway/src/main/java/com/kuros/kurosgateway/GatewayRoutesConfig.java",
+          "line": 41,
+          "end_line": 61,
+          "label": "三条路由"
+        },
+        {
+          "path": "kuros-gateway/src/main/resources/application.properties",
+          "line": 1,
+          "end_line": 12,
+          "label": "服务名与 Nacos"
+        }
+      ]
+    },
+    {
+      "id": "user",
+      "type": "backend",
+      "label": "kuros-user",
+      "sublabel": "认证 · 会话 · RBAC · 关注",
+      "tag": "用户域",
+      "pos": [790, 190],
+      "size": [190, 100],
+      "sources": [
+        {
+          "path": "kuros-user/src/main/java/com/kuros/kurosuser/web/AuthController.java",
+          "line": 33,
+          "end_line": 92,
+          "label": "认证 API"
+        },
+        {
+          "path": "kuros-user/src/main/java/com/kuros/kurosuser/web/UserFollowController.java",
+          "line": 25,
+          "end_line": 49,
+          "label": "关注 API"
+        },
+        {
+          "path": "kuros-user/src/main/java/com/kuros/kurosuser/shared/config/SaTokenConfigure.java",
+          "line": 37,
+          "end_line": 93,
+          "label": "鉴权与 CSRF"
+        }
+      ]
+    },
+    {
+      "id": "content",
+      "type": "backend",
+      "label": "kuros-backend",
+      "sublabel": "帖子 · 评论 · 互动 · Feed · 媒体",
+      "tag": "内容域",
+      "pos": [790, 480],
+      "size": [205, 110],
+      "sources": [
+        {
+          "path": "kuros-backend/src/main/java/com/kuros/kurosbackend/post/web/CommunityPostController.java",
+          "line": 25,
+          "end_line": 78,
+          "label": "帖子 API"
+        },
+        {
+          "path": "kuros-backend/src/main/java/com/kuros/kurosbackend/interaction/web/PostInteractionController.java",
+          "line": 14,
+          "end_line": 49,
+          "label": "互动 API"
+        },
+        {
+          "path": "kuros-backend/src/main/java/com/kuros/kurosbackend/search/SearchController.java",
+          "line": 20,
+          "end_line": 54,
+          "label": "搜索 API"
+        }
+      ]
+    },
+    {
+      "id": "nacos",
+      "type": "cloud",
+      "label": "Nacos",
+      "sublabel": "注册发现 + 配置中心",
+      "tag": "8848",
+      "pos": [1010, 50],
+      "size": [180, 90],
+      "sources": [
+        {
+          "path": "kuros-backend/src/main/resources/application.properties",
+          "line": 13,
+          "end_line": 19,
+          "label": "backend 接入"
+        },
+        {
+          "path": "kuros-user/src/main/resources/application.properties",
+          "line": 6,
+          "end_line": 12,
+          "label": "user 接入"
+        },
+        {
+          "path": "kuros-gateway/src/main/resources/application.properties",
+          "line": 7,
+          "end_line": 12,
+          "label": "gateway 接入"
+        }
+      ]
+    },
+    {
+      "id": "mysql",
+      "type": "database",
+      "label": "MySQL",
+      "sublabel": "kuros + kuros_user",
+      "tag": "权威数据",
+      "pos": [400, 700],
+      "size": [185, 96],
+      "sources": [
+        {
+          "path": "kuros-backend/src/main/resources/application.properties",
+          "line": 43,
+          "end_line": 49,
+          "label": "内容库"
+        },
+        {
+          "path": "kuros-user/src/main/resources/application.properties",
+          "line": 25,
+          "end_line": 31,
+          "label": "用户库"
+        }
+      ]
+    },
+    {
+      "id": "redis",
+      "type": "database",
+      "label": "Redis",
+      "sublabel": "会话 · 缓存 · 计数 · Feed",
+      "tag": "共享状态",
+      "pos": [1020, 340],
+      "size": [180, 108],
+      "sources": [
+        {
+          "path": "kuros-backend/src/main/resources/application.properties",
+          "line": 71,
+          "end_line": 77,
+          "label": "backend 连接"
+        },
+        {
+          "path": "kuros-user/src/main/resources/application.properties",
+          "line": 35,
+          "end_line": 41,
+          "label": "user 连接"
+        },
+        {
+          "path": "kuros-backend/src/main/java/com/kuros/kurosbackend/shared/cache/TwoLevelCache.java",
+          "line": 20,
+          "end_line": 45,
+          "label": "两级缓存"
+        }
+      ]
+    },
+    {
+      "id": "storage",
+      "type": "database",
+      "label": "MinIO / 本地卷",
+      "sublabel": "StorageStrategy",
+      "tag": "媒体对象",
+      "pos": [680, 760],
+      "size": [205, 100],
+      "sources": [
+        {
+          "path": "kuros-backend/src/main/resources/application.properties",
+          "line": 176,
+          "end_line": 182,
+          "label": "存储配置"
+        },
+        {
+          "path": "kuros-backend/src/main/java/com/kuros/kurosbackend/media/storage/MinIOStorageStrategy.java",
+          "line": 36,
+          "end_line": 145,
+          "label": "MinIO 实现"
+        },
+        {
+          "path": "compose.yml",
+          "line": 64,
+          "end_line": 86,
+          "label": "MinIO 服务"
+        }
+      ]
+    },
+    {
+      "id": "rocketmq",
+      "type": "messagebus",
+      "label": "RocketMQ",
+      "sublabel": "互动事件 + CDC topic",
+      "tag": "异步",
+      "pos": [1020, 610],
+      "size": [180, 100],
+      "sources": [
+        {
+          "path": "kuros-backend/src/main/resources/application.properties",
+          "line": 86,
+          "end_line": 114,
+          "label": "事件与 CDC 绑定"
+        }
+      ]
+    },
+    {
+      "id": "elasticsearch",
+      "type": "database",
+      "label": "Elasticsearch",
+      "sublabel": "ik 分词 + 全文检索",
+      "tag": "搜索索引",
+      "pos": [1020, 800],
+      "size": [180, 100],
+      "sources": [
+        {
+          "path": "kuros-backend/src/main/resources/application.properties",
+          "line": 54,
+          "end_line": 67,
+          "label": "ES 连接"
+        },
+        {
+          "path": "kuros-backend/src/main/java/com/kuros/kurosbackend/search/SearchQueryService.java",
+          "line": 71,
+          "end_line": 89,
+          "label": "ES 查询"
+        },
+        {
+          "path": "kuros-backend/src/main/java/com/kuros/kurosbackend/search/SearchIndexManager.java",
+          "line": 115,
+          "end_line": 137,
+          "label": "索引与别名"
+        }
+      ]
+    },
+    {
+      "id": "canal",
+      "type": "backend",
+      "label": "Canal",
+      "sublabel": "订阅 posts / post_tags binlog",
+      "tag": "CDC",
+      "pos": [400, 880],
+      "size": [190, 100],
+      "sources": [
+        {
+          "path": "compose.yml",
+          "line": 428,
+          "end_line": 455,
+          "label": "binlog 订阅"
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "browser-to-frontend",
+      "from": "browser",
+      "to": "frontend",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "frontend-to-gateway",
+      "from": "frontend",
+      "to": "gateway",
+      "label": "REST /api/**",
+      "variant": "emphasis"
+    },
+    {
+      "id": "gateway-to-user",
+      "from": "gateway",
+      "to": "user",
+      "label": "认证 / 关注路由",
+      "variant": "emphasis"
+    },
+    {
+      "id": "gateway-to-content",
+      "from": "gateway",
+      "to": "content",
+      "label": "其余业务路由",
+      "variant": "emphasis"
+    },
+    {
+      "id": "content-to-user",
+      "from": "content",
+      "to": "user",
+      "label": "OpenFeign · 内部令牌",
+      "variant": "security"
+    },
+    {
+      "id": "gateway-to-nacos",
+      "from": "gateway",
+      "to": "nacos",
+      "label": "lb:// 服务查找",
+      "variant": "dashed"
+    },
+    {
+      "id": "user-to-nacos",
+      "from": "user",
+      "to": "nacos",
+      "label": "注册 · 配置",
+      "variant": "dashed"
+    },
+    {
+      "id": "content-to-nacos",
+      "from": "content",
+      "to": "nacos",
+      "label": "注册 · 配置",
+      "variant": "dashed"
+    },
+    {
+      "id": "user-to-mysql",
+      "from": "user",
+      "to": "mysql",
+      "label": "用户库 SQL"
+    },
+    {
+      "id": "content-to-mysql",
+      "from": "content",
+      "to": "mysql",
+      "label": "内容库 SQL"
+    },
+    {
+      "id": "user-to-redis",
+      "from": "user",
+      "to": "redis",
+      "label": "会话 · 权限"
+    },
+    {
+      "id": "content-to-redis",
+      "from": "content",
+      "to": "redis",
+      "label": "缓存 · 计数 · Feed"
+    },
+    {
+      "id": "content-to-mq",
+      "from": "content",
+      "to": "rocketmq",
+      "label": "互动事件发布",
+      "variant": "dashed"
+    },
+    {
+      "id": "mq-to-content",
+      "from": "rocketmq",
+      "to": "content",
+      "label": "投影 / CDC 消费",
+      "variant": "dashed"
+    },
+    {
+      "id": "mysql-to-canal",
+      "from": "mysql",
+      "to": "canal",
+      "label": "binlog",
+      "variant": "dashed"
+    },
+    {
+      "id": "canal-to-mq",
+      "from": "canal",
+      "to": "rocketmq",
+      "label": "kuros-post-cdc",
+      "variant": "dashed"
+    },
+    {
+      "id": "content-to-es",
+      "from": "content",
+      "to": "elasticsearch",
+      "label": "索引 / 查询"
+    },
+    {
+      "id": "content-to-storage",
+      "from": "content",
+      "to": "storage",
+      "label": "对象 I/O · minio 模式",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "请求先分清归属",
+      "items": [
+        "浏览器请求统一先进入 Gateway。",
+        "认证与关注路由进入 kuros-user。",
+        "其余业务进入 kuros-backend；作者信息再由 Feign 回查用户服务。"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "共享状态各司其职",
+      "items": [
+        "MySQL 是用户、内容和互动关系的权威记录。",
+        "Redis 保存跨实例共享的会话、权限、缓存、互动计数与 Feed ZSet。",
+        "媒体文件进入本地卷或 MinIO，搜索索引进入 Elasticsearch。"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "异步链路",
+      "items": [
+        "点赞收藏先更新 Redis，再把事件发布到 RocketMQ。",
+        "消费者按 postId 顺序投影到 MySQL；投递失败时写路径可同步降级。",
+        "Canal 读取 MySQL binlog，经 RocketMQ 通知 backend 更新 ES 索引。"
+      ]
+    }
+  ]
+}

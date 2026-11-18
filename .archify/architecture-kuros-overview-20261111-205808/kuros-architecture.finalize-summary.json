@@ -1,0 +1,270 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\candidate.json",
+    "sha256": "deee61e58132ed0fc98c5d4f2ad2c9031ef2ec20d69f5d4f7b766a0909377623",
+    "bytes": 12925
+  },
+  "artifact": {
+    "path": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\kuros-architecture.html",
+    "sha256": "0ab1776772f75ff1eac8016a705c71f4c0117b68dc20e158ea12fa019d50f39f",
+    "bytes": 871427
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\kuros-architecture.finalize.json",
+    "summaryReceipt": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\kuros-architecture.finalize-summary.json",
+    "browserCheckReceipt": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\kuros-architecture.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-11-11T12:43:50.229Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 3025,
+  "browserCheck": {
+    "requested": true,
+    "ran": true
+  },
+  "visualReviewRecommendation": {
+    "action": "inspect-route-readability",
+    "signals": {
+      "resolvedCrossovers": 7,
+      "routesOverSuggestedBends": 3
+    },
+    "reason": "Automated gates passed, but crossings or detours still need perceptual review before claiming visual quality.",
+    "affectedRoutes": {
+      "crossings": [
+        {
+          "left": {
+            "id": "frontend-to-gateway",
+            "from": "frontend",
+            "to": "gateway",
+            "label": "REST /api/**",
+            "collectionIndex": 1,
+            "artifactIndex": 2
+          },
+          "right": {
+            "id": "user-to-mysql",
+            "from": "user",
+            "to": "mysql",
+            "label": "用户库 SQL",
+            "collectionIndex": 8,
+            "artifactIndex": 9
+          },
+          "point": [
+            513.8,
+            410
+          ]
+        },
+        {
+          "left": {
+            "id": "gateway-to-user",
+            "from": "gateway",
+            "to": "user",
+            "label": "认证 / 关注路由",
+            "collectionIndex": 2,
+            "artifactIndex": 3
+          },
+          "right": {
+            "id": "user-to-mysql",
+            "from": "user",
+            "to": "mysql",
+            "label": "用户库 SQL",
+            "collectionIndex": 8,
+            "artifactIndex": 9
+          },
+          "point": [
+            694,
+            357
+          ],
+          "sharedNode": "user"
+        },
+        {
+          "left": {
+            "id": "content-to-user",
+            "from": "content",
+            "to": "user",
+            "label": "OpenFeign · 内部令牌",
+            "collectionIndex": 4,
+            "artifactIndex": 5
+          },
+          "right": {
+            "id": "content-to-nacos",
+            "from": "content",
+            "to": "nacos",
+            "label": "注册 · 配置",
+            "collectionIndex": 7,
+            "artifactIndex": 8
+          },
+          "point": [
+            899.5,
+            456
+          ],
+          "sharedNode": "content"
+        },
+        {
+          "left": {
+            "id": "gateway-to-nacos",
+            "from": "gateway",
+            "to": "nacos",
+            "label": "lb:// 服务查找",
+            "collectionIndex": 5,
+            "artifactIndex": 6
+          },
+          "right": {
+            "id": "user-to-mysql",
+            "from": "user",
+            "to": "mysql",
+            "label": "用户库 SQL",
+            "collectionIndex": 8,
+            "artifactIndex": 9
+          },
+          "point": [
+            615,
+            357
+          ]
+        },
+        {
+          "left": {
+            "id": "user-to-nacos",
+            "from": "user",
+            "to": "nacos",
+            "label": "注册 · 配置",
+            "collectionIndex": 6,
+            "artifactIndex": 7
+          },
+          "right": {
+            "id": "content-to-nacos",
+            "from": "content",
+            "to": "nacos",
+            "label": "注册 · 配置",
+            "collectionIndex": 7,
+            "artifactIndex": 8
+          },
+          "point": [
+            1003,
+            233
+          ],
+          "sharedNode": "nacos"
+        },
+        {
+          "left": {
+            "id": "content-to-nacos",
+            "from": "content",
+            "to": "nacos",
+            "label": "注册 · 配置",
+            "collectionIndex": 7,
+            "artifactIndex": 8
+          },
+          "right": {
+            "id": "user-to-redis",
+            "from": "user",
+            "to": "redis",
+            "label": "会话 · 权限",
+            "collectionIndex": 10,
+            "artifactIndex": 11
+          },
+          "point": [
+            1003,
+            274
+          ]
+        },
+        {
+          "left": {
+            "id": "canal-to-mq",
+            "from": "canal",
+            "to": "rocketmq",
+            "label": "kuros-post-cdc",
+            "collectionIndex": 15,
+            "artifactIndex": 16
+          },
+          "right": {
+            "id": "content-to-es",
+            "from": "content",
+            "to": "elasticsearch",
+            "label": "索引 / 查询",
+            "collectionIndex": 16,
+            "artifactIndex": 17
+          },
+          "point": [
+            968.35,
+            850
+          ]
+        }
+      ],
+      "detours": [
+        {
+          "relationship": {
+            "id": "content-to-user",
+            "from": "content",
+            "to": "user",
+            "label": "OpenFeign · 内部令牌",
+            "collectionIndex": 4,
+            "artifactIndex": 5
+          },
+          "bends": 4,
+          "stretch": 1.163
+        },
+        {
+          "relationship": {
+            "id": "content-to-nacos",
+            "from": "content",
+            "to": "nacos",
+            "label": "注册 · 配置",
+            "collectionIndex": 7,
+            "artifactIndex": 8
+          },
+          "bends": 4,
+          "stretch": 1
+        },
+        {
+          "relationship": {
+            "id": "user-to-mysql",
+            "from": "user",
+            "to": "mysql",
+            "label": "用户库 SQL",
+            "collectionIndex": 8,
+            "artifactIndex": 9
+          },
+          "bends": 4,
+          "stretch": 1
+        }
+      ],
+      "truncated": false
+    },
+    "hints": [
+      "frontend → gateway crosses user → mysql: move the node of whichever is a branch, return, or second entrance to the other side of the main path, so that relationship runs through an empty corridor.",
+      "gateway → user and user → mysql cross next to user: move node gateway or mysql so the two reach user from different sides (for example one level with it, one directly above or below it).",
+      "content → user and content → nacos cross next to content: move node user or nacos so the two reach content from different sides (for example one level with it, one directly above or below it).",
+      "gateway → nacos crosses user → mysql: move the node of whichever is a branch, return, or second entrance to the other side of the main path, so that relationship runs through an empty corridor.",
+      "user → nacos and content → nacos cross next to nacos: move node user or content so the two reach nacos from different sides (for example one level with it, one directly above or below it).",
+      "content → nacos crosses user → redis: move the node of whichever is a branch, return, or second entrance to the other side of the main path, so that relationship runs through an empty corridor.",
+      "canal → rocketmq crosses content → elasticsearch: move the node of whichever is a branch, return, or second entrance to the other side of the main path, so that relationship runs through an empty corridor.",
+      "content → user needs 4 bends: move node content or user so they share a row or column with matching centers, or sit diagonally with a clear corner."
+    ],
+    "repair": "Trace these relationships at the desktop viewport. For Architecture, use references/architecture-layout-repair.md: reflow a blocked main path or tangled connected scene, and repair an isolated defect locally only when the surrounding composition is accepted. Preserve all semantic content and user-fixed geometry. Rerun finalize once after the edit."
+  }
+}

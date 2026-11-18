@@ -1,0 +1,483 @@
+2026-10-21T18:43:14.954+08:00  INFO 40076 --- [kuros-gateway] [      Thread-20] c.a.nacos.common.notify.NotifyCenter     : [NotifyCenter] Start destroying Publisher
+2026-10-21T18:43:14.954+08:00  INFO 40076 --- [kuros-gateway] [      Thread-18] c.a.n.common.http.HttpClientBeanHolder   : [HttpClientBeanHolder] Start destroying common HttpClient
+2026-10-21T18:43:14.954+08:00  INFO 40076 --- [kuros-gateway] [      Thread-12] c.a.n.common.executor.ThreadPoolManager  : [ThreadPoolManager] Start destroying ThreadPool
+2026-10-21T18:43:14.954+08:00  INFO 40076 --- [kuros-gateway] [      Thread-20] c.a.nacos.common.notify.NotifyCenter     : [NotifyCenter] Completed destruction of Publisher
+2026-10-21T18:43:14.954+08:00  INFO 40076 --- [kuros-gateway] [      Thread-12] c.a.n.common.executor.ThreadPoolManager  : [ThreadPoolManager] Completed destruction of ThreadPool
+2026-10-21T18:43:14.955+08:00  INFO 40076 --- [kuros-gateway] [      Thread-18] c.a.n.common.http.HttpClientBeanHolder   : [HttpClientBeanHolder] Completed destruction of HttpClient
+2026-10-21T18:43:14.957+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] c.a.c.n.registry.NacosServiceRegistry    : De-registering from Nacos Server now...
+2026-10-21T18:43:14.957+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.client.naming          : [DEREGISTER-SERVICE] public deregistering service kuros-gateway with instance: Instance{instanceId='null', ip='192.168.232.1', port=49828, weight=1.0, healthy=true, enabled=true, ephemeral=true, clusterName='', serviceName='null', metadata={}}
+2026-10-21T18:43:15.059+08:00 ERROR 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.common.remote.client   : Send request fail, request = InstanceRequest{headers={app=unknown}, requestId='null'}, retryTimes = 0, errorMessage = Client not connected, current status:UNHEALTHY
+2026-10-21T18:43:15.090+08:00  INFO 40076 --- [kuros-gateway] [remote.worker.1] c.a.n.c.remote.client.grpc.GrpcClient    : grpc client connection server: localhost ip, serverPort: 9848, grpcTslConfig: {"enableTls":false,"mutualAuthEnable":false,"trustAll":true}
+2026-10-21T18:43:15.106+08:00 ERROR 40076 --- [kuros-gateway] [remote.worker.1] c.a.n.c.remote.client.grpc.GrpcClient    : Server check fail, please check server localhost, port 9848 is available, error ={}
+
+java.util.concurrent.ExecutionException: com.alibaba.nacos.shaded.io.grpc.StatusRuntimeException: UNAVAILABLE: io exception
+	at com.alibaba.nacos.shaded.com.google.common.util.concurrent.AbstractFuture.getDoneValue(AbstractFuture.java:596) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.com.google.common.util.concurrent.AbstractFuture.get(AbstractFuture.java:471) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.grpc.GrpcClient.serverCheck(GrpcClient.java:234) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.grpc.GrpcClient.connectToServer(GrpcClient.java:346) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.reconnect(RpcClient.java:504) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.lambda$start$1(RpcClient.java:330) ~[nacos-client-3.1.1.jar:na]
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:572) ~[na:na]
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317) ~[na:na]
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:304) ~[na:na]
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) ~[na:na]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) ~[na:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+Caused by: com.alibaba.nacos.shaded.io.grpc.StatusRuntimeException: UNAVAILABLE: io exception
+	at com.alibaba.nacos.shaded.io.grpc.Status.asRuntimeException(Status.java:532) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.stub.ClientCalls$UnaryStreamToFuture.onClose(ClientCalls.java:638) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener$3.run(DelayedClientCall.java:487) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener.delayOrExecute(DelayedClientCall.java:451) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener.onClose(DelayedClientCall.java:484) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl.closeObserver(ClientCallImpl.java:565) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl.access$100(ClientCallImpl.java:72) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInternal(ClientCallImpl.java:733) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInContext(ClientCallImpl.java:714) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ContextRunnable.run(ContextRunnable.java:37) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.SerializingExecutor.run(SerializingExecutor.java:133) ~[nacos-client-3.1.1.jar:na]
+	... 3 common frames omitted
+Caused by: com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: getsockopt: localhost/[0:0:0:0:0:0:0:1]:9848
+Caused by: java.net.ConnectException: Connection refused: getsockopt
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method) ~[na:na]
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:694) ~[na:na]
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:973) ~[na:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.socket.nio.NioSocketChannel.doFinishConnect(NioSocketChannel.java:336) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.finishConnect(AbstractNioChannel.java:339) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKey(NioEventLoop.java:784) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKeysOptimized(NioEventLoop.java:732) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKeys(NioEventLoop.java:658) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.run(NioEventLoop.java:562) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.concurrent.SingleThreadEventExecutor$4.run(SingleThreadEventExecutor.java:998) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30) ~[nacos-client-3.1.1.jar:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+
+2026-10-21T18:43:15.106+08:00  INFO 40076 --- [kuros-gateway] [remote.worker.1] com.alibaba.nacos.common.remote.client   : [ce692122-c27d-40fa-bb74-b10f0f01a942_config-0] Fail to connect server, after trying 11 times, last try server is {serverIp = 'localhost', server main port = 8848}, error = unknown
+2026-10-21T18:43:15.129+08:00  INFO 40076 --- [kuros-gateway] [remote.worker.1] c.a.n.c.remote.client.grpc.GrpcClient    : grpc client connection server: 127.0.0.1 ip, serverPort: 29848, grpcTslConfig: {"enableTls":false,"mutualAuthEnable":false,"trustAll":true}
+2026-10-21T18:43:15.130+08:00  INFO 40076 --- [kuros-gateway] [remote.worker.1] c.a.n.c.remote.client.grpc.GrpcClient    : grpc client connection server: 127.0.0.1 ip, serverPort: 29848, grpcTslConfig: {"enableTls":false,"mutualAuthEnable":false,"trustAll":true}
+2026-10-21T18:43:15.132+08:00 ERROR 40076 --- [kuros-gateway] [remote.worker.1] c.a.n.c.remote.client.grpc.GrpcClient    : Server check fail, please check server 127.0.0.1, port 29848 is available, error ={}
+
+java.util.concurrent.ExecutionException: com.alibaba.nacos.shaded.io.grpc.StatusRuntimeException: UNAVAILABLE: io exception
+	at com.alibaba.nacos.shaded.com.google.common.util.concurrent.AbstractFuture.getDoneValue(AbstractFuture.java:596) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.com.google.common.util.concurrent.AbstractFuture.get(AbstractFuture.java:471) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.grpc.GrpcClient.serverCheck(GrpcClient.java:234) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.grpc.GrpcClient.connectToServer(GrpcClient.java:346) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.reconnect(RpcClient.java:504) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.lambda$start$1(RpcClient.java:330) ~[nacos-client-3.1.1.jar:na]
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:572) ~[na:na]
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317) ~[na:na]
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:304) ~[na:na]
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) ~[na:na]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) ~[na:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+Caused by: com.alibaba.nacos.shaded.io.grpc.StatusRuntimeException: UNAVAILABLE: io exception
+	at com.alibaba.nacos.shaded.io.grpc.Status.asRuntimeException(Status.java:532) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.stub.ClientCalls$UnaryStreamToFuture.onClose(ClientCalls.java:638) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener$3.run(DelayedClientCall.java:487) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener.delayOrExecute(DelayedClientCall.java:451) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener.onClose(DelayedClientCall.java:484) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl.closeObserver(ClientCallImpl.java:565) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl.access$100(ClientCallImpl.java:72) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInternal(ClientCallImpl.java:733) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInContext(ClientCallImpl.java:714) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ContextRunnable.run(ContextRunnable.java:37) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.SerializingExecutor.run(SerializingExecutor.java:133) ~[nacos-client-3.1.1.jar:na]
+	... 3 common frames omitted
+Caused by: com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: getsockopt: /127.0.0.1:29848
+Caused by: java.net.ConnectException: Connection refused: getsockopt
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method) ~[na:na]
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:694) ~[na:na]
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:973) ~[na:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.socket.nio.NioSocketChannel.doFinishConnect(NioSocketChannel.java:336) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.finishConnect(AbstractNioChannel.java:339) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKey(NioEventLoop.java:784) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKeysOptimized(NioEventLoop.java:732) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKeys(NioEventLoop.java:658) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.run(NioEventLoop.java:562) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.concurrent.SingleThreadEventExecutor$4.run(SingleThreadEventExecutor.java:998) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30) ~[nacos-client-3.1.1.jar:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+
+2026-10-21T18:43:15.132+08:00 ERROR 40076 --- [kuros-gateway] [remote.worker.1] c.a.n.c.remote.client.grpc.GrpcClient    : Server check fail, please check server 127.0.0.1, port 29848 is available, error ={}
+
+java.util.concurrent.ExecutionException: com.alibaba.nacos.shaded.io.grpc.StatusRuntimeException: UNAVAILABLE: io exception
+	at com.alibaba.nacos.shaded.com.google.common.util.concurrent.AbstractFuture.getDoneValue(AbstractFuture.java:596) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.com.google.common.util.concurrent.AbstractFuture.get(AbstractFuture.java:471) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.grpc.GrpcClient.serverCheck(GrpcClient.java:234) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.grpc.GrpcClient.connectToServer(GrpcClient.java:346) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.reconnect(RpcClient.java:504) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.lambda$start$1(RpcClient.java:330) ~[nacos-client-3.1.1.jar:na]
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:572) ~[na:na]
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317) ~[na:na]
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:304) ~[na:na]
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) ~[na:na]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) ~[na:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+Caused by: com.alibaba.nacos.shaded.io.grpc.StatusRuntimeException: UNAVAILABLE: io exception
+	at com.alibaba.nacos.shaded.io.grpc.Status.asRuntimeException(Status.java:532) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.stub.ClientCalls$UnaryStreamToFuture.onClose(ClientCalls.java:638) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener$3.run(DelayedClientCall.java:487) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener.delayOrExecute(DelayedClientCall.java:451) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener.onClose(DelayedClientCall.java:484) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl.closeObserver(ClientCallImpl.java:565) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl.access$100(ClientCallImpl.java:72) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInternal(ClientCallImpl.java:733) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInContext(ClientCallImpl.java:714) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ContextRunnable.run(ContextRunnable.java:37) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.SerializingExecutor.run(SerializingExecutor.java:133) ~[nacos-client-3.1.1.jar:na]
+	... 3 common frames omitted
+Caused by: com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: getsockopt: /127.0.0.1:29848
+Caused by: java.net.ConnectException: Connection refused: getsockopt
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method) ~[na:na]
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:694) ~[na:na]
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:973) ~[na:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.socket.nio.NioSocketChannel.doFinishConnect(NioSocketChannel.java:336) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.finishConnect(AbstractNioChannel.java:339) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKey(NioEventLoop.java:784) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKeysOptimized(NioEventLoop.java:732) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKeys(NioEventLoop.java:658) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.run(NioEventLoop.java:562) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.concurrent.SingleThreadEventExecutor$4.run(SingleThreadEventExecutor.java:998) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30) ~[nacos-client-3.1.1.jar:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+
+2026-10-21T18:43:15.133+08:00  INFO 40076 --- [kuros-gateway] [remote.worker.1] com.alibaba.nacos.common.remote.client   : [126d7b91-3af2-41b1-bb70-10dbb4664991] Fail to connect server, after trying 6 times, last try server is {serverIp = '127.0.0.1', server main port = 28848}, error = unknown
+2026-10-21T18:43:15.133+08:00  INFO 40076 --- [kuros-gateway] [remote.worker.1] com.alibaba.nacos.common.remote.client   : [5610bd56-96e3-4f0d-9ea8-54284517383d] Fail to connect server, after trying 6 times, last try server is {serverIp = '127.0.0.1', server main port = 28848}, error = unknown
+2026-10-21T18:43:15.160+08:00 ERROR 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.common.remote.client   : Send request fail, request = InstanceRequest{headers={app=unknown}, requestId='null'}, retryTimes = 1, errorMessage = Client not connected, current status:UNHEALTHY
+2026-10-21T18:43:15.265+08:00 ERROR 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.common.remote.client   : Send request fail, request = InstanceRequest{headers={app=unknown}, requestId='null'}, retryTimes = 2, errorMessage = Client not connected, current status:UNHEALTHY
+2026-10-21T18:43:15.332+08:00  INFO 40076 --- [kuros-gateway] [ing.grpc.redo.0] com.alibaba.nacos.client.naming          : Redo instance operation REMOVE for DEFAULT_GROUP@@kuros-backend
+2026-10-21T18:43:15.369+08:00 ERROR 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.common.remote.client   : Send request fail, request = InstanceRequest{headers={app=unknown}, requestId='null'}, retryTimes = 3, errorMessage = Client not connected, current status:UNHEALTHY
+2026-10-21T18:43:15.382+08:00 ERROR 40076 --- [kuros-gateway] [ionShutdownHook] c.a.c.n.registry.NacosServiceRegistry    : ERR_NACOS_DEREGISTER, de-register failed...NacosRegistration{nacosDiscoveryProperties=NacosDiscoveryProperties{serverAddr='127.0.0.1:28848', username='******', password='******', endpoint='', namespace='', watchDelay=30000, logName='', service='kuros-gateway', weight=1.0, clusterName='', group='DEFAULT_GROUP', namingLoadCacheAtStart='false', metadata={IPv6=null, preserved.register.source=SPRING_CLOUD}, registerEnabled=true, ip='192.168.232.1', networkInterface='', port=49828, secure=false, accessKey='', secretKey='', heartBeatInterval=null, heartBeatTimeout=null, ipDeleteTimeout=null, instanceEnabled=true, ephemeral=true, failureToleranceEnabled=false}, ipDeleteTimeout=null, failFast=true}},
+
+ErrCode:-401, ErrMsg:Client not connected, current status:UNHEALTHY
+	at com.alibaba.nacos.common.remote.client.RpcClient.request(RpcClient.java:647) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.request(RpcClient.java:626) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.client.naming.remote.gprc.NamingGrpcClientProxy.requestToServer(NamingGrpcClientProxy.java:482) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.client.naming.remote.gprc.NamingGrpcClientProxy.doDeregisterService(NamingGrpcClientProxy.java:324) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.client.naming.remote.gprc.NamingGrpcClientProxy.deregisterServiceForEphemeral(NamingGrpcClientProxy.java:309) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.client.naming.remote.gprc.NamingGrpcClientProxy.deregisterService(NamingGrpcClientProxy.java:291) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.client.naming.remote.NamingClientProxyDelegate.deregisterService(NamingClientProxyDelegate.java:125) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.client.naming.NacosNamingService.deregisterInstance(NacosNamingService.java:227) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.client.naming.NacosNamingService.deregisterInstance(NacosNamingService.java:215) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.cloud.nacos.registry.NacosServiceRegistry.deregister(NacosServiceRegistry.java:106) ~[spring-cloud-starter-alibaba-nacos-discovery-2025.1.0.0.jar:2025.1.0.0]
+	at org.springframework.cloud.client.serviceregistry.AbstractAutoServiceRegistration.deregister(AbstractAutoServiceRegistration.java:280) ~[spring-cloud-commons-5.0.1.jar:5.0.1]
+	at org.springframework.cloud.client.serviceregistry.AbstractAutoServiceRegistration.stop(AbstractAutoServiceRegistration.java:298) ~[spring-cloud-commons-5.0.1.jar:5.0.1]
+	at com.alibaba.cloud.nacos.registry.NacosGracefulShutdownDelegate.doGracefulShutdown(NacosGracefulShutdownDelegate.java:69) ~[spring-cloud-starter-alibaba-nacos-discovery-2025.1.0.0.jar:2025.1.0.0]
+	at com.alibaba.cloud.nacos.registry.NacosGracefulShutdownDelegate.onApplicationEvent(NacosGracefulShutdownDelegate.java:64) ~[spring-cloud-starter-alibaba-nacos-discovery-2025.1.0.0.jar:2025.1.0.0]
+	at com.alibaba.cloud.nacos.registry.NacosGracefulShutdownDelegate.onApplicationEvent(NacosGracefulShutdownDelegate.java:34) ~[spring-cloud-starter-alibaba-nacos-discovery-2025.1.0.0.jar:2025.1.0.0]
+	at org.springframework.context.event.SimpleApplicationEventMulticaster.doInvokeListener(SimpleApplicationEventMulticaster.java:180) ~[spring-context-7.0.9.jar:7.0.9]
+	at org.springframework.context.event.SimpleApplicationEventMulticaster.invokeListener(SimpleApplicationEventMulticaster.java:173) ~[spring-context-7.0.9.jar:7.0.9]
+	at org.springframework.context.event.SimpleApplicationEventMulticaster.multicastEvent(SimpleApplicationEventMulticaster.java:151) ~[spring-context-7.0.9.jar:7.0.9]
+	at org.springframework.context.support.AbstractApplicationContext.publishEvent(AbstractApplicationContext.java:448) ~[spring-context-7.0.9.jar:7.0.9]
+	at org.springframework.context.support.AbstractApplicationContext.publishEvent(AbstractApplicationContext.java:381) ~[spring-context-7.0.9.jar:7.0.9]
+	at org.springframework.context.support.AbstractApplicationContext.doClose(AbstractApplicationContext.java:1190) ~[spring-context-7.0.9.jar:7.0.9]
+	at org.springframework.boot.web.server.reactive.context.ReactiveWebServerApplicationContext.doClose(ReactiveWebServerApplicationContext.java:158) ~[spring-boot-web-server-4.1.1.jar:4.1.1]
+	at org.springframework.context.support.AbstractApplicationContext.close(AbstractApplicationContext.java:1153) ~[spring-context-7.0.9.jar:7.0.9]
+	at org.springframework.boot.SpringApplicationShutdownHook.closeAndWait(SpringApplicationShutdownHook.java:147) ~[spring-boot-4.1.1.jar:4.1.1]
+	at java.base/java.lang.Iterable.forEach(Iterable.java:75) ~[na:na]
+	at org.springframework.boot.SpringApplicationShutdownHook.run(SpringApplicationShutdownHook.java:116) ~[spring-boot-4.1.1.jar:4.1.1]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+
+2026-10-21T18:43:15.382+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] c.a.c.n.registry.NacosServiceRegistry    : De-registration finished.
+2026-10-21T18:43:15.383+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.client.naming          : com.alibaba.nacos.client.naming.cache.ServiceInfoHolder do shutdown begin
+2026-10-21T18:43:15.383+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.client.naming          : com.alibaba.nacos.client.naming.backups.FailoverReactor do shutdown begin
+2026-10-21T18:43:15.383+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.client.naming          : com.alibaba.nacos.client.naming.backups.FailoverReactor do shutdown stop
+2026-10-21T18:43:15.383+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.client.naming          : com.alibaba.nacos.client.naming.cache.ServiceInfoHolder do shutdown stop
+2026-10-21T18:43:15.383+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.client.naming          : com.alibaba.nacos.client.naming.remote.NamingClientProxyDelegate do shutdown begin
+2026-10-21T18:43:15.383+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.client.naming          : com.alibaba.nacos.client.naming.core.ServiceInfoUpdateService do shutdown begin
+2026-10-21T18:43:15.383+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.client.naming          : com.alibaba.nacos.client.naming.core.ServiceInfoUpdateService do shutdown stop
+2026-10-21T18:43:15.383+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] c.a.n.c.a.AbstractServerListManager      : com.alibaba.nacos.client.naming.core.NamingServerListManager do shutdown begin
+2026-10-21T18:43:15.383+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] c.a.n.c.a.AbstractServerListManager      : com.alibaba.nacos.client.naming.core.NamingServerListManager do shutdown stop
+2026-10-21T18:43:15.383+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.client.naming          : com.alibaba.nacos.client.naming.remote.http.NamingHttpClientProxy do shutdown begin
+2026-10-21T18:43:15.383+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.client.naming          : [NamingHttpClientManager] Start destroying NacosRestTemplate
+2026-10-21T18:43:15.383+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.client.naming          : [NamingHttpClientManager] Completed destruction of NacosRestTemplate
+2026-10-21T18:43:15.383+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.client.naming          : com.alibaba.nacos.client.naming.remote.http.NamingHttpClientProxy do shutdown stop
+2026-10-21T18:43:15.383+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.client.naming          : Shutdown naming grpc client proxy for  uuid->5610bd56-96e3-4f0d-9ea8-54284517383d
+2026-10-21T18:43:15.383+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.client.naming          : Shutdown grpc redo service executor java.util.concurrent.ScheduledThreadPoolExecutor@7e93e396[Running, pool size = 1, active threads = 0, queued tasks = 1, completed tasks = 1]
+2026-10-21T18:43:15.383+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.common.remote.client   : Shutdown rpc client, set status to shutdown
+2026-10-21T18:43:15.383+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.common.remote.client   : Shutdown client event executor java.util.concurrent.ScheduledThreadPoolExecutor@6f999cf4[Running, pool size = 2, active threads = 2, queued tasks = 0, completed tasks = 0]
+2026-10-21T18:43:15.383+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.common.remote.client   : Close current connection 1792579391528_172.17.0.1_39210
+2026-10-21T18:43:15.384+08:00  INFO 40076 --- [kuros-gateway] [remote.worker.1] com.alibaba.nacos.common.remote.client   : [5610bd56-96e3-4f0d-9ea8-54284517383d] Client is shutdown, stop reconnect to server
+2026-10-21T18:43:15.384+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] c.a.n.c.remote.client.grpc.GrpcClient    : Shutdown grpc executor java.util.concurrent.ThreadPoolExecutor@51c7d472[Running, pool size = 8, active threads = 0, queued tasks = 0, completed tasks = 54]
+2026-10-21T18:43:15.384+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.client.naming          : shutdown and remove naming rpc client  for uuid ->5610bd56-96e3-4f0d-9ea8-54284517383d
+2026-10-21T18:43:15.385+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] c.a.n.c.a.r.identify.CredentialWatcher   : [null] CredentialWatcher is stopped
+2026-10-21T18:43:15.385+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] c.a.n.c.a.r.identify.CredentialService   : [null] CredentialService is freed
+2026-10-21T18:43:15.385+08:00  INFO 40076 --- [kuros-gateway] [ionShutdownHook] com.alibaba.nacos.client.naming          : com.alibaba.nacos.client.naming.remote.NamingClientProxyDelegate do shutdown stop
+2026-10-21T18:43:15.836+08:00  INFO 40076 --- [kuros-gateway] [remote.worker.1] c.a.n.c.remote.client.grpc.GrpcClient    : grpc client connection server: 127.0.0.1 ip, serverPort: 29848, grpcTslConfig: {"enableTls":false,"mutualAuthEnable":false,"trustAll":true}
+2026-10-21T18:43:15.840+08:00 ERROR 40076 --- [kuros-gateway] [remote.worker.1] c.a.n.c.remote.client.grpc.GrpcClient    : Server check fail, please check server 127.0.0.1, port 29848 is available, error ={}
+
+java.util.concurrent.ExecutionException: com.alibaba.nacos.shaded.io.grpc.StatusRuntimeException: UNAVAILABLE: io exception
+	at com.alibaba.nacos.shaded.com.google.common.util.concurrent.AbstractFuture.getDoneValue(AbstractFuture.java:596) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.com.google.common.util.concurrent.AbstractFuture.get(AbstractFuture.java:471) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.grpc.GrpcClient.serverCheck(GrpcClient.java:234) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.grpc.GrpcClient.connectToServer(GrpcClient.java:346) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.reconnect(RpcClient.java:504) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.lambda$start$1(RpcClient.java:330) ~[nacos-client-3.1.1.jar:na]
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:572) ~[na:na]
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317) ~[na:na]
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:304) ~[na:na]
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) ~[na:na]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) ~[na:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+Caused by: com.alibaba.nacos.shaded.io.grpc.StatusRuntimeException: UNAVAILABLE: io exception
+	at com.alibaba.nacos.shaded.io.grpc.Status.asRuntimeException(Status.java:532) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.stub.ClientCalls$UnaryStreamToFuture.onClose(ClientCalls.java:638) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener$3.run(DelayedClientCall.java:487) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener.delayOrExecute(DelayedClientCall.java:451) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener.onClose(DelayedClientCall.java:484) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl.closeObserver(ClientCallImpl.java:565) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl.access$100(ClientCallImpl.java:72) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInternal(ClientCallImpl.java:733) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInContext(ClientCallImpl.java:714) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ContextRunnable.run(ContextRunnable.java:37) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.SerializingExecutor.run(SerializingExecutor.java:133) ~[nacos-client-3.1.1.jar:na]
+	... 3 common frames omitted
+Caused by: com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: getsockopt: /127.0.0.1:29848
+Caused by: java.net.ConnectException: Connection refused: getsockopt
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method) ~[na:na]
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:694) ~[na:na]
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:973) ~[na:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.socket.nio.NioSocketChannel.doFinishConnect(NioSocketChannel.java:336) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.finishConnect(AbstractNioChannel.java:339) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKey(NioEventLoop.java:784) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKeysOptimized(NioEventLoop.java:732) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKeys(NioEventLoop.java:658) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.run(NioEventLoop.java:562) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.concurrent.SingleThreadEventExecutor$4.run(SingleThreadEventExecutor.java:998) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30) ~[nacos-client-3.1.1.jar:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+
+2026-10-21T18:43:15.841+08:00  INFO 40076 --- [kuros-gateway] [remote.worker.1] com.alibaba.nacos.common.remote.client   : [126d7b91-3af2-41b1-bb70-10dbb4664991] Fail to connect server, after trying 7 times, last try server is {serverIp = '127.0.0.1', server main port = 28848}, error = unknown
+2026-10-21T18:43:16.308+08:00  INFO 40076 --- [kuros-gateway] [remote.worker.1] c.a.n.c.remote.client.grpc.GrpcClient    : grpc client connection server: localhost ip, serverPort: 9848, grpcTslConfig: {"enableTls":false,"mutualAuthEnable":false,"trustAll":true}
+2026-10-21T18:43:16.312+08:00 ERROR 40076 --- [kuros-gateway] [remote.worker.1] c.a.n.c.remote.client.grpc.GrpcClient    : Server check fail, please check server localhost, port 9848 is available, error ={}
+
+java.util.concurrent.ExecutionException: com.alibaba.nacos.shaded.io.grpc.StatusRuntimeException: UNAVAILABLE: io exception
+	at com.alibaba.nacos.shaded.com.google.common.util.concurrent.AbstractFuture.getDoneValue(AbstractFuture.java:596) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.com.google.common.util.concurrent.AbstractFuture.get(AbstractFuture.java:471) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.grpc.GrpcClient.serverCheck(GrpcClient.java:234) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.grpc.GrpcClient.connectToServer(GrpcClient.java:346) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.reconnect(RpcClient.java:504) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.lambda$start$1(RpcClient.java:330) ~[nacos-client-3.1.1.jar:na]
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:572) ~[na:na]
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317) ~[na:na]
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:304) ~[na:na]
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) ~[na:na]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) ~[na:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+Caused by: com.alibaba.nacos.shaded.io.grpc.StatusRuntimeException: UNAVAILABLE: io exception
+	at com.alibaba.nacos.shaded.io.grpc.Status.asRuntimeException(Status.java:532) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.stub.ClientCalls$UnaryStreamToFuture.onClose(ClientCalls.java:638) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener$3.run(DelayedClientCall.java:487) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener.delayOrExecute(DelayedClientCall.java:451) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener.onClose(DelayedClientCall.java:484) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl.closeObserver(ClientCallImpl.java:565) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl.access$100(ClientCallImpl.java:72) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInternal(ClientCallImpl.java:733) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInContext(ClientCallImpl.java:714) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ContextRunnable.run(ContextRunnable.java:37) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.SerializingExecutor.run(SerializingExecutor.java:133) ~[nacos-client-3.1.1.jar:na]
+	... 3 common frames omitted
+Caused by: com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: getsockopt: localhost/[0:0:0:0:0:0:0:1]:9848
+Caused by: java.net.ConnectException: Connection refused: getsockopt
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method) ~[na:na]
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:694) ~[na:na]
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:973) ~[na:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.socket.nio.NioSocketChannel.doFinishConnect(NioSocketChannel.java:336) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.finishConnect(AbstractNioChannel.java:339) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKey(NioEventLoop.java:784) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKeysOptimized(NioEventLoop.java:732) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKeys(NioEventLoop.java:658) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.run(NioEventLoop.java:562) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.concurrent.SingleThreadEventExecutor$4.run(SingleThreadEventExecutor.java:998) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30) ~[nacos-client-3.1.1.jar:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+
+2026-10-21T18:43:16.313+08:00  INFO 40076 --- [kuros-gateway] [remote.worker.1] com.alibaba.nacos.common.remote.client   : [ce692122-c27d-40fa-bb74-b10f0f01a942_config-0] Fail to connect server, after trying 12 times, last try server is {serverIp = 'localhost', server main port = 8848}, error = unknown
+2026-10-21T18:43:16.650+08:00  INFO 40076 --- [kuros-gateway] [remote.worker.1] c.a.n.c.remote.client.grpc.GrpcClient    : grpc client connection server: 127.0.0.1 ip, serverPort: 29848, grpcTslConfig: {"enableTls":false,"mutualAuthEnable":false,"trustAll":true}
+2026-10-21T18:43:16.655+08:00 ERROR 40076 --- [kuros-gateway] [remote.worker.1] c.a.n.c.remote.client.grpc.GrpcClient    : Server check fail, please check server 127.0.0.1, port 29848 is available, error ={}
+
+java.util.concurrent.ExecutionException: com.alibaba.nacos.shaded.io.grpc.StatusRuntimeException: UNAVAILABLE: io exception
+	at com.alibaba.nacos.shaded.com.google.common.util.concurrent.AbstractFuture.getDoneValue(AbstractFuture.java:596) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.com.google.common.util.concurrent.AbstractFuture.get(AbstractFuture.java:471) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.grpc.GrpcClient.serverCheck(GrpcClient.java:234) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.grpc.GrpcClient.connectToServer(GrpcClient.java:346) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.reconnect(RpcClient.java:504) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.lambda$start$1(RpcClient.java:330) ~[nacos-client-3.1.1.jar:na]
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:572) ~[na:na]
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317) ~[na:na]
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:304) ~[na:na]
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) ~[na:na]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) ~[na:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+Caused by: com.alibaba.nacos.shaded.io.grpc.StatusRuntimeException: UNAVAILABLE: io exception
+	at com.alibaba.nacos.shaded.io.grpc.Status.asRuntimeException(Status.java:532) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.stub.ClientCalls$UnaryStreamToFuture.onClose(ClientCalls.java:638) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener$3.run(DelayedClientCall.java:487) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener.delayOrExecute(DelayedClientCall.java:451) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener.onClose(DelayedClientCall.java:484) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl.closeObserver(ClientCallImpl.java:565) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl.access$100(ClientCallImpl.java:72) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInternal(ClientCallImpl.java:733) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInContext(ClientCallImpl.java:714) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ContextRunnable.run(ContextRunnable.java:37) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.SerializingExecutor.run(SerializingExecutor.java:133) ~[nacos-client-3.1.1.jar:na]
+	... 3 common frames omitted
+Caused by: com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: getsockopt: /127.0.0.1:29848
+Caused by: java.net.ConnectException: Connection refused: getsockopt
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method) ~[na:na]
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:694) ~[na:na]
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:973) ~[na:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.socket.nio.NioSocketChannel.doFinishConnect(NioSocketChannel.java:336) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.finishConnect(AbstractNioChannel.java:339) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKey(NioEventLoop.java:784) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKeysOptimized(NioEventLoop.java:732) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKeys(NioEventLoop.java:658) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.run(NioEventLoop.java:562) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.concurrent.SingleThreadEventExecutor$4.run(SingleThreadEventExecutor.java:998) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30) ~[nacos-client-3.1.1.jar:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+
+2026-10-21T18:43:16.656+08:00  INFO 40076 --- [kuros-gateway] [remote.worker.1] com.alibaba.nacos.common.remote.client   : [126d7b91-3af2-41b1-bb70-10dbb4664991] Fail to connect server, after trying 8 times, last try server is {serverIp = '127.0.0.1', server main port = 28848}, error = unknown
+2026-10-21T18:43:17.332+08:00  INFO 40076 --- [kuros-gateway] [ming.security.0] c.a.n.c.a.r.identify.CredentialWatcher   : null No credential found
+2026-10-21T18:43:17.559+08:00  INFO 40076 --- [kuros-gateway] [remote.worker.1] c.a.n.c.remote.client.grpc.GrpcClient    : grpc client connection server: 127.0.0.1 ip, serverPort: 29848, grpcTslConfig: {"enableTls":false,"mutualAuthEnable":false,"trustAll":true}
+2026-10-21T18:43:17.559+08:00 ERROR 40076 --- [kuros-gateway] [remote.worker.1] c.a.n.c.remote.client.grpc.GrpcClient    : Server check fail, please check server 127.0.0.1, port 29848 is available, error ={}
+
+java.util.concurrent.ExecutionException: com.alibaba.nacos.shaded.io.grpc.StatusRuntimeException: UNAVAILABLE: io exception
+	at com.alibaba.nacos.shaded.com.google.common.util.concurrent.AbstractFuture.getDoneValue(AbstractFuture.java:596) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.com.google.common.util.concurrent.AbstractFuture.get(AbstractFuture.java:471) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.grpc.GrpcClient.serverCheck(GrpcClient.java:234) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.grpc.GrpcClient.connectToServer(GrpcClient.java:346) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.reconnect(RpcClient.java:504) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.lambda$start$1(RpcClient.java:330) ~[nacos-client-3.1.1.jar:na]
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:572) ~[na:na]
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317) ~[na:na]
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:304) ~[na:na]
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) ~[na:na]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) ~[na:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+Caused by: com.alibaba.nacos.shaded.io.grpc.StatusRuntimeException: UNAVAILABLE: io exception
+	at com.alibaba.nacos.shaded.io.grpc.Status.asRuntimeException(Status.java:532) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.stub.ClientCalls$UnaryStreamToFuture.onClose(ClientCalls.java:638) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener$3.run(DelayedClientCall.java:487) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener.delayOrExecute(DelayedClientCall.java:451) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener.onClose(DelayedClientCall.java:484) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl.closeObserver(ClientCallImpl.java:565) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl.access$100(ClientCallImpl.java:72) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInternal(ClientCallImpl.java:733) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInContext(ClientCallImpl.java:714) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ContextRunnable.run(ContextRunnable.java:37) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.SerializingExecutor.run(SerializingExecutor.java:133) ~[nacos-client-3.1.1.jar:na]
+	... 3 common frames omitted
+Caused by: com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: getsockopt: /127.0.0.1:29848
+Caused by: java.net.ConnectException: Connection refused: getsockopt
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method) ~[na:na]
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:694) ~[na:na]
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:973) ~[na:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.socket.nio.NioSocketChannel.doFinishConnect(NioSocketChannel.java:336) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.finishConnect(AbstractNioChannel.java:339) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKey(NioEventLoop.java:784) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKeysOptimized(NioEventLoop.java:732) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKeys(NioEventLoop.java:658) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.run(NioEventLoop.java:562) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.concurrent.SingleThreadEventExecutor$4.run(SingleThreadEventExecutor.java:998) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30) ~[nacos-client-3.1.1.jar:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+
+2026-10-21T18:43:17.562+08:00  INFO 40076 --- [kuros-gateway] [remote.worker.1] com.alibaba.nacos.common.remote.client   : [126d7b91-3af2-41b1-bb70-10dbb4664991] Fail to connect server, after trying 9 times, last try server is {serverIp = '127.0.0.1', server main port = 28848}, error = unknown
+2026-10-21T18:43:17.614+08:00  INFO 40076 --- [kuros-gateway] [remote.worker.1] c.a.n.c.remote.client.grpc.GrpcClient    : grpc client connection server: localhost ip, serverPort: 9848, grpcTslConfig: {"enableTls":false,"mutualAuthEnable":false,"trustAll":true}
+2026-10-21T18:43:17.614+08:00 ERROR 40076 --- [kuros-gateway] [remote.worker.1] c.a.n.c.remote.client.grpc.GrpcClient    : Server check fail, please check server localhost, port 9848 is available, error ={}
+
+java.util.concurrent.ExecutionException: com.alibaba.nacos.shaded.io.grpc.StatusRuntimeException: UNAVAILABLE: io exception
+	at com.alibaba.nacos.shaded.com.google.common.util.concurrent.AbstractFuture.getDoneValue(AbstractFuture.java:596) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.com.google.common.util.concurrent.AbstractFuture.get(AbstractFuture.java:471) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.grpc.GrpcClient.serverCheck(GrpcClient.java:234) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.grpc.GrpcClient.connectToServer(GrpcClient.java:346) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.reconnect(RpcClient.java:504) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.lambda$start$1(RpcClient.java:330) ~[nacos-client-3.1.1.jar:na]
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:572) ~[na:na]
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317) ~[na:na]
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:304) ~[na:na]
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) ~[na:na]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) ~[na:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+Caused by: com.alibaba.nacos.shaded.io.grpc.StatusRuntimeException: UNAVAILABLE: io exception
+	at com.alibaba.nacos.shaded.io.grpc.Status.asRuntimeException(Status.java:532) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.stub.ClientCalls$UnaryStreamToFuture.onClose(ClientCalls.java:638) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener$3.run(DelayedClientCall.java:487) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener.delayOrExecute(DelayedClientCall.java:451) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener.onClose(DelayedClientCall.java:484) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl.closeObserver(ClientCallImpl.java:565) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl.access$100(ClientCallImpl.java:72) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInternal(ClientCallImpl.java:733) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInContext(ClientCallImpl.java:714) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ContextRunnable.run(ContextRunnable.java:37) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.SerializingExecutor.run(SerializingExecutor.java:133) ~[nacos-client-3.1.1.jar:na]
+	... 3 common frames omitted
+Caused by: com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: getsockopt: localhost/[0:0:0:0:0:0:0:1]:9848
+Caused by: java.net.ConnectException: Connection refused: getsockopt
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method) ~[na:na]
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:694) ~[na:na]
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:973) ~[na:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.socket.nio.NioSocketChannel.doFinishConnect(NioSocketChannel.java:336) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.finishConnect(AbstractNioChannel.java:339) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKey(NioEventLoop.java:784) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKeysOptimized(NioEventLoop.java:732) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKeys(NioEventLoop.java:658) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.run(NioEventLoop.java:562) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.concurrent.SingleThreadEventExecutor$4.run(SingleThreadEventExecutor.java:998) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30) ~[nacos-client-3.1.1.jar:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+
+2026-10-21T18:43:17.619+08:00  INFO 40076 --- [kuros-gateway] [remote.worker.1] com.alibaba.nacos.common.remote.client   : [ce692122-c27d-40fa-bb74-b10f0f01a942_config-0] Fail to connect server, after trying 13 times, last try server is {serverIp = 'localhost', server main port = 8848}, error = unknown
+2026-10-21T18:43:18.570+08:00  INFO 40076 --- [kuros-gateway] [remote.worker.1] c.a.n.c.remote.client.grpc.GrpcClient    : grpc client connection server: 127.0.0.1 ip, serverPort: 29848, grpcTslConfig: {"enableTls":false,"mutualAuthEnable":false,"trustAll":true}
+2026-10-21T18:43:18.570+08:00 ERROR 40076 --- [kuros-gateway] [remote.worker.1] c.a.n.c.remote.client.grpc.GrpcClient    : Server check fail, please check server 127.0.0.1, port 29848 is available, error ={}
+
+java.util.concurrent.ExecutionException: com.alibaba.nacos.shaded.io.grpc.StatusRuntimeException: UNAVAILABLE: io exception
+	at com.alibaba.nacos.shaded.com.google.common.util.concurrent.AbstractFuture.getDoneValue(AbstractFuture.java:596) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.com.google.common.util.concurrent.AbstractFuture.get(AbstractFuture.java:471) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.grpc.GrpcClient.serverCheck(GrpcClient.java:234) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.grpc.GrpcClient.connectToServer(GrpcClient.java:346) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.reconnect(RpcClient.java:504) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.common.remote.client.RpcClient.lambda$start$1(RpcClient.java:330) ~[nacos-client-3.1.1.jar:na]
+	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:572) ~[na:na]
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317) ~[na:na]
+	at java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:304) ~[na:na]
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144) ~[na:na]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642) ~[na:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+Caused by: com.alibaba.nacos.shaded.io.grpc.StatusRuntimeException: UNAVAILABLE: io exception
+	at com.alibaba.nacos.shaded.io.grpc.Status.asRuntimeException(Status.java:532) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.stub.ClientCalls$UnaryStreamToFuture.onClose(ClientCalls.java:638) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener$3.run(DelayedClientCall.java:487) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener.delayOrExecute(DelayedClientCall.java:451) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.DelayedClientCall$DelayedListener.onClose(DelayedClientCall.java:484) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl.closeObserver(ClientCallImpl.java:565) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl.access$100(ClientCallImpl.java:72) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInternal(ClientCallImpl.java:733) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ClientCallImpl$ClientStreamListenerImpl$1StreamClosed.runInContext(ClientCallImpl.java:714) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.ContextRunnable.run(ContextRunnable.java:37) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.internal.SerializingExecutor.run(SerializingExecutor.java:133) ~[nacos-client-3.1.1.jar:na]
+	... 3 common frames omitted
+Caused by: com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: getsockopt: /127.0.0.1:29848
+Caused by: java.net.ConnectException: Connection refused: getsockopt
+	at java.base/sun.nio.ch.Net.pollConnect(Native Method) ~[na:na]
+	at java.base/sun.nio.ch.Net.pollConnectNow(Net.java:694) ~[na:na]
+	at java.base/sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:973) ~[na:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.socket.nio.NioSocketChannel.doFinishConnect(NioSocketChannel.java:336) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.finishConnect(AbstractNioChannel.java:339) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKey(NioEventLoop.java:784) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKeysOptimized(NioEventLoop.java:732) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.processSelectedKeys(NioEventLoop.java:658) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.channel.nio.NioEventLoop.run(NioEventLoop.java:562) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.concurrent.SingleThreadEventExecutor$4.run(SingleThreadEventExecutor.java:998) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74) ~[nacos-client-3.1.1.jar:na]
+	at com.alibaba.nacos.shaded.io.grpc.netty.shaded.io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30) ~[nacos-client-3.1.1.jar:na]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+
