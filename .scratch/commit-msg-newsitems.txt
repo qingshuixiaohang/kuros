@@ -1,0 +1,11 @@
+chore(front): 删掉 newsItems 与 NewsItem——news 域接入时漏掉的收尾
+
+260d35f 的提交信息写「newsItems 硬编码数组退役」，但那个提交只改了
+api.ts / community-queries.ts / news-page.tsx / community-home.tsx 四个
+文件，mock.ts 里的 newsItems 与 types/community.ts 里的 NewsItem 都没删。
+定义留着、零消费点，后来人 grep 到会以为还有页面在读它。
+
+echoes 域（0509f50）是真删了 echoSets 与 EchoSet，两边不一致。这次补齐。
+
+验证：tsc 0 error、eslint 0 warning、format:check 全绿、vitest 39/39、
+Playwright 106 passed / 0 failed。

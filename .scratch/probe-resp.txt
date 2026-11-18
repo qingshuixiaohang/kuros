@@ -1,0 +1,10 @@
+HTTP/1.1 400 
+Vary: Origin
+Vary: Access-Control-Request-Method
+Vary: Access-Control-Request-Headers
+Content-Type: application/json
+Transfer-Encoding: chunked
+Date: Sun, 27 Sep 2026 12:16:00 GMT
+Connection: close
+
+{"code":"INVALID_VERIFICATION_CODE","message":"验证码无效或已过期","fieldErrors":{}}

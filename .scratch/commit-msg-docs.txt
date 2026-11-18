@@ -1,0 +1,9 @@
+docs: master-plan 与 audit-frontend 记录 H-9 当前进度
+
+- master-plan.md 顶部新增「〇、当前批次」节：H-9 剩 tools / creations 两页，
+  5 个提交的 SHA 一览、基线数字、模式样板指针、git 分支状态警告
+- audit-frontend.md 的 H-9 条目前加进度标注：已完成域与剩余域、
+  新增的两个 spec、基线数字
+
+两条都是「指向代码」的状态，不含会过期的叙述。master-plan 主体仍停在
+2026-10-10 的切片时代内容，本次只在顶部加当前批次区块，不动历史记录。

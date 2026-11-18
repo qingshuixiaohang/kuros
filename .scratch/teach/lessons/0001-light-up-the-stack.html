@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 1 课 · 点亮全栈</title>
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+<header class="lesson-head">
+  <span class="kicker">Lesson 0001 · 验证阶梯 L0</span>
+  <h1>点亮全栈：亲手把 14 个服务跑起来</h1>
+  <p class="subtitle">一切验证的地基。这一课不写一行代码，只做一件事——让系统在你手里活过来，并亲眼确认它真的活着。</p>
+</header>
+
+<div class="note">
+  <span class="label">学习路线说明（2026-10-20）</span>
+  本课是可选的环境启动练习，不是当前功能学习主线的前置课。当前学习进度见 <code>../PROGRESS.md</code>。
+</div>
+
+<div class="win">
+  <span class="label">本课你要拿下的胜利</span>
+  跑完后，你会在 <strong>4 个不同的界面</strong>亲眼看到系统在响应你：社区前端、网关健康检查、Nacos 服务列表、RocketMQ 控制台。这就是"实感"的起点——不再是"AI 说它 work"，而是"我看到它 work"。
+</div>
+
+<div class="note">
+  <span class="label">分工更新（2026-10-03 起）</span>
+  我们的分工调整为：<strong>你只负责把栈点亮</strong>，接口验证、数据库检查、冒烟测试由 AI 在跑起来的系统上执行。CI 已改为手动触发，日常验证不再依赖它。
+  <br><br>
+  <strong>compose 现在有两种模式</strong>：默认 <code>docker compose up -d</code> 只起 9 个中间件（后端用 IDEA 裸跑，仓库自带 <code>.run/</code> 一键启动配置，或 <code>cd front &amp;&amp; npm run dev</code> 起前端）；<code>docker compose --profile full up -d --build</code> 才是本课原来的 14 服务全家桶（演示/体检用）。本课流程照旧，但第 3 步命令记得带 <code>--profile full</code>。
+</div>
+
+<div class="note">
+  <span class="label">为什么从这一课开始</span>
+  你之前没有实感，是因为从没看过系统真正运行的样子。所有更高级的验证（Swagger、消息轨迹、跑测试）都要求栈先在跑。所以第一步永远是：<strong>把它点亮</strong>。
+</div>
+
+<h2>动手步骤</h2>
+<ol class="steps">
+
+  <li>
+    <span class="step-title">启动 Docker Desktop <span class="who you">你来做</span></span>
+    现在你的 Docker 守护进程是关的（我刚探测过）。从开始菜单打开 <strong>Docker Desktop</strong>，等右下角鲸鱼图标从"跳动"变成"静止/绿色"，表示引擎就绪。然后在 PowerShell 里确认：
+<pre><code>docker info</code></pre>
+    <div class="expect">
+      <span class="label">看到这些就说明引擎活了</span>
+      <pre>Server:
+ Server Version: 29.7.2
+ Operating System: Docker Desktop
+ ...（不再报 "failed to connect to the docker API"）</pre>
+    </div>
+    <div class="danger-box">
+      <span class="label">如果还报错</span>
+      说明 Docker Desktop 还没完全启动，多等 20~40 秒再试。这一步只能你手动点——它是图形程序，我无法代劳。
+    </div>
+  </li>
+
+  <li>
+    <span class="step-title">确认环境变量已就位 <span class="who you">你来做</span></span>
+    项目根目录已有一个 <code>.env</code>（compose 会自动读它）。我们要确认"演示登录固定验证码"是开的，这样第 4 步你能顺利登录：
+<pre><code><span class="c"># 在项目根目录 g:\kuros-web 下执行</span>
+Select-String -Path .env -Pattern "APP_AUTH_DEV_CODE"</code></pre>
+    <div class="expect">
+      <span class="label">期望看到（两行）</span>
+      <pre>APP_AUTH_DEV_CODE=123456
+APP_AUTH_DEV_CODE_EXPOSED=true</pre>
+    </div>
+    如果这两行不存在或被注释掉，登录时就要收真实短信验证码（收不到）。把结果贴给我，需要的话我给你补上。
+  </li>
+
+  <li>
+    <span class="step-title">一键启动整个栈 <span class="who you">你来做</span></span>
+    这是核心命令。<code>-d</code> = 后台运行（不占着终端）；<code>--build</code> = 首次需要构建 backend/user/gateway/frontend/es-ik 这几个自定义镜像：
+<pre><code>docker compose up -d --build</code></pre>
+    <div class="warn-box">
+      <span class="label">耐心提示</span>
+      <strong>首次运行会很慢</strong>（5~15 分钟）：要拉十几个基础镜像 + 构建 5 个自定义镜像 + 编译 Java。终端会刷一大堆日志，这是正常的。之后再启动就快了（镜像已缓存）。让它跑完，直到提示符回来。
+    </div>
+  </li>
+
+  <li>
+    <span class="step-title">盯着服务逐个变绿 <span class="who you">你来做</span></span>
+    反复运行下面这条，观察 <code>STATUS</code> 列从 <span class="pill wait">starting</span> 逐渐变成 <span class="pill ok">healthy</span>：
+<pre><code>docker compose ps</code></pre>
+    <div class="expect">
+      <span class="label">全部就绪时大致长这样（STATUS 列都是 healthy / Up）</span>
+      <pre>NAME                    SERVICE              STATUS
+kuros-mysql             mysql                Up (healthy)
+kuros-redis             redis                Up (healthy)
+kuros-minio             minio                Up (healthy)
+kuros-nacos             nacos                Up (healthy)
+kuros-backend           backend              Up (healthy)
+kuros-user              user                 Up (healthy)
+kuros-gateway           gateway              Up (healthy)
+kuros-rocketmq-*        rocketmq-*           Up
+kuros-elasticsearch     elasticsearch        Up (healthy)
+kuros-canal-server      canal-server         Up
+kuros-frontend          frontend             Up</pre>
+    </div>
+    <div class="note">
+      <span class="label">启动顺序有讲究</span>
+      MySQL/Nacos/RocketMQ 会先起，backend/user/gateway 依赖它们，会等到依赖 healthy 才启动（compose 的 <code>depends_on</code> + healthcheck 在编排这件事）。所以变绿是有先后的，不用慌。
+    </div>
+    如果某个服务卡在 <span class="pill wait">starting</span> 超过 2 分钟或反复重启，用排障三件套看它的日志：
+<pre><code>docker compose logs -f backend   <span class="c"># 换成卡住的那个服务名</span></code></pre>
+  </li>
+
+  <li>
+    <span class="step-title">肉眼确认 4 个界面 <span class="who you">你来做 · 这就是实感</span></span>
+    在浏览器里逐个打开，每个都截图/记下你看到了什么：
+    <table>
+      <thead><tr><th>打开这个网址</th><th>你应该看到</th><th>它证明了什么</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><a href="http://localhost:3000">localhost:3000</a></td>
+          <td>鸣潮社区首页（帖子列表）</td>
+          <td>前端 + 网关 + backend + MySQL 整条读路径通了</td>
+        </tr>
+        <tr>
+          <td><a href="http://localhost:8080/actuator/health">localhost:8080/actuator/health</a></td>
+          <td><code>{"status":"UP"}</code></td>
+          <td>网关进程活着（Actuator 健康端点）。<strong>注意：它只反映网关自己，不聚合 backend/user 健康</strong>——那要看各自 <code>:8090</code>/<code>:8091</code> 的同名端点</td>
+        </tr>
+        <tr>
+          <td><a href="http://localhost:8081">localhost:8081</a>（Nacos）</td>
+          <td>控制台里 backend/user/gateway 三个服务已注册</td>
+          <td>服务注册发现生效——网关才知道该把请求转给谁</td>
+        </tr>
+        <tr>
+          <td><a href="http://localhost:8082">localhost:8082</a>（RocketMQ）</td>
+          <td>Dashboard 里能看到 Topic 列表</td>
+          <td>消息中间件活着——发帖异步化 / CDC 都靠它</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <span class="label">Nacos 登录</span>
+      账号 <code>nacos</code> / 密码 <code>nacos123</code>（由 <code>docker/mysql-init/30-nacos-admin-user.sql</code> 种子注入）。<strong>注意：v3 控制台有独立鉴权开关，即使 <code>NACOS_AUTH_ENABLE=false</code> 也要登录</strong>——它和服务端 OpenAPI 鉴权是两回事。报错 “User not found” 其实是“用户不存在或密码错”的合并提示（防枚举），登不进先检查密码是不是 <code>nacos123</code>。
+    </div>
+  </li>
+
+</ol>
+
+<h2>本课收尾：你解锁了什么</h2>
+<ul class="checklist">
+  <li>我能独立启动 Docker Desktop 并确认引擎就绪</li>
+  <li>我跑通了 <code>docker compose up -d --build</code>，看着 14 个服务逐个变 healthy</li>
+  <li>我在浏览器里亲眼看到前端、网关健康、Nacos 注册、RocketMQ 控制台 4 个界面</li>
+  <li>我知道卡住时怎么用 <code>docker compose logs -f &lt;服务&gt;</code> 排查</li>
+</ul>
+<p>现在系统在你手里活着了。下一课（L1）我们就在这个跑起来的栈上，<strong>亲手登录→发一个帖子→再把它搜出来</strong>，同时打开控制台看这个动作背后消息是怎么流的。</p>
+
+<div class="ask-teacher">
+  <span class="label">卡在哪一步，直接告诉我</span>
+  把报错信息或 <code>docker compose ps</code> 的输出贴给我，我帮你判断是哪个服务、什么原因。不要自己硬扛——第一课的目标是"跑通"，不是"独自排障"。
+</div>
+
+<footer class="lesson-foot">
+  <strong>推荐主源</strong>：Docker Compose 官方文档 ·
+  <a href="https://docs.docker.com/compose/" target="_blank">docs.docker.com/compose</a>（读 "Use Compose in production" 一节，理解 depends_on + healthcheck 的编排语义）
+  <div class="nav-links">
+    <a href="../reference/verification-ladder.html">↑ 验证阶梯速查表</a>
+    <a href="../MISSION.md">学习使命</a>
+    <a href="#" onclick="alert('第 2 课会在你跑通本课后生成');return false;">第 2 课：前端点点点（待解锁）</a>
+  </div>
+</footer>
+</main>
+</body>
+</html>

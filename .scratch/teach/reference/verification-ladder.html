@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>速查表 · kuros-web 验证阶梯</title>
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+<header class="lesson-head">
+  <span class="kicker">Reference · 长期速查</span>
+  <h1>验证阶梯：8 级亲眼确认系统 work</h1>
+  <p class="subtitle">从"最有实感"到"最严谨"——每一级都是一种亲手验证系统的手段。这张表会陪你走完整门课。</p>
+</header>
+
+<div class="win">
+  <span class="label">这张表怎么用</span>
+  需要启动项目或验证某个功能时，按需查对应级别的操作步骤。这里的 L0→L7 是验证手段的索引，不是必须依次完成的课程。
+</div>
+
+<div class="note">
+  <span class="label">进度说明（2026-10-20）</span>
+  这份阶梯仅作为启动和测试验证的操作参考，不再代表主学习路线，也不要求逐级打卡。主线改为按用户功能学习，当前状态见同目录 <code>../PROGRESS.md</code>。
+</div>
+
+<h2>阶梯总览</h2>
+<table>
+  <thead>
+    <tr><th>级别</th><th>验证手段</th><th>你能亲眼看到什么</th><th>工具</th><th>状态</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>L0</strong></td>
+      <td>点亮全栈</td>
+      <td>14 个容器逐个从 starting 变 <span class="pill ok">healthy</span></td>
+      <td><code>docker compose</code></td>
+      <td><span class="pill ok">第 1 课</span></td>
+    </tr>
+    <tr>
+      <td><strong>L1</strong></td>
+      <td>前端点点点</td>
+      <td>浏览器里登录→发帖→搜索，页面真的响应你</td>
+      <td>浏览器 :3000</td>
+      <td><span class="pill wait">第 2 课</span></td>
+    </tr>
+    <tr>
+      <td><strong>L2</strong></td>
+      <td>API 层直调</td>
+      <td>Swagger UI 里点一下按钮，看到 HTTP 请求/响应原文</td>
+      <td>Swagger :8090 / curl</td>
+      <td><span class="pill wait">第 3 课</span></td>
+    </tr>
+    <tr>
+      <td><strong>L3</strong></td>
+      <td>中间件控制台</td>
+      <td>看见平时看不见的：服务注册、消息流动、ES 索引、对象文件</td>
+      <td>Nacos/RocketMQ/Kibana/MinIO</td>
+      <td><span class="pill wait">第 4 课</span></td>
+    </tr>
+    <tr>
+      <td><strong>L4</strong></td>
+      <td>冒烟脚本</td>
+      <td>一条命令自动跑完整链路，打印 PASS/FAIL</td>
+      <td><code>node scripts/*.mjs</code></td>
+      <td><span class="pill wait">第 5 课</span></td>
+    </tr>
+    <tr>
+      <td><strong>L5</strong></td>
+      <td>跑单个测试类</td>
+      <td>看某一段逻辑的红/绿，秒级反馈</td>
+      <td><code>mvnw test -Dtest=</code></td>
+      <td><span class="pill wait">第 6 课</span></td>
+    </tr>
+    <tr>
+      <td><strong>L6</strong></td>
+      <td>门控集成测试</td>
+      <td>真起 ES/MySQL 容器，验证跨组件契约</td>
+      <td><code>-Dkuros.it.es=true</code></td>
+      <td><span class="pill wait">第 7 课</span></td>
+    </tr>
+    <tr>
+      <td><strong>L7</strong></td>
+      <td>全量套件 + e2e</td>
+      <td>整个项目的全绿基线（110 后端 + 5 前端 e2e spec）</td>
+      <td><code>mvnw test</code> / Playwright</td>
+      <td><span class="pill wait">第 8 课</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>服务与端口地图（背下来）</h2>
+<table>
+  <thead><tr><th>服务</th><th>宿主端口</th><th>是什么</th><th>能看到的界面</th></tr></thead>
+  <tbody>
+    <tr><td>frontend</td><td><code>3000</code></td><td>Next.js 前端</td><td>社区页面本身</td></tr>
+    <tr><td>gateway</td><td><code>8080</code></td><td>统一正门，前端唯一入口</td><td><code>/actuator/health</code></td></tr>
+    <tr><td>backend</td><td><code>8090</code></td><td>内容服务（帖子/评论/互动/搜索）</td><td>Swagger <code>/swagger-ui/index.html</code></td></tr>
+    <tr><td>user</td><td><code>8091</code></td><td>用户域（认证/RBAC/关注）</td><td>Actuator</td></tr>
+    <tr><td>nacos</td><td><code>8081</code></td><td>注册 + 配置中心</td><td>控制台：服务列表</td></tr>
+    <tr><td>rocketmq-dashboard</td><td><code>8082</code></td><td>RocketMQ 控制台</td><td>Topic / 消息轨迹</td></tr>
+    <tr><td>elasticsearch</td><td><code>9200</code></td><td>全文检索引擎（ik 分词）</td><td>REST（配 Kibana 5601）</td></tr>
+    <tr><td>minio</td><td><code>9000 / 9001</code></td><td>对象存储（图片）</td><td>控制台：桶与文件</td></tr>
+    <tr><td>mysql</td><td><code>3307</code></td><td>主数据库（binlog 开）</td><td>—</td></tr>
+    <tr><td>redis</td><td><code>6379</code></td><td>缓存 / 会话 / 计数</td><td>—</td></tr>
+    <tr><td>canal-server</td><td><code>11111</code></td><td>订阅 MySQL binlog 做 CDC</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<h2>万能排障三件套</h2>
+<pre><code><span class="c"># 1. 看某个服务为什么起不来（最常用）</span>
+docker compose logs -f backend
+
+<span class="c"># 2. 看所有服务健康状态</span>
+docker compose ps
+
+<span class="c"># 3. 数据脏了想彻底重置（会删数据库和图片！确认后再用）</span>
+docker compose down -v</code></pre>
+
+<div class="ask-teacher">
+  <span class="label">随时问你的 AI 老师</span>
+  任何一级卡住、任何输出看不懂、任何命令报错——直接把报错贴给我，我帮你定位。教学的目的就是让你亲手跑通，不是让你自己硬扛。
+</div>
+
+<footer class="lesson-foot">
+  <div class="nav-links">
+    <a href="../lessons/0001-light-up-the-stack.html">→ 第 1 课：点亮全栈</a>
+    <a href="../MISSION.md">学习使命</a>
+  </div>
+</footer>
+</main>
+</body>
+</html>

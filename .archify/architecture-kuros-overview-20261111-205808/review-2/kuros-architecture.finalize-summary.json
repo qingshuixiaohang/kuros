@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\candidate.json",
+    "sha256": "9596542d76be9c36581cae667c1a10fbf5fb474e2ad130096de97953b48efe40",
+    "bytes": 12924
+  },
+  "artifact": {
+    "path": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\kuros-architecture.html",
+    "sha256": "0ab1776772f75ff1eac8016a705c71f4c0117b68dc20e158ea12fa019d50f39f",
+    "bytes": 871427
+  },
+  "gates": {
+    "validate": "fail",
+    "deliver": "not-run",
+    "check": "not-run",
+    "browser-check": "not-run"
+  },
+  "failedStage": "validate",
+  "diagnostics": [
+    {
+      "code": "composition/desktop-readability",
+      "severity": "error",
+      "message": "Final artifact failed composition/desktop-readability.",
+      "subject": {
+        "check": "composition"
+      },
+      "evidence": {
+        "owner": {
+          "kind": "edge",
+          "id": "browser-to-frontend",
+          "from": "browser",
+          "to": "frontend"
+        },
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "availableDiagramWidth": 930,
+        "budgetBasis": "legacy-930",
+        "readerContract": "declared-wide-v1",
+        "requestedTargetPx": 7.5,
+        "requestedTargetMet": false,
+        "budgetLimit": "legacy",
+        "viewBoxWidth": 1250,
+        "scale": 0.744,
+        "text": "HTTPS",
+        "detail": "edge",
+        "sourceFontPx": 8,
+        "projectedFontPx": 5.952,
+        "minimumProjectedFontPx": 6
+      },
+      "supportedFixes": [
+        "Preserve the semantic text and any supplied coordinates, routes, sides, channels, and labels. Compactly reflow automatic spacing and empty corridors so the complete viewBox width is at most 1240px (current 1250px; 8px source text at 930px desktop budget). If supplied geometry fixes that width, use a renderer-supported semantic text-size setting or renderer-level fix instead. Position-only label controls cannot repair its projection."
+      ]
+    }
+  ],
+  "diagnosticSummary": {
+    "total": 1,
+    "shown": 1,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\review-2\\kuros-architecture.finalize.json",
+    "summaryReceipt": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\review-2\\kuros-architecture.finalize-summary.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-11-11T12:43:50.229Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 863,
+  "browserCheck": {
+    "requested": true,
+    "ran": false
+  },
+  "nextAction": {
+    "action": "edit-in-place",
+    "candidate": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\candidate.json",
+    "constraint": "Preserve unaffected semantics and geometry; apply each diagnostic's supportedFixes, or the fix its message names, and do not replace the whole candidate.",
+    "then": "finalize-once"
+  }
+}

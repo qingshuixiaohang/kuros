@@ -1,0 +1,18 @@
+HTTP/1.1 200 OK
+Vary: Origin
+Vary: Access-Control-Request-Method
+Vary: Access-Control-Request-Headers
+Access-Control-Allow-Origin: http://localhost:3000
+Access-Control-Expose-Headers: X-XSRF-TOKEN
+Access-Control-Allow-Credentials: true
+Vary: Origin
+Vary: Access-Control-Request-Method
+Vary: Access-Control-Request-Headers
+Access-Control-Allow-Origin: http://localhost:3000
+Access-Control-Expose-Headers: X-XSRF-TOKEN
+Access-Control-Allow-Credentials: true
+Content-Type: application/json
+Content-Length: 57
+Date: Sun, 27 Sep 2026 12:18:05 GMT
+
+{"data":{"expiresIn":300,"retryAfter":60,"devCode":null}}
