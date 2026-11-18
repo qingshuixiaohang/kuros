@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Eye, Heart, MessageSquare, MoveRight, PenLine } from "lucide-react";
-import { Fragment, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Fragment, useEffect, useState } from "react";
 import { ApiFallbackNote } from "@/components/community/api-fallback-note";
 import { CommunityPageFrame, PageHeader } from "@/components/community/community-pages";
 import { useCommunityPostQuery } from "@/lib/community-queries";
@@ -57,6 +58,7 @@ function GuideListItem({ guide }: { guide: Guide }) {
 
 export function GuidesApiPage() {
   const params = useSearchParams();
+  const queryClient = useQueryClient();
   const initialCategory = params.get("category") ?? "全部";
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(initialCategory);
@@ -70,6 +72,25 @@ export function GuidesApiPage() {
   const visibleItems = apiUnavailable ? filterFallback(category, query, tag) : (result.data?.items.map(toGuide) ?? []);
   const totalItems = apiUnavailable ? visibleItems.length : (result.data?.meta?.totalItems ?? visibleItems.length);
   const totalPages = apiUnavailable ? 1 : (result.data?.meta?.totalPages ?? 1);
+  const lastPage = Math.max(1, totalPages);
+  const needsCorrection = !apiUnavailable && !result.isFetching && !result.isPlaceholderData && Boolean(result.data?.meta) && page > lastPage;
+  useEffect(() => {
+    if (!needsCorrection) return;
+    let cancelled = false;
+    // A cached last page can predate the shrink; make sure recovery fetches it again.
+    void queryClient
+      .invalidateQueries({
+        queryKey: ["community-posts", category, query, tag, lastPage, 10, sort],
+        exact: true,
+        refetchType: "none",
+      })
+      .then(() => {
+        if (!cancelled) setPage(lastPage);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [needsCorrection, queryClient, category, query, tag, lastPage, sort]);
   const pageNumbers = [...new Set([1, page - 1, page, page + 1, totalPages].filter((number) => number >= 1 && number <= totalPages))].sort((a, b) => a - b);
   function changeCategory(value: string) {
     setCategory(value);
@@ -144,7 +165,7 @@ export function GuidesApiPage() {
         {apiUnavailable && <ApiFallbackNote onRetry={result.refetch} />}
         {totalPages > 1 && (
           <nav className="pagination guide-pagination" aria-label="攻略分页">
-            <button disabled={page === 1} onClick={() => setPage(page - 1)} type="button">
+            <button disabled={needsCorrection || result.isFetching || result.isPlaceholderData || page <= 1} onClick={() => setPage(page - 1)} type="button">
               上一页
             </button>
             {pageNumbers.map((pageNumber, index) => {
@@ -153,7 +174,7 @@ export function GuidesApiPage() {
               return (
                 <Fragment key={pageNumber}>
                   {gap === 2 && (
-                    <button onClick={() => setPage(pageNumber - 1)} type="button">
+                    <button disabled={needsCorrection || result.isFetching || result.isPlaceholderData} onClick={() => setPage(pageNumber - 1)} type="button">
                       {pageNumber - 1}
                     </button>
                   )}
@@ -165,6 +186,7 @@ export function GuidesApiPage() {
                   <button
                     aria-current={page === pageNumber ? "page" : undefined}
                     className={page === pageNumber ? "is-active" : ""}
+                    disabled={needsCorrection || result.isFetching || result.isPlaceholderData}
                     onClick={() => setPage(pageNumber)}
                     type="button"
                   >
@@ -173,7 +195,11 @@ export function GuidesApiPage() {
                 </Fragment>
               );
             })}
-            <button disabled={page === totalPages} onClick={() => setPage(page + 1)} type="button">
+            <button
+              disabled={needsCorrection || result.isFetching || result.isPlaceholderData || page >= totalPages}
+              onClick={() => setPage(page + 1)}
+              type="button"
+            >
               下一页
             </button>
           </nav>
