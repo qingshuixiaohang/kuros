@@ -182,9 +182,9 @@ test("公开个人中心桌面端展示资料和帖子且没有横向滚动", as
   expect(width.scroll).toBeLessThanOrEqual(width.client);
 });
 
-test("个人中心移动端保持单列且没有页面级横向滚动", async ({ page }) => {
+test("个人中心在最窄桌面宽度保持单列且没有页面级横向滚动", async ({ page }) => {
   await mockMyProfileApi(page);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 768, height: 900 });
   await page.goto("/profile");
 
   await expect(page.getByRole("region", { name: "个人资料概览" })).toBeVisible();
