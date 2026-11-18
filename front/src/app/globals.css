@@ -766,6 +766,8 @@ a.report-target:hover strong { color: var(--cyan); }
 .pagination { display: flex; justify-content: center; gap: 6px; padding: 22px 0 5px; }
 .pagination button { min-width: 30px; height: 30px; border-radius: 4px; background: #f2f6f8; color: #8292a0; font-size: 13px; }
 .pagination button:hover, .pagination button.is-active { background: var(--cyan); color: #fff; }
+.guide-pagination button:disabled, .guide-pagination button:disabled:hover { cursor: default; opacity: .5; background: #f2f6f8; color: #8292a0; }
+.guide-pagination .pagination-ellipsis { align-self: center; color: #8292a0; }
 @media (max-width: 620px) {
   .filter-keyword, .filter-sort { flex: 0 0 auto; }
   .filter-keyword input { width: 80px; }
