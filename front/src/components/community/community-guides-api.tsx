@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Eye, Heart, MessageSquare, MoveRight, PenLine } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { ApiFallbackNote } from "@/components/community/api-fallback-note";
 import { CommunityPageFrame, PageHeader } from "@/components/community/community-pages";
 import { useCommunityPostQuery } from "@/lib/community-queries";
@@ -70,6 +70,7 @@ export function GuidesApiPage() {
   const visibleItems = apiUnavailable ? filterFallback(category, query, tag) : (result.data?.items.map(toGuide) ?? []);
   const totalItems = apiUnavailable ? visibleItems.length : (result.data?.meta?.totalItems ?? visibleItems.length);
   const totalPages = apiUnavailable ? 1 : (result.data?.meta?.totalPages ?? 1);
+  const pageNumbers = [...new Set([1, page - 1, page, page + 1, totalPages].filter((number) => number >= 1 && number <= totalPages))].sort((a, b) => a - b);
   function changeCategory(value: string) {
     setCategory(value);
     setPage(1);
@@ -142,12 +143,39 @@ export function GuidesApiPage() {
         )}
         {apiUnavailable && <ApiFallbackNote onRetry={result.refetch} />}
         {totalPages > 1 && (
-          <nav className="pagination" aria-label="攻略分页">
-            {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
-              <button className={page === pageNumber ? "is-active" : ""} key={pageNumber} onClick={() => setPage(pageNumber)} type="button">
-                {pageNumber}
-              </button>
-            ))}
+          <nav className="pagination guide-pagination" aria-label="攻略分页">
+            <button disabled={page === 1} onClick={() => setPage(page - 1)} type="button">
+              上一页
+            </button>
+            {pageNumbers.map((pageNumber, index) => {
+              const previous = pageNumbers[index - 1];
+              const gap = previous === undefined ? 0 : pageNumber - previous;
+              return (
+                <Fragment key={pageNumber}>
+                  {gap === 2 && (
+                    <button onClick={() => setPage(pageNumber - 1)} type="button">
+                      {pageNumber - 1}
+                    </button>
+                  )}
+                  {gap > 2 && (
+                    <span className="pagination-ellipsis" aria-hidden="true">
+                      …
+                    </span>
+                  )}
+                  <button
+                    aria-current={page === pageNumber ? "page" : undefined}
+                    className={page === pageNumber ? "is-active" : ""}
+                    onClick={() => setPage(pageNumber)}
+                    type="button"
+                  >
+                    {pageNumber}
+                  </button>
+                </Fragment>
+              );
+            })}
+            <button disabled={page === totalPages} onClick={() => setPage(page + 1)} type="button">
+              下一页
+            </button>
           </nav>
         )}
       </section>
