@@ -22,7 +22,10 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,6 +51,7 @@ class PostListSqlCountIntegrationTest {
 
     /** 测试帖数：取一页的上界（生产 MAX_PAGE_SIZE=50），N+1 在此规模下最明显。 */
     private static final int POST_COUNT = 50;
+    private static final LocalDateTime BASE_PUBLISHED_AT = LocalDateTime.of(2026, 9, 21, 10, 0);
 
     @Container
     static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
@@ -89,6 +93,7 @@ class PostListSqlCountIntegrationTest {
     private CommunityPostRepository postRepository;
 
     private Statistics statistics;
+    private List<String> publishedPostIds;
 
     @BeforeEach
     void setUp() {
@@ -109,12 +114,16 @@ class PostListSqlCountIntegrationTest {
         statistics.setStatisticsEnabled(true);
 
         String authorId = "10000000-0000-0000-0000-000000000001";
+        publishedPostIds = new ArrayList<>(POST_COUNT);
         for (int i = 0; i < POST_COUNT; i++) {
             List<String> tags = i < 2 ? List.of("guide", "beginner") : List.of();
-            publishingService.publish(new CreatePostRequest(
+            var published = publishingService.publish(new CreatePostRequest(
                     "GUIDE", "配队攻略", "SQL 计数测试帖 " + i,
                     "摘要 " + i, "正文 " + i, tags, List.of()
             ), authorId);
+            publishedPostIds.add(published.id());
+            jdbcTemplate.update("UPDATE posts SET published_at = ?, like_count = ? WHERE id = ?",
+                    BASE_PUBLISHED_AT.plusMinutes(i), (long) i, published.id());
         }
         var deletedPost = publishingService.publish(new CreatePostRequest(
                 "GUIDE", "配队攻略", "已删除计数测试帖",
@@ -147,7 +156,8 @@ class PostListSqlCountIntegrationTest {
         // 分类必须与建帖时的实际分类一致；传 "GUIDE"（帖子类型）会得到 0 条，测不到计数。
         var result = postService.findPublished(1, 10, "hot", "配队攻略", "guide", null);
 
-        assertThat(result.items()).hasSize(2);
+        assertThat(result.items()).extracting(item -> item.id())
+                .containsExactly(publishedPostIds.get(1), publishedPostIds.get(0));
         assertThat(result.meta().totalItems()).isEqualTo(2);
         assertThat(result.meta().totalPages()).isEqualTo(1);
         assertThat(result.items()).allSatisfy(item ->
@@ -171,9 +181,48 @@ class PostListSqlCountIntegrationTest {
 
         PostListSqlInspector.clear();
         var hotFullPage = postService.findPublished(1, 1, "hot", "配队攻略", "guide", null);
-        assertThat(hotFullPage.items()).hasSize(1);
+        assertThat(hotFullPage.items()).extracting(item -> item.id()).containsExactly(publishedPostIds.get(1));
         assertThat(hotFullPage.meta().totalItems()).isEqualTo(2);
+        assertThat(hotFullPage.meta().totalPages()).isEqualTo(2);
         assertThat(PostListSqlInspector.statements()).anyMatch(sql -> sql.toLowerCase().contains("select count("));
+    }
+
+    @Test
+    void latest与hot跨页顺序及末页元数据保持稳定() {
+        var latestPage1 = postService.findPublished(1, 2, "latest", null, null, null);
+        var latestPage2 = postService.findPublished(2, 2, "latest", null, null, null);
+        assertThat(latestPage1.items()).extracting(item -> item.id())
+                .containsExactly(publishedPostIds.get(49), publishedPostIds.get(48));
+        assertThat(latestPage2.items()).extracting(item -> item.id())
+                .containsExactly(publishedPostIds.get(47), publishedPostIds.get(46));
+        assertThat(latestPage1.meta().totalItems()).isEqualTo(POST_COUNT);
+        assertThat(latestPage1.meta().totalPages()).isEqualTo(25);
+        assertThat(latestPage2.meta().totalItems()).isEqualTo(POST_COUNT);
+        assertThat(latestPage2.meta().totalPages()).isEqualTo(25);
+
+        var hotPage1 = postService.findPublished(1, 2, "hot", null, null, null);
+        var hotPage2 = postService.findPublished(2, 2, "hot", null, null, null);
+        assertThat(hotPage1.items()).extracting(item -> item.id())
+                .containsExactly(publishedPostIds.get(49), publishedPostIds.get(48));
+        assertThat(hotPage2.items()).extracting(item -> item.id())
+                .containsExactly(publishedPostIds.get(47), publishedPostIds.get(46));
+        assertThat(hotPage1.meta().totalItems()).isEqualTo(POST_COUNT);
+        assertThat(hotPage1.meta().totalPages()).isEqualTo(25);
+        assertThat(hotPage2.meta().totalItems()).isEqualTo(POST_COUNT);
+        assertThat(hotPage2.meta().totalPages()).isEqualTo(25);
+
+        PostListSqlInspector.clear();
+        var shortLastPage = postService.findPublished(17, 3, "latest", null, null, null);
+        assertThat(shortLastPage.items()).extracting(item -> item.id())
+                .containsExactly(publishedPostIds.get(1), publishedPostIds.get(0));
+        assertThat(shortLastPage.meta().totalItems()).isEqualTo(POST_COUNT);
+        assertThat(shortLastPage.meta().totalPages()).isEqualTo(17);
+        assertThat(PostListSqlInspector.statements()).noneMatch(sql -> sql.toLowerCase().contains("select count("));
+
+        var beyondLastPage = postService.findPublished(18, 3, "latest", null, null, null);
+        assertThat(beyondLastPage.items()).isEmpty();
+        assertThat(beyondLastPage.meta().totalItems()).isEqualTo(POST_COUNT);
+        assertThat(beyondLastPage.meta().totalPages()).isEqualTo(17);
     }
 
     @Test
@@ -183,9 +232,13 @@ class PostListSqlCountIntegrationTest {
         assertFilteredTotal(null, "guide", null, 2);
         assertFilteredTotal(null, null, "摘要 0", 1);
         assertFilteredTotal(null, null, "SQL 计数测试帖 0", 1);
-        assertFilteredTotal("配队攻略", "guide", null, 2);
+        assertFilteredTotal(null, null, "sql 计数测试帖 0", 1);
+        assertFilteredTotal(null, null, "帖%", POST_COUNT);
+        assertFilteredTotal(null, null, "帖_", POST_COUNT);
+        assertFilteredTotal(null, null, "已删除计数测试帖", 0);
         assertFilteredTotal("配队攻略", null, "摘要 0", 1);
         assertFilteredTotal(null, "guide", "摘要 0", 1);
+        assertFilteredTotal("配队攻略", "guide", "SQL 计数测试帖 0", 1);
         assertFilteredTotal("配队攻略", "guide", "摘要 0", 1);
         assertFilteredTotal("不存在", "guide", "摘要 0", 0);
         var lastPage = postService.findPublished(5, 10, "latest", null, null, null);
@@ -199,7 +252,27 @@ class PostListSqlCountIntegrationTest {
     private void assertFilteredTotal(String category, String tag, String keyword, int expected) {
         var result = postService.findPublished(1, 1, "latest", category, tag, keyword);
         assertThat(result.meta().totalItems()).isEqualTo(expected);
+        assertThat(result.meta().totalPages()).isEqualTo(expected);
         assertThat(result.items()).hasSize(expected == 0 ? 0 : 1);
+        if (expected == 0) {
+            return;
+        }
+
+        var item = result.items().get(0);
+        if (category != null) {
+            assertThat(item.category()).isEqualTo(category);
+        }
+        if (tag != null) {
+            assertThat(item.tags()).contains(tag);
+        }
+        if (keyword != null) {
+            String content = (item.title() + " " + item.excerpt()).toLowerCase(Locale.ROOT);
+            if (keyword.contains("%") || keyword.contains("_")) {
+                assertThat(item.title()).contains("SQL 计数测试帖");
+            } else {
+                assertThat(content).contains(keyword.toLowerCase(Locale.ROOT));
+            }
+        }
     }
 
     @Test
