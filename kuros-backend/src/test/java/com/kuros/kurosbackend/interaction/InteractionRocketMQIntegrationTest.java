@@ -79,7 +79,9 @@ class InteractionRocketMQIntegrationTest {
                     .withStartupTimeout(Duration.ofMinutes(3)));
 
     @Container
-    static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
+    static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379)
+            .withCreateContainerCmdModifier(cmd -> cmd.withHostConfig(HostConfig.newHostConfig()
+                    .withPortBindings(new PortBinding(Ports.Binding.bindPort(16379), new ExposedPort(6379)))));
 
     @Container
     static GenericContainer<?> namesrv = new GenericContainer<>(ROCKETMQ_IMAGE)
@@ -362,6 +364,31 @@ class InteractionRocketMQIntegrationTest {
             try { projectionService.recoverPending(); return !jdbc.queryForObject("select cache_pending from interaction_operations where operation_id = ?", Boolean.class, event.eventId()); }
             catch (org.springframework.dao.DataAccessException ex) { return false; }
         }, Duration.ofSeconds(60));
+        assertThat(interactionService.findPost(POST_ID, user).liked()).isTrue();
+    }
+
+    @Test
+    void redis停止跨恢复周期后重启并恢复缓存() throws Exception {
+        String user = UUID.randomUUID().toString();
+        var event = new InteractionEvent(UUID.randomUUID().toString(), POST_ID, user, InteractionType.LIKE, System.currentTimeMillis());
+        long before = likeCountInDb();
+        interactionService.findPost(POST_ID, user);
+        int port = redis.getMappedPort(6379);
+        redis.getDockerClient().stopContainerCmd(redis.getContainerId()).exec();
+        org.mockito.Mockito.clearInvocations(projectionService);
+        try {
+            assertThat(publisher.publish(event)).isEqualTo(com.kuros.kurosbackend.interaction.event.InteractionEventPublisher.Result.SENT);
+            awaitUntil(() -> projectionService.isApplied(event), Duration.ofSeconds(60));
+            org.mockito.Mockito.verify(projectionService, org.mockito.Mockito.timeout(75000).atLeast(2)).recoverPending();
+            assertThat(projectionService.findOperation(event.eventId(), user).status()).isEqualTo("APPLIED");
+            assertThat(likeRepository.existsById(new PostLikeId(user, POST_ID))).isTrue();
+            assertThat(likeCountInDb()).isEqualTo(before + 1);
+            assertThat(jdbc.queryForObject("select cache_pending from interaction_operations where operation_id = ?", Boolean.class, event.eventId())).isTrue();
+        } finally {
+            redis.getDockerClient().startContainerCmd(redis.getContainerId()).exec();
+        }
+        assertThat(redis.getMappedPort(6379)).isEqualTo(port);
+        awaitUntil(() -> !jdbc.queryForObject("select cache_pending from interaction_operations where operation_id = ?", Boolean.class, event.eventId()), Duration.ofSeconds(75));
         assertThat(interactionService.findPost(POST_ID, user).liked()).isTrue();
     }
 
