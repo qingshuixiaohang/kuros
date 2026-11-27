@@ -5,7 +5,6 @@ import com.github.dockerjava.api.model.ExposedPort;
 import com.github.dockerjava.api.model.HostConfig;
 import com.github.dockerjava.api.model.PortBinding;
 import com.github.dockerjava.api.model.Ports;
-import com.kuros.kurosbackend.TestDatabases;
 import com.kuros.kurosbackend.interaction.domain.PostLikeId;
 import com.kuros.kurosbackend.interaction.repository.PostLikeRepository;
 import com.kuros.kurosbackend.interaction.service.PostInteractionService;
@@ -30,13 +29,17 @@ import org.testcontainers.utility.MountableFile;
 
 import java.time.Duration;
 import java.util.UUID;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 互动异步落库 RocketMQ 端到端集成测试（切片 #11）：真实 namesrv + broker 容器，验证
- * 「点赞 → 发顺序消息 → 消费端幂等落库 → DB 最终一致」全链路，以及同一帖 LIKE→UNLIKE 的顺序终态。
+ * 点赞、取消和多用户并发经真实 RocketMQ、Redis、MySQL 收敛。
  *
  * ⚠️ 默认跳过（gated）：本类是唯一需要真实 RocketMQ broker 的重量级用例，用 @EnabledIfSystemProperty
  * 门控——默认 {@code mvn test} 不跑（保持主套件确定性与速度），需显式 {@code -Dkuros.it.rocketmq=true}
@@ -61,6 +64,14 @@ class InteractionRocketMQIntegrationTest {
     private static final int BROKER_FAST_PORT = 10909;
 
     static final Network network = Network.newNetwork();
+
+    @Container
+    static GenericContainer<?> mysql = new GenericContainer<>("mysql:8.0")
+            .withEnv("MYSQL_ROOT_PASSWORD", "test-only-password")
+            .withEnv("MYSQL_DATABASE", "kuros_test")
+            .withExposedPorts(3306)
+            .waitingFor(Wait.forLogMessage(".*ready for connections.*\\n", 2)
+                    .withStartupTimeout(Duration.ofMinutes(3)));
 
     @Container
     static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
@@ -92,10 +103,19 @@ class InteractionRocketMQIntegrationTest {
                     .withStartupTimeout(Duration.ofMinutes(3)));
 
     @DynamicPropertySource
-    static void props(DynamicPropertyRegistry registry) {
+    static void props(DynamicPropertyRegistry registry) throws Exception {
+        var topic = broker.execInContainer("sh", "mqadmin", "updateTopic", "-n", "namesrv:9876",
+                "-b", "localhost:10911", "-t", "post-interaction-topic", "-r", "4", "-w", "4");
+        if (topic.getExitCode() != 0) {
+            throw new IllegalStateException("Topic creation failed: " + topic.getStderr());
+        }
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
-        registry.add("spring.datasource.url", () -> TestDatabases.h2Url("interaction-rocketmq"));
+        registry.add("spring.datasource.url", () -> "jdbc:mysql://" + mysql.getHost() + ":"
+                + mysql.getMappedPort(3306) + "/kuros_test?characterEncoding=UTF-8&serverTimezone=UTC");
+        registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
+        registry.add("spring.datasource.username", () -> "root");
+        registry.add("spring.datasource.password", () -> "test-only-password");
         // 打开异步链路（覆盖 test profile 的 async.enabled=false / 空 function.definition）：
         // @DynamicPropertySource 优先级高于 application-test.properties，故此处生效
         registry.add("app.interaction.async.enabled", () -> "true");
@@ -128,18 +148,41 @@ class InteractionRocketMQIntegrationTest {
     }
 
     @Test
-    void 同一帖点赞与取消经顺序消费后终态回到基线() {
+    void 点赞完成后取消终态回到基线() {
         redisTemplate.getConnectionFactory().getConnection().serverCommands().flushDb();
         long before = likeCountInDb();
         String userId = UUID.randomUUID().toString();
 
         interactionService.like(POST_ID, userId);
+        awaitUntil(() -> likeRepository.existsById(new PostLikeId(userId, POST_ID))
+                && likeCountInDb() == before + 1, Duration.ofSeconds(60));
         interactionService.unlike(POST_ID, userId);
 
-        // 顺序消费（同 postId 落同队列串行）保证 LIKE 先于 UNLIKE 生效 → 终态无关系行、计数回基线。
-        // 若并发乱序（UNLIKE 先于 LIKE 到达）则终态会残留一行 / 计数停在 before+1，此断言即红。
+        // 已观察到点赞完成后再取消，避免在消费前误判初始状态为最终状态。
         awaitUntil(() -> !likeRepository.existsById(new PostLikeId(userId, POST_ID))
                 && likeCountInDb() == before, Duration.ofSeconds(60));
+    }
+
+    @Test
+    void 多用户并发点赞同一帖后计数与新增关系一致() throws Exception {
+        long before = likeCountInDb();
+        List<String> users = java.util.stream.IntStream.range(0, 8)
+                .mapToObj(ignored -> UUID.randomUUID().toString()).toList();
+        CountDownLatch start = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(users.size())) {
+            var requests = users.stream().map(user -> executor.submit(() -> {
+                start.await();
+                interactionService.like(POST_ID, user);
+                return null;
+            })).toList();
+            start.countDown();
+            for (var request : requests) {
+                request.get(30, TimeUnit.SECONDS);
+            }
+        }
+        awaitUntil(() -> users.stream().allMatch(user ->
+                        likeRepository.existsById(new PostLikeId(user, POST_ID)))
+                && likeCountInDb() == before + users.size(), Duration.ofSeconds(60));
     }
 
     private long likeCountInDb() {
