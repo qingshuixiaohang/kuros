@@ -16,6 +16,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -24,6 +26,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import com.kuros.kurosbackend.interaction.redis.InteractionRedisStore;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -48,6 +52,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 因此无需 @DirtiesContext 重载上下文（既快又隔离）。
  */
 @SpringBootTest
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Testcontainers
 @Import(InteractionAsyncIntegrationTest.RecordingPublisherConfig.class)
@@ -77,6 +82,10 @@ class InteractionAsyncIntegrationTest {
     private StringRedisTemplate redisTemplate;
     @Autowired
     private RecordingPublisher publisher;
+    @Autowired
+    private MockMvc mockMvc;
+    @MockitoSpyBean
+    private InteractionRedisStore redisStore;
 
     @BeforeEach
     void reset() {
@@ -147,6 +156,202 @@ class InteractionAsyncIntegrationTest {
         // 关系仅一行、计数只 +1（existsById 前置判断挡住二次 increment）
         assertThat(likeRepository.existsById(new PostLikeId(userId, POST_ID))).isTrue();
         assertThat(likeCountInDb()).isEqualTo(before + 1);
+    }
+
+    @Test
+    void 取消后重放已完成的点赞不会恢复关系() {
+        long before = likeCountInDb();
+        String userId = UUID.randomUUID().toString();
+        InteractionEvent like = InteractionEvent.of(POST_ID, userId, InteractionType.LIKE);
+
+        projectionService.apply(like);
+        projectionService.apply(InteractionEvent.of(POST_ID, userId, InteractionType.UNLIKE));
+        projectionService.apply(like);
+
+        assertThat(likeRepository.existsById(new PostLikeId(userId, POST_ID))).isFalse();
+        assertThat(likeCountInDb()).isEqualTo(before);
+    }
+
+    @Test
+    void 操作查询只向本人返回数据库状态() {
+        String userId = UUID.randomUUID().toString();
+        InteractionEvent event = InteractionEvent.of(POST_ID, userId, InteractionType.LIKE);
+        assertThat(projectionService.findOperation(event.eventId(), userId).status()).isEqualTo("UNKNOWN");
+        projectionService.apply(event);
+        var result = projectionService.findOperation(event.eventId(), userId);
+        assertThat(result.status()).isEqualTo("APPLIED");
+        assertThat(result.state().liked()).isTrue();
+        assertThat(projectionService.findOperation(event.eventId(), UUID.randomUUID().toString()).status())
+                .isEqualTo("UNKNOWN");
+    }
+
+    @Test
+    void 受理请求保留调用方操作编号和目标状态() {
+        String userId = UUID.randomUUID().toString();
+        String operationId = UUID.randomUUID().toString();
+        publisher.result = InteractionEventPublisher.Result.SENT;
+        interactionService.submit(POST_ID, userId, operationId, InteractionType.LIKE);
+        assertThat(publisher.published).singleElement().satisfies(event -> {
+            assertThat(event.eventId()).isEqualTo(operationId);
+            assertThat(event.type()).isEqualTo(InteractionType.LIKE);
+        });
+        assertThat(likeRepository.existsById(new PostLikeId(userId, POST_ID))).isFalse();
+    }
+
+    @Test
+    void 缓存失效失败后可从持久记录恢复() {
+        String userId = UUID.randomUUID().toString();
+        InteractionEvent event = InteractionEvent.of(POST_ID, userId, InteractionType.LIKE);
+        interactionService.findPost(POST_ID, userId);
+        org.mockito.Mockito.doThrow(new IllegalStateException("redis down")).doCallRealMethod()
+                .when(redisStore).invalidate(event.type().kind(), POST_ID, userId);
+        assertThatThrownBy(() -> projectionService.apply(event)).isInstanceOf(IllegalStateException.class);
+        assertThat(projectionService.findOperation(event.eventId(), userId).status()).isEqualTo("APPLIED");
+        projectionService.recoverPending();
+        assertThat(redisTemplate.hasKey("interaction:like:" + POST_ID + ":" + userId)).isFalse();
+        assertThat(projectionService.findOperation(event.eventId(), userId).state().liked()).isTrue();
+    }
+
+    @Test
+    void 多次缓存失效失败后业务仍已应用并最终恢复() {
+        String userId = UUID.randomUUID().toString();
+        InteractionEvent event = InteractionEvent.of(POST_ID, userId, InteractionType.LIKE);
+        interactionService.findPost(POST_ID, userId);
+        org.mockito.Mockito.doThrow(new IllegalStateException("redis down"))
+                .doThrow(new IllegalStateException("redis still down"))
+                .doThrow(new IllegalStateException("redis still down"))
+                .doCallRealMethod().when(redisStore).invalidate(event.type().kind(), POST_ID, userId);
+        assertThatThrownBy(() -> projectionService.apply(event)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> projectionService.recoverPending()).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> projectionService.recoverPending()).isInstanceOf(IllegalStateException.class);
+        assertThat(projectionService.findOperation(event.eventId(), userId).status()).isEqualTo("APPLIED");
+        projectionService.recoverPending();
+        assertThat(redisTemplate.hasKey("interaction:like:" + POST_ID + ":" + userId)).isFalse();
+        assertThat(interactionService.findPost(POST_ID, userId).liked()).isTrue();
+    }
+
+    @Test
+    void 操作接口受理并限制查询身份() throws Exception {
+        String user = UUID.randomUUID().toString();
+        String operation = UUID.randomUUID().toString();
+        var cookie = new jakarta.servlet.http.Cookie("KUROS_SESSION", cn.dev33.satoken.stp.StpUtil.createLoginSession(user));
+        publisher.result = InteractionEventPublisher.Result.SENT;
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/interaction-operations")
+                        .cookie(cookie, new jakarta.servlet.http.Cookie("XSRF-TOKEN", "test"))
+                        .header("X-XSRF-TOKEN", "test").contentType("application/json")
+                        .content("{\"operationId\":\"" + operation + "\",\"postId\":\"" + POST_ID + "\",\"type\":\"LIKE\"}"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isAccepted());
+        projectionService.apply(publisher.published.getFirst());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/interaction-operations/" + operation).cookie(cookie))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.data.status").value("APPLIED"));
+        var other = new jakarta.servlet.http.Cookie("KUROS_SESSION", cn.dev33.satoken.stp.StpUtil.createLoginSession(UUID.randomUUID().toString()));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/interaction-operations/" + operation).cookie(other))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.data.status").value("UNKNOWN"));
+    }
+
+    @Test
+    void 旧互动地址可携带操作编号并返回受理结果() throws Exception {
+        String user = UUID.randomUUID().toString();
+        String operation = UUID.randomUUID().toString();
+        var cookie = new jakarta.servlet.http.Cookie("KUROS_SESSION", cn.dev33.satoken.stp.StpUtil.createLoginSession(user));
+        publisher.result = InteractionEventPublisher.Result.SENT;
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/posts/" + POST_ID + "/interactions/like")
+                        .cookie(cookie, new jakarta.servlet.http.Cookie("XSRF-TOKEN", "test"))
+                        .header("X-XSRF-TOKEN", "test").header("Idempotency-Key", operation))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isAccepted())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.data.operationId").value(operation));
+        assertThat(publisher.published).singleElement().satisfies(event -> assertThat(event.eventId()).isEqualTo(operation));
+    }
+
+    @Test
+    void 失败任务暂停后可恢复且保留记录() {
+        InteractionEvent event = InteractionEvent.of(POST_ID, UUID.randomUUID().toString(), InteractionType.LIKE);
+        projectionService.recordFailure(event, "TemporaryFailure");
+        assertThat(projectionService.isFailurePaused(event.eventId())).isTrue();
+        projectionService.resumeFailure(event.eventId());
+        assertThat(projectionService.isFailurePaused(event.eventId())).isFalse();
+        assertThat(projectionService.findOperation(event.eventId(), event.userId()).status()).isEqualTo("APPLIED");
+        projectionService.apply(event);
+        assertThat(projectionService.findOperation(event.eventId(), event.userId()).status()).isEqualTo("APPLIED");
+    }
+
+    @Test
+    void 并发重投同一操作只生效一次() throws Exception {
+        String userId = UUID.randomUUID().toString();
+        long before = likeCountInDb();
+        InteractionEvent event = InteractionEvent.of(POST_ID, userId, InteractionType.LIKE);
+        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(4)) {
+            var gate = new java.util.concurrent.CountDownLatch(1);
+            var tasks = java.util.stream.IntStream.range(0, 4).mapToObj(i -> executor.submit(() -> {
+                gate.await();
+                projectionService.apply(event);
+                return null;
+            })).toList();
+            gate.countDown();
+            for (var task : tasks) task.get();
+        }
+        var state = projectionService.findOperation(event.eventId(), userId).state();
+        assertThat(state.liked()).isTrue();
+        assertThat(state.likeCount()).isEqualTo(before + 1);
+    }
+
+    @Test
+    void 已绑定的操作编号不能用于另一目标状态() {
+        String userId = UUID.randomUUID().toString();
+        InteractionEvent event = InteractionEvent.of(POST_ID, userId, InteractionType.LIKE);
+        projectionService.apply(event);
+        publisher.result = InteractionEventPublisher.Result.SENT;
+        assertThatThrownBy(() -> interactionService.submit(POST_ID, userId, event.eventId(), InteractionType.UNLIKE))
+                .isInstanceOf(com.kuros.kurosbackend.shared.exception.AuthRequestException.class);
+        assertThat(publisher.published).isEmpty();
+    }
+
+    @Test
+    void 首次消息尚未消费时操作编号仍不能绑定另一目标状态() {
+        String userId = UUID.randomUUID().toString();
+        String operationId = UUID.randomUUID().toString();
+        publisher.result = InteractionEventPublisher.Result.SENT;
+        interactionService.submit(POST_ID, userId, operationId, InteractionType.LIKE);
+        assertThatThrownBy(() -> interactionService.submit(POST_ID, userId, operationId, InteractionType.UNLIKE))
+                .isInstanceOf(com.kuros.kurosbackend.shared.exception.AuthRequestException.class);
+        assertThat(publisher.published).hasSize(1);
+    }
+
+    @Test
+    void 结果未知后重试明确连接失败仍保持未知() {
+        String userId = UUID.randomUUID().toString();
+        String operationId = UUID.randomUUID().toString();
+        publisher.result = InteractionEventPublisher.Result.UNKNOWN;
+        assertThatThrownBy(() -> interactionService.submit(POST_ID, userId, operationId, InteractionType.LIKE))
+                .isInstanceOfSatisfying(ServiceUnavailableException.class,
+                        failure -> assertThat(failure.getCode()).isEqualTo("INTERACTION_DELIVERY_UNKNOWN"));
+        publisher.result = InteractionEventPublisher.Result.REJECTED;
+        assertThatThrownBy(() -> interactionService.submit(POST_ID, userId, operationId, InteractionType.LIKE))
+                .isInstanceOfSatisfying(ServiceUnavailableException.class,
+                        failure -> assertThat(failure.getCode()).isEqualTo("INTERACTION_DELIVERY_UNKNOWN"));
+    }
+
+    @Test
+    void 并发请求不能把同一操作编号绑定到不同用户() throws Exception {
+        String operationId = UUID.randomUUID().toString();
+        String firstUser = UUID.randomUUID().toString();
+        String secondUser = UUID.randomUUID().toString();
+        publisher.result = InteractionEventPublisher.Result.SENT;
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var gate = new java.util.concurrent.CountDownLatch(1);
+            var results = java.util.List.of(firstUser, secondUser).stream().map(user -> pool.submit(() -> {
+                gate.await();
+                try {
+                    interactionService.submit(POST_ID, user, operationId, InteractionType.LIKE);
+                    return "SENT";
+                } catch (com.kuros.kurosbackend.shared.exception.AuthRequestException conflict) {
+                    return "CONFLICT";
+                }
+            })).toList();
+            gate.countDown();
+            assertThat(java.util.List.of(results.get(0).get(), results.get(1).get())).containsExactlyInAnyOrder("SENT", "CONFLICT");
+        }
+        assertThat(publisher.published).hasSize(1);
     }
 
     @Test

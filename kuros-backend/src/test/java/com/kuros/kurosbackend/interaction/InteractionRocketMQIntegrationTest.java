@@ -9,6 +9,9 @@ import com.kuros.kurosbackend.TestDatabases;
 import com.kuros.kurosbackend.interaction.domain.PostLikeId;
 import com.kuros.kurosbackend.interaction.repository.PostLikeRepository;
 import com.kuros.kurosbackend.interaction.service.PostInteractionService;
+import com.kuros.kurosbackend.interaction.service.InteractionProjectionService;
+import com.kuros.kurosbackend.interaction.event.InteractionEvent;
+import com.kuros.kurosbackend.interaction.event.InteractionType;
 import com.kuros.kurosbackend.post.domain.CommunityPost;
 import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
 import org.junit.jupiter.api.Tag;
@@ -21,6 +24,7 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -92,14 +96,19 @@ class InteractionRocketMQIntegrationTest {
                     .withStartupTimeout(Duration.ofMinutes(3)));
 
     @DynamicPropertySource
-    static void props(DynamicPropertyRegistry registry) {
+    static void props(DynamicPropertyRegistry registry) throws Exception {
+        var init = broker.execInContainer("sh", "mqadmin", "updateTopic", "-n", "namesrv:9876",
+                "-b", "localhost:10911", "-t", "post-interaction-topic", "-r", "4", "-w", "4");
+        if (init.getExitCode() != 0) {
+            throw new IllegalStateException(init.getStderr());
+        }
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
         registry.add("spring.datasource.url", () -> TestDatabases.h2Url("interaction-rocketmq"));
         // 打开异步链路（覆盖 test profile 的 async.enabled=false / 空 function.definition）：
         // @DynamicPropertySource 优先级高于 application-test.properties，故此处生效
         registry.add("app.interaction.async.enabled", () -> "true");
-        registry.add("spring.cloud.function.definition", () -> "interactionConsumer");
+        registry.add("spring.cloud.function.definition", () -> "");
         registry.add("spring.cloud.stream.rocketmq.binder.name-server",
                 () -> namesrv.getHost() + ":" + namesrv.getMappedPort(NAMESRV_PORT));
     }
@@ -112,6 +121,40 @@ class InteractionRocketMQIntegrationTest {
     private CommunityPostRepository postRepository;
     @Autowired
     private StringRedisTemplate redisTemplate;
+    @MockitoSpyBean
+    private InteractionProjectionService projectionService;
+
+    @Test
+    void 业务回调失败后消息会重新消费() {
+        String userId = UUID.randomUUID().toString();
+        String operationId = UUID.randomUUID().toString();
+        org.mockito.Mockito.doThrow(new IllegalStateException("temporary failure")).doCallRealMethod()
+                .when(projectionService).apply(org.mockito.ArgumentMatchers.argThat(
+                        event -> event != null && operationId.equals(event.eventId())));
+        interactionService.submit(POST_ID, userId, operationId, InteractionType.LIKE);
+        awaitUntil(() -> projectionService.findOperation(operationId, userId).status().equals("APPLIED"), Duration.ofSeconds(60));
+        org.mockito.Mockito.verify(projectionService, org.mockito.Mockito.atLeast(2)).apply(
+                org.mockito.ArgumentMatchers.argThat(event -> event != null && operationId.equals(event.eventId())));
+    }
+
+    @Test
+    void 重试耗尽后暂停队列并由管理员恢复() {
+        String userId = UUID.randomUUID().toString();
+        String first = UUID.randomUUID().toString();
+        String second = UUID.randomUUID().toString();
+        org.mockito.Mockito.doThrow(new IllegalStateException("failure"))
+                .when(projectionService).apply(org.mockito.ArgumentMatchers.argThat(
+                        event -> event != null && first.equals(event.eventId())));
+        interactionService.submit(POST_ID, userId, first, InteractionType.LIKE);
+        interactionService.submit(POST_ID, userId, second, InteractionType.UNLIKE);
+        awaitUntil(() -> projectionService.isFailurePaused(first), Duration.ofSeconds(60));
+        assertThat(projectionService.findOperation(second, userId).status()).isEqualTo("UNKNOWN");
+        org.mockito.Mockito.doCallRealMethod().when(projectionService).apply(org.mockito.ArgumentMatchers.argThat(
+                event -> event != null && first.equals(event.eventId())));
+        projectionService.resumeFailure(first);
+        awaitUntil(() -> projectionService.findOperation(second, userId).status().equals("APPLIED"), Duration.ofSeconds(60));
+        assertThat(likeRepository.existsById(new PostLikeId(userId, POST_ID))).isFalse();
+    }
 
     @Test
     void 点赞经RocketMQ顺序消费后DB最终一致() {
@@ -133,13 +176,29 @@ class InteractionRocketMQIntegrationTest {
         long before = likeCountInDb();
         String userId = UUID.randomUUID().toString();
 
-        interactionService.like(POST_ID, userId);
-        interactionService.unlike(POST_ID, userId);
+        String first = UUID.randomUUID().toString();
+        String second = UUID.randomUUID().toString();
+        interactionService.submit(POST_ID, userId, first, InteractionType.LIKE);
+        interactionService.submit(POST_ID, userId, second, InteractionType.UNLIKE);
 
         // 顺序消费（同 postId 落同队列串行）保证 LIKE 先于 UNLIKE 生效 → 终态无关系行、计数回基线。
         // 若并发乱序（UNLIKE 先于 LIKE 到达）则终态会残留一行 / 计数停在 before+1，此断言即红。
-        awaitUntil(() -> !likeRepository.existsById(new PostLikeId(userId, POST_ID))
+        awaitUntil(() -> projectionService.findOperation(second, userId).status().equals("APPLIED")
+                && !likeRepository.existsById(new PostLikeId(userId, POST_ID))
                 && likeCountInDb() == before, Duration.ofSeconds(60));
+    }
+
+    @Test
+    void 同一帖点赞取消再点赞最终只增加一次() {
+        long before = likeCountInDb();
+        String userId = UUID.randomUUID().toString();
+        String last = UUID.randomUUID().toString();
+        interactionService.submit(POST_ID, userId, UUID.randomUUID().toString(), InteractionType.LIKE);
+        interactionService.submit(POST_ID, userId, UUID.randomUUID().toString(), InteractionType.UNLIKE);
+        interactionService.submit(POST_ID, userId, last, InteractionType.LIKE);
+        awaitUntil(() -> projectionService.findOperation(last, userId).status().equals("APPLIED")
+                && likeRepository.existsById(new PostLikeId(userId, POST_ID))
+                && likeCountInDb() == before + 1, Duration.ofSeconds(60));
     }
 
     private long likeCountInDb() {
