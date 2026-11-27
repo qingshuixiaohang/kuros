@@ -53,6 +53,104 @@ class InteractionMySqlIntegrationTest {
     @Autowired InteractionProjectionService projection;
     @Autowired CommunityPostRepository posts;
     @Autowired PostInteractionService interactions;
+    @Autowired com.kuros.kurosbackend.interaction.redis.InteractionRedisStore cache;
+    @Autowired com.kuros.kurosbackend.interaction.repository.PostLikeRepository likes;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
+    @Autowired com.kuros.kurosbackend.interaction.repository.PostFavoriteRepository favorites;
+    @Autowired jakarta.persistence.EntityManagerFactory emf;
+    @Autowired org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
+
+    @Test
+    void 批量状态同负载测量() {
+        var ids = java.util.stream.IntStream.rangeClosed(1, 4)
+                .mapToObj(i -> "10000000-0000-0000-0000-%012d".formatted(i)).toList();
+        var users = java.util.stream.IntStream.range(0, 20).mapToObj(i -> UUID.randomUUID().toString()).toList();
+        for (String user : users) for (String id : ids)
+            jdbc.update("insert into post_likes (user_id, post_id, created_at) values (?, ?, now())", user, id);
+        var statistics = emf.unwrap(org.hibernate.SessionFactory.class).getStatistics();
+        statistics.setStatisticsEnabled(true);
+        for (int phase = 0; phase < 2; phase++) {
+            statistics.clear();
+            long[] times = new long[200];
+            for (int i = 0; i < times.length; i++) {
+                String user = users.get(i % users.size());
+                long start = System.nanoTime();
+                if (phase == 0) {
+                    var state = new java.util.HashMap<String, boolean[]>();
+                    ids.forEach(id -> state.put(id, new boolean[]{false, false}));
+                    likes.findLikedPostIds(user, ids).forEach(id -> state.get(id)[0] = true);
+                    favorites.findFavoritedPostIds(user, ids).forEach(id -> state.get(id)[1] = true);
+                } else {
+                    interactions.findStatesFor(ids, user);
+                }
+                times[i] = System.nanoTime() - start;
+            }
+            java.util.Arrays.sort(times);
+            java.util.Properties info;
+            long keys;
+            try (var connection = redisTemplate.getConnectionFactory().getConnection()) {
+                info = connection.serverCommands().info("memory");
+                keys = connection.serverCommands().dbSize();
+            }
+            System.out.printf("PERF phase=%s requests=%d users=%d batch=%d sql=%d keys=%d used_memory=%s p50_us=%d p95_us=%d p99_us=%d%n",
+                    phase == 0 ? "before" : "after", times.length, users.size(), ids.size(), statistics.getPrepareStatementCount(),
+                    keys, info.getProperty("used_memory"),
+                    times[99] / 1000, times[189] / 1000, times[197] / 1000);
+        }
+        statistics.clear();
+        long[] writes = new long[20];
+        for (int i = 0; i < writes.length; i++) {
+            String user = users.get(i);
+            long start = System.nanoTime();
+            cache.invalidate(com.kuros.kurosbackend.interaction.event.InteractionKind.LIKE, ids.get(0), user);
+            cache.recentLikes(user, () -> likes.findByUserIdOrderByCreatedAtDescPostIdDesc(user, org.springframework.data.domain.PageRequest.of(0, cache.likesMaxSize())));
+            writes[i] = System.nanoTime() - start;
+        }
+        java.util.Arrays.sort(writes);
+        System.out.printf("PERF rebuilds=20 sql=%d p50_us=%d p95_us=%d version_ttl=%d%n", statistics.getPrepareStatementCount(), writes[9] / 1000, writes[18] / 1000,
+                redisTemplate.getExpire("user:likes:patten:" + users.getFirst() + ":post:version"));
+        statistics.setStatisticsEnabled(false);
+    }
+
+    @Test
+    void 旧数据库快照不能覆盖并发取消() throws Exception {
+        String user = UUID.randomUUID().toString();
+        jdbc.update("insert into post_likes (user_id, post_id, created_at) values (?, ?, now())", user, POST);
+        var snapshotTaken = new CountDownLatch(1);
+        var resume = new CountDownLatch(1);
+        try (var pool = Executors.newSingleThreadExecutor()) {
+            var result = pool.submit(() -> cache.recentLikes(user, () -> {
+                var rows = likes.findByUserIdOrderByCreatedAtDescPostIdDesc(user, org.springframework.data.domain.PageRequest.of(0, 3));
+                snapshotTaken.countDown();
+                try { resume.await(); } catch (InterruptedException e) { throw new RuntimeException(e); }
+                return rows;
+            }));
+            try {
+                assertThat(snapshotTaken.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                jdbc.update("delete from post_likes where user_id = ? and post_id = ?", user, POST);
+                cache.invalidate(com.kuros.kurosbackend.interaction.event.InteractionKind.LIKE, POST, user);
+            } finally { resume.countDown(); }
+            assertThat(result.get(10, java.util.concurrent.TimeUnit.SECONDS)).isEmpty();
+        }
+    }
+
+    @Test
+    void 取消后窗口补齐且相同时间分页稳定() {
+        String user = UUID.randomUUID().toString();
+        var ids = java.util.stream.IntStream.rangeClosed(1, 4)
+                .mapToObj(i -> "10000000-0000-0000-0000-%012d".formatted(i)).toList();
+        for (String id : ids) jdbc.update("insert into post_likes (user_id, post_id, created_at) values (?, ?, '2026-01-01 12:00:00')", user, id);
+        var first = likes.findByUserIdOrderByCreatedAtDescPostIdDesc(user, org.springframework.data.domain.PageRequest.of(0, 2));
+        var second = likes.findByUserIdOrderByCreatedAtDescPostIdDesc(user, org.springframework.data.domain.PageRequest.of(1, 2));
+        assertThat(java.util.stream.Stream.concat(first.stream(), second.stream()).map(x -> x.getPostId()).toList())
+                .containsExactly(ids.get(3), ids.get(2), ids.get(1), ids.get(0));
+        java.util.function.Supplier<java.util.List<com.kuros.kurosbackend.interaction.domain.PostLike>> load =
+                () -> likes.findByUserIdOrderByCreatedAtDescPostIdDesc(user, org.springframework.data.domain.PageRequest.of(0, 3));
+        assertThat(cache.recentLikes(user, load)).containsExactly(ids.get(3), ids.get(2), ids.get(1));
+        jdbc.update("delete from post_likes where user_id = ? and post_id = ?", user, ids.get(3));
+        cache.invalidate(com.kuros.kurosbackend.interaction.event.InteractionKind.LIKE, ids.get(3), user);
+        assertThat(cache.recentLikes(user, load)).containsExactly(ids.get(2), ids.get(1), ids.get(0));
+    }
 
     @Test
     void 并发重投和取消后重放保持正确状态() throws Exception {
