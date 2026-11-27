@@ -11,6 +11,7 @@ import com.kuros.kurosbackend.interaction.service.InteractionProjectionService;
 import com.kuros.kurosbackend.interaction.service.PostInteractionService;
 import com.kuros.kurosbackend.post.domain.CommunityPost;
 import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
+import com.kuros.kurosbackend.shared.exception.ServiceUnavailableException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,9 +32,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 互动异步写路径集成测试（切片 #11）：不依赖 RocketMQ broker，用「记录型发布器」在最高接缝（Service）
@@ -41,11 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * 为什么这一类能在无 broker 下验证异步语义？
  * test profile 关异步（app.interaction.async.enabled=false）→ RocketMQ 发布器与 Stream 消费绑定都不装配，
- * binder 全程不连 name-server；再用 @Primary 的 RecordingPublisher 顶替 Noop，用开关模拟两种投递结果：
- * - deliver=true：等价「MQ 投递成功」→ 写路径只应改 Redis + 记事件，绝不同步写 DB（异步化的本质）；
- * - deliver=false：等价「未启用 / 投递失败」→ 写路径必须锁内同步降级落库（互动不丢）。
- * 落库正确性 / 消费幂等 / 顺序终态则直接驱动 InteractionProjectionService.apply——它就是消费端与降级路径
- * 共用的唯一落库入口，因此绕过 MQ 传输也能验证「消费端契约」。
+ * binder 全程不连 name-server。RecordingPublisher 注入不同投递结果，消费者通过投影服务直接触发。
  *
  * 断言一律用「相对增量」而非绝对值，配合每用例唯一 userId + @BeforeEach 清 Redis，
  * 因此无需 @DirtiesContext 重载上下文（既快又隔离）。
@@ -88,16 +85,16 @@ class InteractionAsyncIntegrationTest {
     }
 
     @Test
-    void 投递成功时写路径只改Redis并发事件而不同步落库() {
+    void 投递成功后仅消费者落库并失效旧缓存() {
         long before = likeCountInDb();
         String userId = UUID.randomUUID().toString();
-        publisher.deliver.set(true);
+        publisher.result = InteractionEventPublisher.Result.SENT;
+        interactionService.findPost(POST_ID, userId);
 
         PostInteractionResponse resp = interactionService.like(POST_ID, userId);
 
-        // 即时反馈：响应取自 Redis 实时读源，已 +1、liked=true
-        assertThat(resp.liked()).isTrue();
-        assertThat(resp.likeCount()).isEqualTo(before + 1);
+        assertThat(resp.liked()).isFalse();
+        assertThat(resp.likeCount()).isEqualTo(before);
         // 关键断言：写路径未同步写 DB——请求线程脱离了 DB 写（这正是热点行竞争被根除的前提）
         assertThat(likeRepository.existsById(new PostLikeId(userId, POST_ID))).isFalse();
         assertThat(likeCountInDb()).isEqualTo(before);
@@ -110,23 +107,32 @@ class InteractionAsyncIntegrationTest {
 
         // 模拟消费端顺序消费该事件 → DB 最终一致
         projectionService.apply(event);
+        assertThat(redisTemplate.hasKey("interaction:count:like:" + POST_ID)).isFalse();
+        assertThat(redisTemplate.hasKey("interaction:like:" + POST_ID + ":" + userId)).isFalse();
         assertThat(likeRepository.existsById(new PostLikeId(userId, POST_ID))).isTrue();
         assertThat(likeCountInDb()).isEqualTo(before + 1);
+        assertThat(interactionService.findPost(POST_ID, userId).liked()).isTrue();
+        assertThat(interactionService.findPost(POST_ID, userId).likeCount()).isEqualTo(before + 1);
     }
 
     @Test
-    void 投递失败时锁内同步降级落库保证互动不丢() {
+    void 投递拒绝或结果未知时不写业务数据和缓存() {
         long before = likeCountInDb();
         String userId = UUID.randomUUID().toString();
-        publisher.deliver.set(false); // 模拟 MQ 不可用 / 未启用
+        publisher.result = InteractionEventPublisher.Result.REJECTED;
 
-        PostInteractionResponse resp = interactionService.like(POST_ID, userId);
+        assertThatThrownBy(() -> interactionService.like(POST_ID, userId))
+                .isInstanceOfSatisfying(ServiceUnavailableException.class,
+                        failure -> assertThat(failure.getCode()).isEqualTo("INTERACTION_NOT_ACCEPTED"));
+        publisher.result = InteractionEventPublisher.Result.UNKNOWN;
+        assertThatThrownBy(() -> interactionService.like(POST_ID, userId))
+                .isInstanceOfSatisfying(ServiceUnavailableException.class,
+                        failure -> assertThat(failure.getCode()).isEqualTo("INTERACTION_DELIVERY_UNKNOWN"));
 
-        assertThat(resp.liked()).isTrue();
-        assertThat(resp.likeCount()).isEqualTo(before + 1);
-        // 降级：锁内已同步落库（commit 先于 unlock），DB 立即可见，互动绝不丢
-        assertThat(likeRepository.existsById(new PostLikeId(userId, POST_ID))).isTrue();
-        assertThat(likeCountInDb()).isEqualTo(before + 1);
+        assertThat(redisTemplate.hasKey("interaction:count:like:" + POST_ID)).isFalse();
+        assertThat(redisTemplate.hasKey("interaction:like:" + POST_ID + ":" + userId)).isFalse();
+        assertThat(likeRepository.existsById(new PostLikeId(userId, POST_ID))).isFalse();
+        assertThat(likeCountInDb()).isEqualTo(before);
     }
 
     @Test
@@ -160,7 +166,7 @@ class InteractionAsyncIntegrationTest {
     void 写路径重复点赞在Redis与DB两侧都幂等不重复计数() {
         long before = likeCountInDb();
         String userId = UUID.randomUUID().toString();
-        publisher.deliver.set(false); // 走降级同步，便于同时校验 Redis 与 DB 收敛一致
+        publisher.result = InteractionEventPublisher.Result.DISABLED;
 
         PostInteractionResponse first = interactionService.like(POST_ID, userId);
         PostInteractionResponse second = interactionService.like(POST_ID, userId);
@@ -176,17 +182,17 @@ class InteractionAsyncIntegrationTest {
 
     /** 记录型发布器：@Primary 顶替 Noop，开关控制投递结果并留存事件供断言 / 回放。 */
     static class RecordingPublisher implements InteractionEventPublisher {
-        final AtomicBoolean deliver = new AtomicBoolean(false);
+        Result result = Result.DISABLED;
         final List<InteractionEvent> published = new CopyOnWriteArrayList<>();
 
         @Override
-        public boolean publish(InteractionEvent event) {
+        public Result publish(InteractionEvent event) {
             published.add(event);
-            return deliver.get();
+            return result;
         }
 
         void reset() {
-            deliver.set(false);
+            result = Result.DISABLED;
             published.clear();
         }
     }

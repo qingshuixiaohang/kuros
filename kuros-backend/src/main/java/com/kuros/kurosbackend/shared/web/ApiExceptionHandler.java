@@ -101,7 +101,7 @@ public class ApiExceptionHandler {
         // split-07：用户域数据迁出后的窗口期降级（详见异常类注释），
         // 前端据此识别“服务端能力暂不可用”并渲染降级提示，而非误报“用户不存在”
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(new ErrorResponse("SERVICE_UNAVAILABLE", exception.getMessage(), null));
+                .body(new ErrorResponse(exception.getCode(), exception.getMessage(), null));
     }
 
     @ExceptionHandler(FileStorageException.class)

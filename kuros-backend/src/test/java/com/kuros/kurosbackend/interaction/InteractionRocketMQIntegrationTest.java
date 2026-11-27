@@ -6,7 +6,6 @@ import com.github.dockerjava.api.model.HostConfig;
 import com.github.dockerjava.api.model.PortBinding;
 import com.github.dockerjava.api.model.Ports;
 import com.kuros.kurosbackend.TestDatabases;
-import com.kuros.kurosbackend.interaction.api.PostInteractionResponse;
 import com.kuros.kurosbackend.interaction.domain.PostLikeId;
 import com.kuros.kurosbackend.interaction.repository.PostLikeRepository;
 import com.kuros.kurosbackend.interaction.service.PostInteractionService;
@@ -120,14 +119,12 @@ class InteractionRocketMQIntegrationTest {
         long before = likeCountInDb();
         String userId = UUID.randomUUID().toString();
 
-        // 写路径即时返回 Redis 实时值（此刻 DB 尚未落库）
-        PostInteractionResponse resp = interactionService.like(POST_ID, userId);
-        assertThat(resp.liked()).isTrue();
-        assertThat(resp.likeCount()).isEqualTo(before + 1);
+        interactionService.like(POST_ID, userId);
 
         // 轮询等待真实 broker 传输 + 顺序消费 → DB 最终一致
         awaitUntil(() -> likeRepository.existsById(new PostLikeId(userId, POST_ID))
-                && likeCountInDb() == before + 1, Duration.ofSeconds(60));
+                && likeCountInDb() == before + 1
+                && interactionService.findPost(POST_ID, userId).liked(), Duration.ofSeconds(60));
     }
 
     @Test

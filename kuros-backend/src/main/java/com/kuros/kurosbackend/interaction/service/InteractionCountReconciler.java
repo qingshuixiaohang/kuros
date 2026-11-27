@@ -71,37 +71,29 @@ public class InteractionCountReconciler {
         return deltas;
     }
 
-    /** Repairs the persisted count columns from the live Redis counts without overwriting them. */
+    /** 以已提交的互动关系修复计数，避免陈旧缓存反写数据库。 */
     public void reconcilePublishedPostCounts(String postId) {
-        reconcileLikeColumnFromRedis(postId);
-        reconcileFavoriteColumnFromRedis(postId);
-    }
-
-    private void reconcileLikeColumnFromRedis(String postId) {
-        CommunityPostState dbBefore = transactionTemplate.execute(status -> postRepository.findById(postId)
+        CommunityPostState likeBefore = transactionTemplate.execute(status -> postRepository.findById(postId)
                 .map(post -> new CommunityPostState(post.getLikeCount(), post.getInteractionCountVersion()))
                 .orElse(new CommunityPostState(0L, 0L)));
-        long liveCount = redisStore.readCount(InteractionKind.LIKE, postId,
-                () -> likeRepository.countByPostId(postId));
+        long liveCount = likeRepository.countByPostId(postId);
         int updated = transactionTemplate.execute(status ->
-                postRepository.updateLikeCountIfVersion(postId, dbBefore.version(), liveCount));
-        logColumnRepair(postId, InteractionKind.LIKE, dbBefore.count(), liveCount, updated);
-    }
+                postRepository.updateLikeCountIfVersion(postId, likeBefore.version(), liveCount));
+        logColumnRepair(postId, InteractionKind.LIKE, likeBefore.count(), liveCount, updated);
 
-    private void reconcileFavoriteColumnFromRedis(String postId) {
-        CommunityPostState dbBefore = transactionTemplate.execute(status -> postRepository.findById(postId)
+        CommunityPostState favoriteBefore = transactionTemplate.execute(status -> postRepository.findById(postId)
                 .map(post -> new CommunityPostState(post.getFavoriteCount(), post.getInteractionCountVersion()))
                 .orElse(new CommunityPostState(0L, 0L)));
-        long liveCount = redisStore.readCount(InteractionKind.FAVORITE, postId,
-                () -> favoriteRepository.countByPostId(postId));
-        int updated = transactionTemplate.execute(status ->
-                postRepository.updateFavoriteCountIfVersion(postId, dbBefore.version(), liveCount));
-        logColumnRepair(postId, InteractionKind.FAVORITE, dbBefore.count(), liveCount, updated);
+        long favoriteCount = favoriteRepository.countByPostId(postId);
+        updated = transactionTemplate.execute(status ->
+                postRepository.updateFavoriteCountIfVersion(postId, favoriteBefore.version(), favoriteCount));
+        logColumnRepair(postId, InteractionKind.FAVORITE, favoriteBefore.count(), favoriteCount, updated);
+        redisStore.invalidateCounts(postId);
     }
 
     private void logColumnRepair(String postId, InteractionKind kind, long dbBefore, long liveCount, int updated) {
         if (updated > 0 && dbBefore != liveCount) {
-            log.warn("互动计数对账修正：postId={} kind={} dbColumn {} -> {}，Redis 保持实时值",
+            log.warn("互动计数对账修正：postId={} kind={} dbColumn {} -> {}",
                     postId, kind, dbBefore, liveCount);
         }
     }

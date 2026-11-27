@@ -290,20 +290,24 @@ class InteractionCountReconcileIntegrationTest {
 
         assertThat(publishedPosts).extracting(CommunityPost::getId).contains(postId, secondPost.getId(), thirdPost.getId());
         for (CommunityPost post : publishedPosts) {
-            assertCounts(post.getId(), likeRepository.countByPostId(post.getId()), favoriteRepository.countByPostId(post.getId()));
+            CommunityPost repaired = postRepository.findById(post.getId()).orElseThrow();
+            assertThat(repaired.getLikeCount()).isEqualTo(likeRepository.countByPostId(post.getId()));
+            assertThat(repaired.getFavoriteCount()).isEqualTo(favoriteRepository.countByPostId(post.getId()));
+            assertThat(redisTemplate.hasKey("interaction:count:like:" + post.getId())).isFalse();
+            assertThat(redisTemplate.hasKey("interaction:count:favorite:" + post.getId())).isFalse();
         }
     }
 
     @Test
-    void 待投影互动的Redis计数不会被关系表旧快照覆盖() {
+    void 旧Redis计数不会反写数据库() {
         CommunityPost post = createPost("异步投影中的帖子");
         String likeKey = "interaction:count:like:" + post.getId();
         redisTemplate.opsForValue().set(likeKey, "1");
 
         reconciliationJob.reconcilePublishedPosts();
 
-        assertThat(redisTemplate.opsForValue().get(likeKey)).isEqualTo("1");
-        assertThat(postRepository.findById(post.getId()).orElseThrow().getLikeCount()).isEqualTo(1);
+        assertThat(redisTemplate.hasKey(likeKey)).isFalse();
+        assertThat(postRepository.findById(post.getId()).orElseThrow().getLikeCount()).isZero();
         assertThat(likeRepository.countByPostId(post.getId())).isZero();
     }
 

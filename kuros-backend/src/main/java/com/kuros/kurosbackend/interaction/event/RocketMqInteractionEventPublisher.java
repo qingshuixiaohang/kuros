@@ -1,5 +1,8 @@
 package com.kuros.kurosbackend.interaction.event;
 
+import org.apache.rocketmq.client.common.ClientErrorCode;
+import org.apache.rocketmq.client.exception.MQClientException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -20,8 +23,6 @@ import org.springframework.stereotype.Component;
  * RocketMQ 的 KEYS 是消息的业务索引（可在控制台按 key 查消息轨迹），设为 postId 便于按帖排查；
  * 顺序性由 binder 的 partition-key-expression=payload.postId + orderly=true 保证，与 KEYS 头无关。
  *
- * 为什么 send 失败/异常都返回 false？
- * 让调用方（写路径）统一走「同步降级落库」，保证互动绝不因 MQ 抖动而丢失（ADR 0004 决策）。
  */
 @Component
 @ConditionalOnProperty(name = "app.interaction.async.enabled", havingValue = "true")
@@ -39,17 +40,24 @@ public class RocketMqInteractionEventPublisher implements InteractionEventPublis
     }
 
     @Override
-    public boolean publish(InteractionEvent event) {
+    public Result publish(InteractionEvent event) {
         try {
             Message<InteractionEvent> message = MessageBuilder.withPayload(event)
                     .setHeader("KEYS", event.postId())
                     .build();
-            return streamBridge.send(OUT_BINDING, message);
+            return streamBridge.send(OUT_BINDING, message) ? Result.SENT : Result.REJECTED;
         } catch (RuntimeException ex) {
-            // 投递异常（binder 未就绪、broker 不可达等）→ 返回 false 触发同步降级，互动不丢
-            log.warn("互动事件投递 MQ 失败，转同步降级落库: postId={} userId={} type={}",
-                    event.postId(), event.userId(), event.type(), ex);
-            return false;
+            for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+                if (cause instanceof MQClientException failure &&
+                        (failure.getResponseCode() == ClientErrorCode.NOT_FOUND_TOPIC_EXCEPTION ||
+                                failure.getResponseCode() == ClientErrorCode.NO_NAME_SERVER_EXCEPTION)) {
+                    log.warn("互动事件缺少 RocketMQ 路由: eventId={} postId={}", event.eventId(), event.postId());
+                    return Result.REJECTED;
+                }
+            }
+            log.warn("互动事件投递结果未确认: eventId={} postId={} type={}",
+                    event.eventId(), event.postId(), event.type(), ex);
+            return Result.UNKNOWN;
         }
     }
 }
