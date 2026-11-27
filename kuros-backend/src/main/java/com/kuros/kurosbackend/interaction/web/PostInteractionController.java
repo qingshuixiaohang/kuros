@@ -10,6 +10,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.http.ResponseEntity;
+import com.kuros.kurosbackend.interaction.event.InteractionType;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/posts/{postId}/interactions")
@@ -29,22 +33,31 @@ public class PostInteractionController {
     }
 
     @PostMapping("/like")
-    public ApiResponse<PostInteractionResponse> like(@PathVariable String postId) {
-        return new ApiResponse<>(interactionService.like(postId, StpUtil.getLoginIdAsString()), null);
+    public ResponseEntity<?> like(@PathVariable String postId, @RequestHeader(value = "Idempotency-Key", required = false) UUID operationId) {
+        if (operationId != null) return submit(postId, operationId, InteractionType.LIKE);
+        return ResponseEntity.ok(new ApiResponse<>(interactionService.like(postId, StpUtil.getLoginIdAsString()), null));
     }
 
     @DeleteMapping("/like")
-    public ApiResponse<PostInteractionResponse> unlike(@PathVariable String postId) {
-        return new ApiResponse<>(interactionService.unlike(postId, StpUtil.getLoginIdAsString()), null);
+    public ResponseEntity<?> unlike(@PathVariable String postId, @RequestHeader(value = "Idempotency-Key", required = false) UUID operationId) {
+        if (operationId != null) return submit(postId, operationId, InteractionType.UNLIKE);
+        return ResponseEntity.ok(new ApiResponse<>(interactionService.unlike(postId, StpUtil.getLoginIdAsString()), null));
     }
 
     @PostMapping("/favorite")
-    public ApiResponse<PostInteractionResponse> favorite(@PathVariable String postId) {
-        return new ApiResponse<>(interactionService.favorite(postId, StpUtil.getLoginIdAsString()), null);
+    public ResponseEntity<?> favorite(@PathVariable String postId, @RequestHeader(value = "Idempotency-Key", required = false) UUID operationId) {
+        if (operationId != null) return submit(postId, operationId, InteractionType.FAVORITE);
+        return ResponseEntity.ok(new ApiResponse<>(interactionService.favorite(postId, StpUtil.getLoginIdAsString()), null));
     }
 
     @DeleteMapping("/favorite")
-    public ApiResponse<PostInteractionResponse> unfavorite(@PathVariable String postId) {
-        return new ApiResponse<>(interactionService.unfavorite(postId, StpUtil.getLoginIdAsString()), null);
+    public ResponseEntity<?> unfavorite(@PathVariable String postId, @RequestHeader(value = "Idempotency-Key", required = false) UUID operationId) {
+        if (operationId != null) return submit(postId, operationId, InteractionType.UNFAVORITE);
+        return ResponseEntity.ok(new ApiResponse<>(interactionService.unfavorite(postId, StpUtil.getLoginIdAsString()), null));
+    }
+
+    private ResponseEntity<?> submit(String postId, UUID operationId, InteractionType type) {
+        interactionService.submit(postId, StpUtil.getLoginIdAsString(), operationId.toString(), type);
+        return ResponseEntity.accepted().body(new ApiResponse<>(new InteractionOperationController.Accepted(operationId), null));
     }
 }

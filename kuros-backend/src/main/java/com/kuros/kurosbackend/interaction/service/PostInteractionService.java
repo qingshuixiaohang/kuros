@@ -40,6 +40,7 @@ public class PostInteractionService {
     private final InteractionRedisStore redisStore;
     private final InteractionEventPublisher eventPublisher;
     private final InteractionProjectionService projectionService;
+    private final InteractionAcceptanceService acceptanceService;
 
     public PostInteractionService(
             CommunityPostRepository postRepository,
@@ -48,7 +49,8 @@ public class PostInteractionService {
             DistributedLock distributedLock,
             InteractionRedisStore redisStore,
             InteractionEventPublisher eventPublisher,
-            InteractionProjectionService projectionService
+            InteractionProjectionService projectionService,
+            InteractionAcceptanceService acceptanceService
     ) {
         this.postRepository = postRepository;
         this.likeRepository = likeRepository;
@@ -57,6 +59,7 @@ public class PostInteractionService {
         this.redisStore = redisStore;
         this.eventPublisher = eventPublisher;
         this.projectionService = projectionService;
+        this.acceptanceService = acceptanceService;
     }
 
     /** 读互动状态：计数与关系状态均 Redis 优先，miss 回源 DB（冗余计数列 / 关系行）并回填。 */
@@ -132,6 +135,25 @@ public class PostInteractionService {
 
     public PostInteractionResponse unfavorite(String postId, String userId) {
         return interact(postId, userId, InteractionType.UNFAVORITE, "favorite");
+    }
+
+    public void submit(String postId, String userId, String operationId, InteractionType type) {
+        String lockKey = "lock:" + type.kind().keyPrefix() + ":" + postId + ":" + userId;
+        Boolean accepted = distributedLock.withLock(lockKey, LOCK_TTL_SECONDS, () -> {
+            findPublishedPost(postId);
+            InteractionEvent event = new InteractionEvent(operationId, postId, userId, type, System.currentTimeMillis());
+            projectionService.requireCompatible(event);
+            switch (acceptanceService.submit(event)) {
+                case DISABLED -> throw new IllegalStateException("Unexpected delivery state");
+                case REJECTED -> throw new ServiceUnavailableException("INTERACTION_NOT_ACCEPTED", "互动暂无法受理，请稍后重试");
+                case UNKNOWN -> throw new ServiceUnavailableException("INTERACTION_DELIVERY_UNKNOWN", "互动投递结果暂未确认");
+                case SENT -> { }
+            }
+            return true;
+        });
+        if (accepted == null) {
+            throw new ServiceUnavailableException("INTERACTION_NOT_ACCEPTED", "上一条互动请求正在提交，请稍后重试");
+        }
     }
 
     private PostInteractionResponse interact(String postId, String userId, InteractionType type, String lockPrefix) {

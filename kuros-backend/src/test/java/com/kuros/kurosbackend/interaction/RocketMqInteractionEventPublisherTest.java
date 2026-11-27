@@ -7,36 +7,54 @@ import com.kuros.kurosbackend.interaction.event.RocketMqInteractionEventPublishe
 import org.apache.rocketmq.client.common.ClientErrorCode;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.junit.jupiter.api.Test;
-import org.springframework.cloud.stream.function.StreamBridge;
-import org.springframework.messaging.MessagingException;
+import org.apache.rocketmq.client.producer.DefaultMQProducer;
+import org.apache.rocketmq.client.producer.MessageQueueSelector;
+import org.apache.rocketmq.client.producer.SendResult;
+import org.apache.rocketmq.client.producer.SendStatus;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class RocketMqInteractionEventPublisherTest {
 
-    private final StreamBridge bridge = mock(StreamBridge.class);
-    private final RocketMqInteractionEventPublisher publisher = new RocketMqInteractionEventPublisher(bridge);
+    @Test
+    void 刷盘超时不能视为受理成功() throws Exception {
+        DefaultMQProducer producer = mock(DefaultMQProducer.class);
+        SendResult result = mock(SendResult.class);
+        when(result.getSendStatus()).thenReturn(SendStatus.FLUSH_DISK_TIMEOUT);
+        when(producer.send(any(org.apache.rocketmq.common.message.Message.class), any(MessageQueueSelector.class), any(), anyLong()))
+                .thenReturn(result);
+        assertThat(new RocketMqInteractionEventPublisher(producer).publish(
+                InteractionEvent.of("post", "user", InteractionType.LIKE))).isEqualTo(Result.UNKNOWN);
+    }
+
+    private final DefaultMQProducer producer = mock(DefaultMQProducer.class);
+    private final RocketMqInteractionEventPublisher publisher = new RocketMqInteractionEventPublisher(producer);
     private final InteractionEvent event = InteractionEvent.of("post", "user", InteractionType.LIKE);
 
     @Test
-    void missingRouteIsAnExplicitRejection() {
-        when(bridge.send(eq("interactionOutbound"), any())).thenThrow(
-                new MessagingException("send failed",
-                        new MQClientException(ClientErrorCode.NOT_FOUND_TOPIC_EXCEPTION, "no route")));
+    void missingRouteIsAnExplicitRejection() throws Exception {
+        when(producer.send(any(org.apache.rocketmq.common.message.Message.class), any(MessageQueueSelector.class), any(), anyLong())).thenThrow(
+                new MQClientException(ClientErrorCode.NOT_FOUND_TOPIC_EXCEPTION, "no route"));
 
         assertThat(publisher.publish(event)).isEqualTo(Result.REJECTED);
     }
 
     @Test
-    void brokerTimeoutLeavesDeliveryUnknown() {
-        when(bridge.send(eq("interactionOutbound"), any())).thenThrow(
-                new MessagingException("send failed",
-                        new MQClientException(ClientErrorCode.ACCESS_BROKER_TIMEOUT, "timeout")));
+    void brokerTimeoutLeavesDeliveryUnknown() throws Exception {
+        when(producer.send(any(org.apache.rocketmq.common.message.Message.class), any(MessageQueueSelector.class), any(), anyLong())).thenThrow(
+                new MQClientException(ClientErrorCode.ACCESS_BROKER_TIMEOUT, "timeout"));
 
         assertThat(publisher.publish(event)).isEqualTo(Result.UNKNOWN);
+    }
+
+    @Test
+    void broker连接未建立时明确拒绝() throws Exception {
+        when(producer.send(any(org.apache.rocketmq.common.message.Message.class), any(MessageQueueSelector.class), any(), anyLong()))
+                .thenThrow(new org.apache.rocketmq.remoting.exception.RemotingConnectException("broker"));
+        assertThat(publisher.publish(event)).isEqualTo(Result.REJECTED);
     }
 }

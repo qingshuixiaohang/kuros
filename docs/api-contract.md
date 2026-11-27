@@ -109,7 +109,19 @@
 | GET | `/interactions/batch-states?ids=a,b,c` | 批量查询当前用户对多帖的赞/藏状态（H-2：首页 Feed N+1 消除，游客返回全 0） |
 | POST/DELETE | `/posts/{id}/interactions/like` | 点赞/取消点赞 |
 | POST/DELETE | `/posts/{id}/interactions/favorite` | 收藏/取消收藏 |
+| POST | `/interaction-operations` | 提交带操作编号的点赞、取消点赞、收藏或取消收藏 |
+| GET | `/interaction-operations/{operationId}` | 查询当前用户的操作结果和数据库中的当前状态 |
 | GET/POST/DELETE | `/users/{targetUserId}/follow` | 查询、关注或取消关注作者 |
+
+提交示例：`POST /api/v1/interaction-operations`，请求体为
+`{"operationId":"<UUID>","postId":"<UUID>","type":"LIKE"}`。`type` 也可为
+`UNLIKE`、`FAVORITE` 或 `UNFAVORITE`。MQ 模式下确认发送时返回 `202` 和操作编号；明确未受理返回
+`INTERACTION_NOT_ACCEPTED`，投递结果未知返回 `INTERACTION_DELIVERY_UNKNOWN`，应使用相同编号查询或重试。
+查询返回 `UNKNOWN` 或 `APPLIED`，后者附带直接从数据库读取的当前互动状态和计数；不同用户无法查询该操作。
+
+旧点赞和收藏地址允许在请求头 `Idempotency-Key` 中传入 UUID，行为与新操作接口一致；不携带该头时保留旧的
+响应格式，不能在投递结果未知后安全地跨请求重用操作编号。客户端迁移应优先使用新接口或该请求头。
+可靠性前提、故障恢复和未满足的保留期验收见 [互动可靠性说明](interaction-reliability.md)。
 
 ## 7. 用户资料
 
