@@ -9,17 +9,17 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.LongSupplier;
+import java.util.function.Supplier;
+import java.util.Set;
+import java.util.ArrayList;
+import com.kuros.kurosbackend.interaction.domain.PostLike;
+import java.time.ZoneOffset;
 
 /**
  * 互动旁路缓存，未命中时从数据库回填。
  *
- * 数据模型（两类 key，均 String）：
- * - 状态：interaction:{like|favorite}:{postId}:{userId} = "1"(已赞/藏) | "0"(未)
- * - 计数：interaction:count:{like|favorite}:{postId} = 整数字符串
- *
- * 为什么状态用「单 key/用户」而不是「一个 Set 存全部点赞用户」？
- * Set 方案在热帖上会退化成大 key（百万成员），且回填（把 DB 关系灌进 Set）非幂等、有竞态；
- * 单 key 天然按用户分片、回填只是「不存在则用 DB 值 set 一次」，幂等且无大 key 风险。
+ * 点赞计数和用户近期点赞窗口使用独立命名空间；收藏继续使用原有缓存。
+ * 版本键保留在 Redis 中，用于防止并发失效后的旧数据库快照回填。
  */
 @Component
 public class InteractionRedisStore {
@@ -60,6 +60,48 @@ public class InteractionRedisStore {
 
     private final StringRedisTemplate redisTemplate;
     private final long ttlSeconds;
+    @Value("${app.interaction.redis.likes-max-size:1000}")
+    private int likesMaxSize = 1000;
+
+    private static final DefaultRedisScript<Long> INVALIDATE_LIKES = new DefaultRedisScript<>(
+            "redis.call('incr', KEYS[1]); redis.call('incr', KEYS[2]); "
+                    + "redis.call('del', KEYS[3], KEYS[4], KEYS[5]); return 1", Long.class);
+    private static final DefaultRedisScript<Long> BACKFILL_LIKES = new DefaultRedisScript<>(
+            "if (redis.call('get', KEYS[1]) or '0') ~= ARGV[1] then return 0 end; "
+                    + "if redis.call('exists', KEYS[3]) == 1 then return 1 end; "
+                    + "redis.call('del', KEYS[2]); for i=3,#ARGV,2 do redis.call('zadd', KEYS[2], ARGV[i], ARGV[i+1]) end; "
+                    + "redis.call('expire', KEYS[2], ARGV[2]); redis.call('set', KEYS[3], '1', 'EX', ARGV[2]); return 1", Long.class);
+    private static final DefaultRedisScript<String> BACKFILL_COUNT = new DefaultRedisScript<>(
+            "if (redis.call('get', KEYS[1]) or '0') ~= ARGV[1] then return nil end; "
+                    + "if redis.call('exists', KEYS[2]) == 0 then redis.call('set', KEYS[2], ARGV[2], 'EX', ARGV[3]) end; return redis.call('get', KEYS[2])", String.class);
+
+    public int likesMaxSize() { return likesMaxSize; }
+
+    public Set<String> recentLikes(String userId, Supplier<List<PostLike>> load) {
+        String key = likesKey(userId);
+        String marker = key + ":ready";
+        String versionKey = key + ":version";
+        while (true) {
+            if (Boolean.TRUE.equals(redisTemplate.hasKey(marker))) {
+                Set<String> cached = redisTemplate.opsForZSet().reverseRange(key, 0, -1);
+                return cached == null ? Set.of() : cached;
+            }
+            String version = redisTemplate.opsForValue().get(versionKey);
+            List<PostLike> rows = load.get();
+            List<String> args = new ArrayList<>();
+            args.add(version == null ? "0" : version);
+            args.add(Long.toString(ttlSeconds));
+            for (PostLike row : rows) {
+                var timestamp = row.getCreatedAt().toInstant(ZoneOffset.UTC);
+                args.add(Long.toString(timestamp.getEpochSecond() * 1_000_000 + timestamp.getNano() / 1_000));
+                args.add(row.getPostId());
+            }
+            Long installed = redisTemplate.execute(BACKFILL_LIKES, List.of(versionKey, key, marker), args.toArray());
+            if (Long.valueOf(1).equals(installed)) continue;
+        }
+    }
+
+    private String likesKey(String userId) { return "user:likes:patten:" + userId + ":post"; }
 
     public InteractionRedisStore(StringRedisTemplate redisTemplate,
                                  @Value("${app.interaction.redis.ttl-seconds:86400}") long ttlSeconds) {
@@ -70,6 +112,18 @@ public class InteractionRedisStore {
     /** 读计数：Redis 命中直接返回，未命中时使用 DB 基线回填。 */
     public long readCount(InteractionKind kind, String postId, LongSupplier dbBaseline) {
         String key = countKey(kind, postId);
+        if (kind == InteractionKind.LIKE) {
+            String versionKey = key + ":version";
+            while (true) {
+                String cached = redisTemplate.opsForValue().get(key);
+                if (cached != null) return Long.parseLong(cached.split(",", 2)[0]);
+                String version = redisTemplate.opsForValue().get(versionKey);
+                long baseline = dbBaseline.getAsLong();
+                String value = redisTemplate.execute(BACKFILL_COUNT, List.of(versionKey, key),
+                        version == null ? "0" : version, baseline + ",0", Long.toString(ttlSeconds));
+                if (value != null) return Long.parseLong(value.split(",", 2)[0]);
+            }
+        }
         String cached = redisTemplate.opsForValue().get(key);
         if (cached != null) {
             return Long.parseLong(cached);
@@ -93,11 +147,19 @@ public class InteractionRedisStore {
     }
 
     public void invalidate(InteractionKind kind, String postId, String userId) {
+        if (kind == InteractionKind.LIKE) {
+            String count = countKey(kind, postId);
+            String likes = likesKey(userId);
+            redisTemplate.execute(INVALIDATE_LIKES, List.of(count + ":version", likes + ":version", count, likes, likes + ":ready"));
+            return;
+        }
         redisTemplate.delete(List.of(stateKey(kind, postId, userId), countKey(kind, postId)));
     }
 
     public void invalidateCounts(String postId) {
-        redisTemplate.delete(List.of(countKey(InteractionKind.LIKE, postId), countKey(InteractionKind.FAVORITE, postId)));
+        String key = countKey(InteractionKind.LIKE, postId);
+        redisTemplate.execute(new DefaultRedisScript<>("redis.call('incr', KEYS[1]); redis.call('del', KEYS[2], KEYS[3]); return 1", Long.class),
+                List.of(key + ":version", key, countKey(InteractionKind.FAVORITE, postId)));
     }
 
     /**
@@ -125,11 +187,25 @@ public class InteractionRedisStore {
      */
     public ReconcileResult reconcileCount(InteractionKind kind, String postId, LongSupplier truthSupplier) {
         String key = countKey(kind, postId);
+        if (kind == InteractionKind.LIKE) {
+            String versionKey = key + ":version";
+            var script = new DefaultRedisScript<Long>(
+                    "if (redis.call('get', KEYS[1]) or '0') ~= ARGV[1] then return -1 end; "
+                            + "local old = redis.call('get', KEYS[2]); redis.call('incr', KEYS[1]); "
+                            + "redis.call('set', KEYS[2], ARGV[2], 'EX', ARGV[3]); if old == ARGV[2] then return 1 else return 0 end", Long.class);
+            while (true) {
+                String version = redisTemplate.opsForValue().get(versionKey);
+                long truth = truthSupplier.getAsLong();
+                Long result = redisTemplate.execute(script, List.of(versionKey, key), version == null ? "0" : version,
+                        truth + ",0", Long.toString(ttlSeconds));
+                if (Long.valueOf(0).equals(result) || Long.valueOf(1).equals(result)) return new ReconcileResult(truth, result == 0);
+            }
+        }
         long truth = truthSupplier.getAsLong();
         // 本地构造脚本对象：static 实例复用会导致 execute 返回 null（B2 踩过的坑）
         DefaultRedisScript<Long> script = new DefaultRedisScript<>(RECONCILE_SCRIPT, Long.class);
         Long changed = redisTemplate.execute(script, List.of(key),
-                Long.toString(truth), Long.toString(ttlSeconds));
+                kind == InteractionKind.LIKE ? truth + ",0" : Long.toString(truth), Long.toString(ttlSeconds));
         // Lua 返回 0=修正了偏差、1=原本一致；execute 返回 null 时保守地当作"未修正"
         boolean corrected = Long.valueOf(0L).equals(changed);
         return new ReconcileResult(truth, corrected);
@@ -140,6 +216,7 @@ public class InteractionRedisStore {
     }
 
     private String countKey(InteractionKind kind, String postId) {
+        if (kind == InteractionKind.LIKE) return "count:patten:post:" + postId;
         return "interaction:count:" + kind.keyPrefix() + ":" + postId;
     }
 }

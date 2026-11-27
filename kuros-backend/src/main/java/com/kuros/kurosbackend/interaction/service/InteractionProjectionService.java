@@ -44,6 +44,7 @@ public class InteractionProjectionService {
         transactionTemplate.executeWithoutResult(status -> persist(event));
         // 重投也要失效缓存，前一次可能在提交之后、失效之前失败。
         redisStore.invalidate(event.type().kind(), event.postId(), event.userId());
+        rebuildLikes(event.type().kind(), event.userId());
         jdbc.update("update interaction_operations set cache_pending = false where operation_id = ?", event.eventId());
         jdbc.update("update interaction_failures set status = 'RESOLVED', updated_at = ? where operation_id = ? and post_id = ? and user_id = ? and operation_type = ?",
                 LocalDateTime.now(), event.eventId(), event.postId(), event.userId(), event.type().name());
@@ -109,9 +110,17 @@ public class InteractionProjectionService {
                 (rs, row) -> new String[]{rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4)});
         for (String[] operation : pending) {
             redisStore.invalidate(com.kuros.kurosbackend.interaction.event.InteractionType.valueOf(operation[3]).kind(), operation[1], operation[2]);
+            rebuildLikes(com.kuros.kurosbackend.interaction.event.InteractionType.valueOf(operation[3]).kind(), operation[2]);
             jdbc.update("update interaction_operations set cache_pending = false where operation_id = ?", operation[0]);
             jdbc.update("update interaction_failures set status = 'RESOLVED', updated_at = ? where operation_id = ? and post_id = ? and user_id = ? and operation_type = ?",
                     LocalDateTime.now(), operation[0], operation[1], operation[2], operation[3]);
+        }
+    }
+
+    private void rebuildLikes(com.kuros.kurosbackend.interaction.event.InteractionKind kind, String userId) {
+        if (kind == com.kuros.kurosbackend.interaction.event.InteractionKind.LIKE) {
+            redisStore.recentLikes(userId, () -> likeRepository.findByUserIdOrderByCreatedAtDescPostIdDesc(
+                    userId, org.springframework.data.domain.PageRequest.of(0, redisStore.likesMaxSize())));
         }
     }
 

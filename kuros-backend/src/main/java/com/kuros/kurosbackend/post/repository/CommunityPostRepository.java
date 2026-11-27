@@ -15,6 +15,10 @@ import java.util.Optional;
 
 public interface CommunityPostRepository extends JpaRepository<CommunityPost, String> {
 
+    @Query("select p.likeCount from CommunityPost p where p.id = :postId")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true, propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    long readCommittedLikeCount(@Param("postId") String postId);
+
     /**
      * 可见帖子分页（列表读路径）。
      *

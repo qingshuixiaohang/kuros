@@ -12,14 +12,16 @@ import java.util.function.LongSupplier;
 public class RedisPostInteractionCountReader implements PostInteractionCountReader {
 
     private final InteractionRedisStore redisStore;
+    private final com.kuros.kurosbackend.post.repository.CommunityPostRepository postRepository;
 
-    public RedisPostInteractionCountReader(InteractionRedisStore redisStore) {
+    public RedisPostInteractionCountReader(InteractionRedisStore redisStore, com.kuros.kurosbackend.post.repository.CommunityPostRepository postRepository) {
         this.redisStore = redisStore;
+        this.postRepository = postRepository;
     }
 
     @Override
     public PostInteractionCounts readForPost(String postId, LongSupplier likeBaseline, LongSupplier favoriteBaseline) {
-        long likeCount = redisStore.readCount(InteractionKind.LIKE, postId, likeBaseline);
+        long likeCount = redisStore.readCount(InteractionKind.LIKE, postId, () -> postRepository.readCommittedLikeCount(postId));
         long favoriteCount = redisStore.readCount(InteractionKind.FAVORITE, postId, favoriteBaseline);
         return new PostInteractionCounts(likeCount, favoriteCount);
     }

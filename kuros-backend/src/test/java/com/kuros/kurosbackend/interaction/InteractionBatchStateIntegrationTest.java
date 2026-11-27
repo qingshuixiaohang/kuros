@@ -69,6 +69,7 @@ class InteractionBatchStateIntegrationTest {
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
         registry.add("spring.datasource.url", () -> TestDatabases.h2Url("interaction-batch"));
+        registry.add("app.interaction.redis.likes-max-size", () -> "2");
     }
 
     private static final String AUTHOR_ID = "10000000-0000-0000-0000-000000000001";
@@ -92,12 +93,122 @@ class InteractionBatchStateIntegrationTest {
     private StringRedisTemplate redisTemplate;
 
     @Autowired
+    private com.kuros.kurosbackend.interaction.redis.InteractionRedisStore redisStore;
+
+    @Autowired
     private jakarta.persistence.EntityManager entityManager;
 
     @Autowired
     private MockMvc mockMvc;
 
     private List<String> postIds;
+
+    @Test
+    void 冷读取回填定长点赞窗口且裁剪项仍可查到() {
+        String userId = UUID.randomUUID().toString();
+        for (int i = 0; i < 3; i++) {
+            projectionService.apply(InteractionEvent.of(postIds.get(i), userId, InteractionType.LIKE));
+        }
+        String window = "user:likes:patten:" + userId + ":post";
+        redisTemplate.delete(List.of(window, window + ":ready"));
+        var states = interactionService.findStatesFor(postIds, userId);
+        assertThat(states.get(postIds.get(0))[0]).isTrue();
+        assertThat(states.get(postIds.get(1))[0]).isTrue();
+        assertThat(states.get(postIds.get(2))[0]).isTrue();
+        assertThat(redisTemplate.opsForZSet().size("user:likes:patten:" + userId + ":post")).isEqualTo(2L);
+        assertThat(redisTemplate.opsForValue().get("count:patten:post:" + postIds.get(0))).isNull();
+        assertThat(interactionService.findPost(postIds.get(0), userId).likeCount()).isEqualTo(1);
+        assertThat(redisTemplate.opsForValue().get("count:patten:post:" + postIds.get(0))).isEqualTo("1,0");
+    }
+
+    @Test
+    void 取消窗口内点赞后补入较早记录且重投不改变终态() {
+        String userId = UUID.randomUUID().toString();
+        for (int i = 0; i < 3; i++) {
+            projectionService.apply(InteractionEvent.of(postIds.get(i), userId, InteractionType.LIKE));
+        }
+        String key = "user:likes:patten:" + userId + ":post";
+        String removed = redisTemplate.opsForZSet().reverseRange(key, 0, 0).iterator().next();
+        InteractionEvent unlike = InteractionEvent.of(removed, userId, InteractionType.UNLIKE);
+        projectionService.apply(unlike);
+        projectionService.apply(unlike);
+        assertThat(redisTemplate.opsForZSet().size(key)).isEqualTo(2);
+        assertThat(redisTemplate.opsForZSet().range(key, 0, -1)).doesNotContain(removed);
+        assertThat(interactionService.findPost(removed, userId).liked()).isFalse();
+        assertThat(interactionService.findStatesFor(postIds, userId).values().stream().filter(v -> v[0]).count()).isEqualTo(2);
+    }
+
+    @Test
+    void 并发旧快照不能覆盖取消后的窗口() throws Exception {
+        String userId = UUID.randomUUID().toString();
+        String postId = postIds.get(0);
+        projectionService.apply(InteractionEvent.of(postId, userId, InteractionType.LIKE));
+        String key = "user:likes:patten:" + userId + ":post";
+        redisTemplate.delete(List.of(key, key + ":ready"));
+        var captured = new java.util.concurrent.CountDownLatch(1);
+        var resume = new java.util.concurrent.CountDownLatch(1);
+        var executor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            var result = executor.submit(() -> redisStore.recentLikes(userId, () -> {
+                var rows = likeRepository.findByUserIdOrderByCreatedAtDescPostIdDesc(userId,
+                        org.springframework.data.domain.PageRequest.of(0, 2));
+                captured.countDown();
+                try { resume.await(); } catch (InterruptedException e) { throw new RuntimeException(e); }
+                return rows;
+            }));
+            assertThat(captured.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            projectionService.apply(InteractionEvent.of(postId, userId, InteractionType.UNLIKE));
+            resume.countDown();
+            assertThat(result.get(10, java.util.concurrent.TimeUnit.SECONDS)).doesNotContain(postId);
+            assertThat(interactionService.findPost(postId, userId).liked()).isFalse();
+        } finally {
+            resume.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void 同时间点赞按帖子ID稳定裁剪() {
+        String userId = UUID.randomUUID().toString();
+        LocalDateTime time = LocalDateTime.of(2026, 1, 1, 12, 0);
+        for (String postId : postIds.subList(0, 3)) {
+            likeRepository.save(new com.kuros.kurosbackend.interaction.domain.PostLike(userId, postId, time));
+        }
+        interactionService.findStatesFor(postIds, userId);
+        var expected = postIds.subList(0, 3).stream().sorted(java.util.Comparator.reverseOrder()).limit(2).toList();
+        assertThat(redisTemplate.opsForZSet().reverseRange("user:likes:patten:" + userId + ":post", 0, -1))
+                .containsExactlyElementsOf(expected);
+    }
+
+    @Test
+    void 计数旧快照不会覆盖并发取消() throws Exception {
+        String userId = UUID.randomUUID().toString();
+        String postId = postIds.get(0);
+        projectionService.apply(InteractionEvent.of(postId, userId, InteractionType.LIKE));
+        var captured = new java.util.concurrent.CountDownLatch(1);
+        var resume = new java.util.concurrent.CountDownLatch(1);
+        var calls = new java.util.concurrent.atomic.AtomicInteger();
+        var executor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            var result = executor.submit(() -> redisStore.readCount(
+                    com.kuros.kurosbackend.interaction.event.InteractionKind.LIKE, postId, () -> {
+                        long value = postRepository.readCommittedLikeCount(postId);
+                        if (calls.getAndIncrement() == 0) {
+                            captured.countDown();
+                            try { resume.await(); } catch (InterruptedException e) { throw new RuntimeException(e); }
+                        }
+                        return value;
+                    }));
+            assertThat(captured.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            projectionService.apply(InteractionEvent.of(postId, userId, InteractionType.UNLIKE));
+            resume.countDown();
+            assertThat(result.get(10, java.util.concurrent.TimeUnit.SECONDS)).isZero();
+            assertThat(redisTemplate.opsForValue().get("count:patten:post:" + postId)).isEqualTo("0,0");
+        } finally {
+            resume.countDown();
+            executor.shutdownNow();
+        }
+    }
 
     /** 构造登录会话 Cookie（与 KurosBackendApplicationTests 同一手法：直接建登录会话，绕过登录链路）。 */
     private Cookie sessionCookie(String userId) {

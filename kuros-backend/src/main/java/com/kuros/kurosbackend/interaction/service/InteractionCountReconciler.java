@@ -99,16 +99,17 @@ public class InteractionCountReconciler {
     }
 
     private CountDelta reconcileLike(String postId) {
+        CommunityPostState before = transactionTemplate.execute(status -> postRepository.findById(postId)
+                .map(post -> new CommunityPostState(post.getLikeCount(), post.getInteractionCountVersion()))
+                .orElse(new CommunityPostState(0L, 0L)));
         long truth = likeRepository.countByPostId(postId);
-        long redisBefore = readRedisCount(InteractionKind.LIKE, postId, truth);
+        long redisBefore = redisStore.readCount(InteractionKind.LIKE, postId, () -> likeRepository.countByPostId(postId));
         InteractionRedisStore.ReconcileResult result = redisStore.reconcileCount(
-                InteractionKind.LIKE, postId, () -> truth);
-        long dbBefore = transactionTemplate.execute(status ->
-                postRepository.findById(postId).map(post -> post.getLikeCount()).orElse(truth));
+                InteractionKind.LIKE, postId, () -> likeRepository.countByPostId(postId));
         transactionTemplate.executeWithoutResult(status ->
-                postRepository.updateLikeCount(postId, truth));
+                postRepository.updateLikeCountIfVersion(postId, before.version(), truth));
 
-        CountDelta delta = new CountDelta(redisBefore, result.count(), dbBefore);
+        CountDelta delta = new CountDelta(redisBefore, result.count(), before.count());
         logIfCorrected(postId, InteractionKind.LIKE, delta);
         return delta;
     }

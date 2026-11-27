@@ -17,7 +17,6 @@ import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
 import com.kuros.kurosbackend.shared.exception.ServiceUnavailableException;
 import com.kuros.kurosbackend.shared.lock.DistributedLock;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -63,13 +62,12 @@ public class PostInteractionService {
     }
 
     /** 读互动状态：计数与关系状态均 Redis 优先，miss 回源 DB（冗余计数列 / 关系行）并回填。 */
-    @Transactional(readOnly = true)
     public PostInteractionResponse findPost(String postId, String userId) {
         CommunityPost post = findPublishedPost(postId);
-        long likeCount = redisStore.readCount(InteractionKind.LIKE, postId, post::getLikeCount);
+        long likeCount = redisStore.readCount(InteractionKind.LIKE, postId, () -> postRepository.readCommittedLikeCount(postId));
         long favoriteCount = redisStore.readCount(InteractionKind.FAVORITE, postId, post::getFavoriteCount);
-        boolean liked = userId != null && redisStore.readState(InteractionKind.LIKE, postId, userId,
-                () -> likeRepository.existsById(new PostLikeId(userId, postId)));
+        boolean liked = userId != null && (recentLikes(userId).contains(postId)
+                || likeRepository.existsById(new PostLikeId(userId, postId)));
         boolean favorited = userId != null && redisStore.readState(InteractionKind.FAVORITE, postId, userId,
                 () -> favoriteRepository.existsById(new PostFavoriteId(userId, postId)));
         return new PostInteractionResponse(postId, likeCount, favoriteCount, liked, favorited);
@@ -92,7 +90,6 @@ public class PostInteractionService {
      * @return postId → {liked, favorited}；每个输入的 postId 都有条目
      *         （无关系的帖子是 {false, false}），调用方不必再判空
      */
-    @Transactional(readOnly = true)
     public Map<String, boolean[]> findStatesFor(Collection<String> postIds, String userId) {
         if (postIds == null || postIds.isEmpty()) {
             return Map.of();
@@ -105,8 +102,12 @@ public class PostInteractionService {
         if (userId == null) {
             return states;
         }
-        // 两次常数查询覆盖整页，与帖子数无关（这是消除 N+1 的硬指标）
-        for (String postId : likeRepository.findLikedPostIds(userId, distinctIds)) {
+        var recent = recentLikes(userId);
+        for (String postId : distinctIds) {
+            if (recent.contains(postId)) states.get(postId)[0] = true;
+        }
+        var missing = distinctIds.stream().filter(id -> !recent.contains(id)).toList();
+        for (String postId : missing.isEmpty() ? List.<String>of() : likeRepository.findLikedPostIds(userId, missing)) {
             boolean[] state = states.get(postId);
             if (state != null) {
                 state[0] = true;
@@ -119,6 +120,11 @@ public class PostInteractionService {
             }
         }
         return states;
+    }
+
+    private java.util.Set<String> recentLikes(String userId) {
+        return redisStore.recentLikes(userId, () -> likeRepository.findByUserIdOrderByCreatedAtDescPostIdDesc(
+                userId, org.springframework.data.domain.PageRequest.of(0, redisStore.likesMaxSize())));
     }
 
     public PostInteractionResponse like(String postId, String userId) {
