@@ -5,7 +5,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AtSign,
   Bell,
-  ChevronDown,
   ChevronRight,
   FileText,
   Heart,
@@ -46,15 +45,18 @@ function isActive(label: string, path: string, params: URLSearchParams) {
   if (label === "关注") return path === "/" && params.get("tab") === "following";
   if (label === "新手") return path === "/guides" && params.get("category") === "新手攻略";
   if (label === "攻略") return path.startsWith("/guides") && params.get("category") !== "新手攻略";
+  if (label === "角色图鉴") return path.startsWith("/characters");
+  if (label === "声骸图鉴") return path.startsWith("/echoes");
   if (label === "官方") return path === "/news" && params.get("category") === "官方公告";
+  if (label === "同人") return path.startsWith("/creations");
   if (label === "资讯") return path.startsWith("/news") && params.get("category") !== "官方公告";
-  return path.startsWith("/creations");
+  if (label === "工具箱") return path.startsWith("/tools");
+  return false;
 }
 function GameLogo() {
   return (
     <div className="game-logo">
       <Image alt="鸣潮" className="game-logo-wordmark" height={72} priority src="/brand/wuthering-waves.png" width={114} />
-      <p>海潮回响 · 共鸣此间</p>
     </div>
   );
 }
@@ -165,14 +167,12 @@ export function TopNavigation({ query, onQueryChange, onMenu }: { query: string;
           <Menu size={22} />
         </button>
         <Link className="top-logo" href="/" aria-label="鸣潮社区首页">
-          <Image alt="" className="top-logo-icon" height={26} priority src="/brand/kurobbs-icon.png" width={26} />
-          <Image alt="鸣潮" className="top-logo-wordmark" height={26} priority src="/brand/wuthering-waves-white.png" width={42} />
+          <Image alt="库街区" className="top-logo-brand" height={34} priority src="/brand/kurobbs.png" width={104} />
         </Link>
         <div className="game-selector">
           <button className="game-switcher" onClick={() => setGameOpen(!gameOpen)} type="button" aria-expanded={gameOpen}>
             <span>战双帕弥什</span>
             <span className="current-game">鸣潮</span>
-            <ChevronDown size={14} />
           </button>
           {gameOpen && (
             <div className="game-popover">
@@ -187,20 +187,22 @@ export function TopNavigation({ query, onQueryChange, onMenu }: { query: string;
           )}
         </div>
         <form className="top-search" onSubmit={submitSearch}>
-          <Search size={18} />
           <input
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder="搜索帖子、攻略、玩家..."
             aria-label="搜索帖子、攻略、玩家"
           />
-          <button type="submit" aria-label="提交搜索" />
+          <button className="top-search-submit" type="submit" aria-label="提交搜索">
+            <Search size={18} />
+          </button>
         </form>
         <button className="mobile-search-button" onClick={() => router.push("/search")} type="button" aria-label="打开搜索">
           <Search size={19} />
         </button>
         <Link className="top-action" href="/publish" aria-label="发布内容">
-          <PenSquare size={20} />
+          <PenSquare size={16} />
+          <span>发布</span>
         </Link>
         {user?.role === "ADMIN" && (
           <Link aria-label="管理入口" className="top-admin-link" href="/admin/reports" title="举报审核台">
@@ -208,7 +210,7 @@ export function TopNavigation({ query, onQueryChange, onMenu }: { query: string;
             管理
           </Link>
         )}
-        {loggedIn && (
+        {loggedIn ? (
           <div className="top-bell-wrap" ref={bellWrapRef}>
             <button
               className="top-bell"
@@ -233,6 +235,10 @@ export function TopNavigation({ query, onQueryChange, onMenu }: { query: string;
               </div>
             )}
           </div>
+        ) : (
+          <button className="top-bell" onClick={() => requestLogin()} aria-label="消息通知" type="button">
+            <Bell size={20} />
+          </button>
         )}
         <>
           {loggedIn ? (
@@ -283,9 +289,8 @@ export function TopNavigation({ query, onQueryChange, onMenu }: { query: string;
               )}
             </div>
           ) : (
-            <button className="top-login" onClick={() => requestLogin()} type="button">
-              <CommunityAvatar avatarUrl={null} className="login-avatar" identity="guest" size={34} />
-              <span>登录</span>
+            <button aria-label="登录" className="top-login top-login--avatar" onClick={() => requestLogin()} title="登录" type="button">
+              <UserRound size={20} strokeWidth={1.8} />
             </button>
           )}
         </>

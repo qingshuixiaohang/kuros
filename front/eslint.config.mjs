@@ -17,7 +17,7 @@ const eslintConfig = defineConfig([
   ]),
   // 反过度工程：只收零成本规则（不需要类型信息，不会引入新依赖）。
   // 存量代码已验证零告警。no-nested-ternary 因 JSX 里三元嵌套是既有写法（35 处），不启用。
-  // 需要类型信息的规则（如 @typescript-eslint/no-unnecessary-condition）见 docs/agents/autonomous-agent.md 的说明，另行评估基线后再开。
+  // 需要类型信息的规则（如 @typescript-eslint/no-unnecessary-condition）另行评估基线后再开。
   {
     rules: {
       "no-else-return": "error",

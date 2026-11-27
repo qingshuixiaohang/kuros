@@ -5,14 +5,18 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import Link from "next/link";
 
+import { topicArtwork } from "@/lib/official-art";
+
 export type CarouselImage = { src: string; alt: string };
 
 function CarouselImageView({ image, priority = false }: { image: CarouselImage; priority?: boolean }) {
-  if (image.src.startsWith("/art/")) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const resolvedSrc = failedSrc === image.src ? topicArtwork(image.alt) : image.src;
+  if (resolvedSrc.startsWith("/art/")) {
     return (
       <span className="community-carousel-image-frame">
-        <Image aria-hidden alt="" className="community-carousel-image-backdrop" fill sizes="(max-width: 720px) 100vw, 820px" src={image.src} />
-        <Image alt={image.alt} className="community-carousel-image-primary" fill priority={priority} sizes="(max-width: 720px) 100vw, 820px" src={image.src} />
+        <Image aria-hidden alt="" className="community-carousel-image-backdrop" fill sizes="(max-width: 720px) 100vw, 820px" src={resolvedSrc} />
+        <Image alt={image.alt} className="community-carousel-image-primary" fill priority={priority} sizes="(max-width: 720px) 100vw, 820px" src={resolvedSrc} />
       </span>
     );
   }
@@ -20,9 +24,9 @@ function CarouselImageView({ image, priority = false }: { image: CarouselImage; 
   return (
     <span className="community-carousel-image-frame">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img aria-hidden alt="" className="community-carousel-image-backdrop" src={image.src} />
+      <img aria-hidden alt="" className="community-carousel-image-backdrop" onError={() => setFailedSrc(image.src)} src={resolvedSrc} />
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img alt={image.alt} className="community-carousel-image-primary" loading={priority ? "eager" : "lazy"} src={image.src} />
+      <img alt={image.alt} className="community-carousel-image-primary" loading={priority ? "eager" : "lazy"} onError={() => setFailedSrc(image.src)} src={resolvedSrc} />
     </span>
   );
 }

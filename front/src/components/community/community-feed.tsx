@@ -14,6 +14,7 @@ import { CommunityReportDialog } from "@/components/community/community-report-d
 import { ApiError, fetchPostInteractionsBatch } from "@/lib/api";
 import { useFavoriteMutation, useLikeMutation } from "@/lib/community-queries";
 import { useCommunityFeedQuery } from "@/lib/feed-queries";
+import { topicArtwork } from "@/lib/official-art";
 import { DEMO_AUTHOR_ID_BY_NAME, toGuide } from "@/lib/post-view";
 import type { Guide } from "@/types/community";
 const bannerSlides = [
@@ -43,6 +44,14 @@ function parseLikeCount(value: string) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 }
+function PostMediaGridTile({ alt, href, src }: { alt: string; href: string; src: string }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <Link className="post-media-grid-item" href={href} rel="noopener noreferrer" target="_blank">
+      <Image alt={alt} fill onError={() => setFailed(true)} sizes="160px" src={failed ? topicArtwork(alt) : src} unoptimized />
+    </Link>
+  );
+}
 function PostMedia({ guide, href }: { guide: Guide; href: string }) {
   const sources = guide.mediaUrls ?? [];
   if (!sources.length) return null;
@@ -51,9 +60,7 @@ function PostMedia({ guide, href }: { guide: Guide; href: string }) {
     return (
       <div className="post-media-grid" style={{ gridTemplateColumns: `repeat(${Math.min(sources.length, 3)}, 1fr)` }}>
         {sources.slice(0, 6).map((src, index) => (
-          <Link className="post-media-grid-item" href={href} key={src + index} rel="noopener noreferrer" target="_blank">
-            <Image alt={`${guide.title}配图 ${index + 1}`} fill sizes="160px" src={src} unoptimized />
-          </Link>
+          <PostMediaGridTile alt={`${guide.title}配图 ${index + 1}`} href={href} key={src + index} src={src} />
         ))}
       </div>
     );
