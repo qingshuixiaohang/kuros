@@ -56,6 +56,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @ActiveProfiles("test")
 @Testcontainers
+@org.junit.jupiter.api.TestMethodOrder(org.junit.jupiter.api.MethodOrderer.OrderAnnotation.class)
 @Tag("rocketmq-e2e")
 @EnabledIfSystemProperty(named = "kuros.it.rocketmq", matches = "true")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
@@ -115,6 +116,7 @@ class InteractionRocketMQIntegrationTest {
         }
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+        registry.add("spring.data.redis.timeout", () -> "2s");
         registry.add("spring.datasource.url", () -> "jdbc:mysql://" + mysql.getHost() + ":"
                 + mysql.getMappedPort(3306) + "/kuros_test?characterEncoding=UTF-8&serverTimezone=UTC");
         registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
@@ -132,12 +134,18 @@ class InteractionRocketMQIntegrationTest {
     private PostInteractionService interactionService;
     @Autowired
     private PostLikeRepository likeRepository;
-    @Autowired
+    @MockitoSpyBean
     private CommunityPostRepository postRepository;
     @Autowired
     private StringRedisTemplate redisTemplate;
     @MockitoSpyBean
     private InteractionProjectionService projectionService;
+    @MockitoSpyBean
+    private com.kuros.kurosbackend.interaction.event.InteractionEventPublisher publisher;
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+    @MockitoSpyBean
+    private com.kuros.kurosbackend.interaction.redis.InteractionRedisStore redisStore;
 
     @Test
     void 业务回调失败后消息会重新消费() {
@@ -247,6 +255,151 @@ class InteractionRocketMQIntegrationTest {
         awaitUntil(() -> projectionService.findOperation(last, userId).status().equals("APPLIED")
                 && likeRepository.existsById(new PostLikeId(userId, POST_ID))
                 && likeCountInDb() == before + 1, Duration.ofSeconds(60));
+    }
+
+    @Test
+    @org.junit.jupiter.api.Order(Integer.MAX_VALUE)
+    void broker停机后不会误报受理() {
+        String user = UUID.randomUUID().toString();
+        String operation = UUID.randomUUID().toString();
+        long before = likeCountInDb();
+        interactionService.findPost(POST_ID, user);
+        String stateKey = "interaction:like:" + POST_ID + ":" + user;
+        String countKey = "interaction:count:like:" + POST_ID;
+        String stateBefore = redisTemplate.opsForValue().get(stateKey);
+        String countBefore = redisTemplate.opsForValue().get(countKey);
+        broker.getDockerClient().stopContainerCmd(broker.getContainerId()).exec();
+        try {
+            var failure = org.assertj.core.api.Assertions.catchThrowableOfType(
+                    () -> interactionService.submit(POST_ID, user, operation, InteractionType.LIKE),
+                    com.kuros.kurosbackend.shared.exception.ServiceUnavailableException.class);
+            assertThat(failure).isNotNull();
+            assertThat(failure.getCode()).isIn("INTERACTION_NOT_ACCEPTED", "INTERACTION_DELIVERY_UNKNOWN");
+            System.out.println("Broker stopped: " + failure.getCode());
+            if (failure.getCode().equals("INTERACTION_NOT_ACCEPTED")) {
+                assertThat(likeRepository.existsById(new PostLikeId(user, POST_ID))).isFalse();
+                assertThat(likeCountInDb()).isEqualTo(before);
+                assertThat(redisTemplate.opsForValue().get(stateKey)).isEqualTo(stateBefore);
+                assertThat(redisTemplate.opsForValue().get(countKey)).isEqualTo(countBefore);
+            }
+        } finally {
+            broker.getDockerClient().startContainerCmd(broker.getContainerId()).exec();
+        }
+    }
+
+    @Test
+    void broker确认后丢失受理结果并以同一编号重试() {
+        String user = UUID.randomUUID().toString();
+        String operation = UUID.randomUUID().toString();
+        long before = likeCountInDb();
+        var attempts = new java.util.concurrent.atomic.AtomicInteger();
+        org.mockito.Mockito.doAnswer(invocation -> {
+            var sent = invocation.callRealMethod();
+            if (attempts.getAndIncrement() == 0) {
+                assertThat(sent).isEqualTo(com.kuros.kurosbackend.interaction.event.InteractionEventPublisher.Result.SENT);
+                return com.kuros.kurosbackend.interaction.event.InteractionEventPublisher.Result.UNKNOWN;
+            }
+            return sent;
+        }).when(publisher).publish(org.mockito.ArgumentMatchers.argThat(event -> event != null && operation.equals(event.eventId())));
+        try {
+            var failure = org.assertj.core.api.Assertions.catchThrowableOfType(
+                    () -> interactionService.submit(POST_ID, user, operation, InteractionType.LIKE),
+                    com.kuros.kurosbackend.shared.exception.ServiceUnavailableException.class);
+            assertThat(failure).isNotNull();
+            assertThat(failure.getCode()).isEqualTo("INTERACTION_DELIVERY_UNKNOWN");
+            interactionService.submit(POST_ID, user, operation, InteractionType.LIKE);
+            awaitUntil(() -> projectionService.findOperation(operation, user).status().equals("APPLIED"), Duration.ofSeconds(60));
+            assertThat(likeRepository.existsById(new PostLikeId(user, POST_ID))).isTrue();
+            assertThat(likeCountInDb()).isEqualTo(before + 1);
+            assertThat(attempts.get()).isEqualTo(2);
+        } finally {
+            org.mockito.Mockito.reset(publisher);
+        }
+    }
+
+    @Test
+    void 真实消息重复投递和旧消息不会覆盖取消() {
+        long before = likeCountInDb();
+        String user = UUID.randomUUID().toString();
+        var like = new InteractionEvent(UUID.randomUUID().toString(), POST_ID, user, InteractionType.LIKE, System.currentTimeMillis());
+        var unlike = new InteractionEvent(UUID.randomUUID().toString(), POST_ID, user, InteractionType.UNLIKE, System.currentTimeMillis());
+        var completed = new CountDownLatch(2);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            Object result = invocation.callRealMethod();
+            completed.countDown();
+            return result;
+        }).when(projectionService).apply(like);
+        assertThat(publisher.publish(like)).isEqualTo(com.kuros.kurosbackend.interaction.event.InteractionEventPublisher.Result.SENT);
+        awaitUntil(() -> projectionService.isApplied(like), Duration.ofSeconds(60));
+        assertThat(publisher.publish(unlike)).isEqualTo(com.kuros.kurosbackend.interaction.event.InteractionEventPublisher.Result.SENT);
+        awaitUntil(() -> projectionService.isApplied(unlike), Duration.ofSeconds(60));
+        assertThat(publisher.publish(like)).isEqualTo(com.kuros.kurosbackend.interaction.event.InteractionEventPublisher.Result.SENT);
+        try {
+            assertThat(completed.await(60, TimeUnit.SECONDS)).isTrue();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(ex);
+        }
+        assertThat(likeRepository.existsById(new PostLikeId(user, POST_ID))).isFalse();
+        assertThat(likeCountInDb()).isEqualTo(before);
+    }
+
+    @Test
+    void redis暂停跨提交后恢复待失效缓存() {
+        String user = UUID.randomUUID().toString();
+        var event = new InteractionEvent(UUID.randomUUID().toString(), POST_ID, user, InteractionType.LIKE, System.currentTimeMillis());
+        interactionService.findPost(POST_ID, user);
+        redis.getDockerClient().pauseContainerCmd(redis.getContainerId()).exec();
+        try {
+            assertThat(publisher.publish(event)).isEqualTo(com.kuros.kurosbackend.interaction.event.InteractionEventPublisher.Result.SENT);
+            awaitUntil(() -> projectionService.isApplied(event), Duration.ofSeconds(60));
+            assertThat(likeRepository.existsById(new PostLikeId(user, POST_ID))).isTrue();
+            assertThat(jdbc.queryForObject("select cache_pending from interaction_operations where operation_id = ?", Boolean.class, event.eventId())).isTrue();
+        } finally {
+            redis.getDockerClient().unpauseContainerCmd(redis.getContainerId()).exec();
+        }
+        awaitUntil(() -> {
+            try { projectionService.recoverPending(); return !jdbc.queryForObject("select cache_pending from interaction_operations where operation_id = ?", Boolean.class, event.eventId()); }
+            catch (org.springframework.dao.DataAccessException ex) { return false; }
+        }, Duration.ofSeconds(60));
+        assertThat(interactionService.findPost(POST_ID, user).liked()).isTrue();
+    }
+
+    @Test
+    void 提交后失效前抛错仍保留待恢复标记() {
+        String user = UUID.randomUUID().toString();
+        var event = new InteractionEvent(UUID.randomUUID().toString(), POST_ID, user, InteractionType.LIKE, System.currentTimeMillis());
+        org.mockito.Mockito.doThrow(new IllegalStateException("injected after commit"))
+                .when(redisStore).invalidate(InteractionType.LIKE.kind(), POST_ID, user);
+        try {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> projectionService.apply(event)).isInstanceOf(IllegalStateException.class);
+            assertThat(projectionService.isApplied(event)).isTrue();
+            assertThat(jdbc.queryForObject("select cache_pending from interaction_operations where operation_id = ?", Boolean.class, event.eventId())).isTrue();
+        } finally {
+            org.mockito.Mockito.doCallRealMethod().when(redisStore).invalidate(InteractionType.LIKE.kind(), POST_ID, user);
+        }
+        projectionService.apply(event);
+        assertThat(jdbc.queryForObject("select cache_pending from interaction_operations where operation_id = ?", Boolean.class, event.eventId())).isFalse();
+    }
+
+    @Test
+    void 提交前失败事务完整回滚后可重投() {
+        String user = UUID.randomUUID().toString();
+        var event = new InteractionEvent(UUID.randomUUID().toString(), POST_ID, user, InteractionType.LIKE, System.currentTimeMillis());
+        long before = likeCountInDb();
+        org.mockito.Mockito.doThrow(new IllegalStateException("injected before commit"))
+                .when(postRepository).incrementLikeCount(POST_ID);
+        try {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> projectionService.apply(event)).isInstanceOf(IllegalStateException.class);
+            assertThat(projectionService.isApplied(event)).isFalse();
+            assertThat(likeRepository.existsById(new PostLikeId(user, POST_ID))).isFalse();
+            assertThat(likeCountInDb()).isEqualTo(before);
+        } finally {
+            org.mockito.Mockito.reset(postRepository);
+        }
+        projectionService.apply(event);
+        assertThat(projectionService.isApplied(event)).isTrue();
+        assertThat(likeCountInDb()).isEqualTo(before + 1);
     }
 
     private long likeCountInDb() {

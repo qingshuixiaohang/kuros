@@ -22,3 +22,15 @@
 | 前端 | 跨 Feed、详情、个人中心切换；延迟旧查询响应并切换账号，确认待确认状态隔离且权威结果不被覆盖。 |
 
 还需覆盖 A→B→C 排队顺序、C 明确拒绝、无路由、失败事件重放、重试上限和恢复。具体注入点应由集成后的公开契约及容器控制确定，避免依赖业务内部私有方法。
+
+## 2026-11-27 隔离容器补充验收（基线 c1fa96f）
+
+运行：`cd kuros-backend && mvn test -Dtest=InteractionRocketMQIntegrationTest -Dkuros.it.rocketmq=true`。最终版本 13 项通过（0 失败、0 跳过）。每次使用测试独立 MySQL、Redis 和 RocketMQ；固定占用宿主 10909/10911。测试不调用认证 HTTP 接口，Broker 为异步刷盘。
+
+- 停止测试 Broker 后提交返回 `INTERACTION_NOT_ACCEPTED`，关联 MySQL 关系、计数和 Redis 状态及计数快照未变化；仅对明确拒绝做不变断言，未知结果不等同拒绝。停机用例放最后，避免重启期间影响其他用例。
+- 真正投递相同消息，以及点赞、取消完成后重投旧点赞；操作只生效一次，最终关系和计数保持取消。Broker 确认后在发布器返回边界模拟结果丢失，重用操作 ID 再投递，最终只增加一次。不是网络层丢包实验。
+- 暂停 Redis 容器后经真实 Broker 投递：MySQL 提交成功且 `cache_pending=true`；恢复 Redis 后主动执行恢复任务，待失效标记清除并读到正确状态。此实验未跨完整重试窗口；不是 Redis 进程重启实验。曾尝试停止再启动容器，Lettuce 持续报 `RedisSystemException: Connection reset`，恢复等待超时；原因未确定，不能据此归因于业务。
+- 通过测试替身在事务内计数更新前抛错，检查事务回滚后重试成功；另在提交后缓存失效前抛错，检查已提交和待恢复标记，再重放恢复。两者是异常注入，未杀死消费者进程，也未验证失效后确认前进程崩溃。
+- `cd front && npx playwright test e2e/write-read-consistency.spec.ts --project=chromium`：9 项通过，覆盖 Feed、详情、个人中心、待确认、刷新及账号切换；HTTP 响应由测试模拟，不能作为真实前后端联调证据。首次启动因 Next.js 安全升级提示退出，重试成功；该提示建议升级 Next.js。
+
+尚未验证真实消费者进程在三个位置崩溃、Redis 故障跨重试窗口、真实 MySQL 死锁、HTTP 受理响应网络丢失、无路由及真实前后端跨页面联调。真实页面联调需隔离启动 gateway、user、backend、Nacos 等服务并建立测试会话；本次尚未完成该环境，不应视为通过。
