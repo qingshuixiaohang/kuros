@@ -12,7 +12,8 @@ import { CommunityHeroCarousel, CommunityImageCarousel } from "@/components/comm
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
 import { ApiError, fetchPostInteractionsBatch } from "@/lib/api";
-import { useFavoriteMutation, useLikeMutation } from "@/lib/community-queries";
+import { useFavoriteMutation } from "@/lib/community-queries";
+import { useSharedLike } from "@/components/community/like-operations-provider";
 import { useCommunityFeedQuery } from "@/lib/feed-queries";
 import { topicArtwork } from "@/lib/official-art";
 import { DEMO_AUTHOR_ID_BY_NAME, toGuide } from "@/lib/post-view";
@@ -83,7 +84,7 @@ function PostCard({
   interaction?: { liked: boolean; favorited: boolean } | null;
   interactionUnavailable?: boolean;
 }) {
-  const { liked, bookmarked, toggleLike, toggleBookmark, notify, requestLogin } = useCommunityDemo();
+  const { liked, bookmarked, toggleLike, toggleBookmark, notify, requestLogin, user } = useCommunityDemo();
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const { context: menuContext, refs: menuRefs } = useFloating({ open: menuOpen, onOpenChange: setMenuOpen });
@@ -93,28 +94,11 @@ function PostCard({
   const menuRole = useRole(menuContext, { role: "menu" });
   const { getReferenceProps: getMenuTriggerProps, getFloatingProps: getMenuProps } = useInteractions([menuClick, menuDismiss, menuRole]);
   const postId = postIdBySlug[guide.id] ?? (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(guide.id) ? guide.id : undefined);
-  // H-2：互动状态由 Feed 一次批量拉取后传下来，不再每卡自己发请求。
-  // 原来的实现是每个 PostCard 各发一次 /posts/{id}/interactions，
-  // 一屏 20 帖 = 21 个请求（浏览器 6 条并发，分 4 批完成）。
-  //
-  // 计数与状态分离：批量接口只返回 liked/favorited（列表响应已带 likeCount，
-  // 两边重复返回会诱发"哪个才是真相"），所以卡片显示的计数始终取自
-  // guide.likes（列表数据），initialInteraction 只提供"当前用户赞过没有"。
-  //
-  // 为什么不能把 initialInteraction 塞进 useState：批量状态是异步到达的，
-  // prop 从 null 变成 {liked:true} 时 useState 的初始值不会重新求值——
-  // 卡片会永远停在挂载那一刻的状态（这正是"首页显示未赞"的直接原因）。
-  //
-  // 也不再用"本地 override 覆盖 prop"：那只是把同一个 bug 从「挂载时冻结」
-  // 降级为「每次操作后冻结」——override 写进去后没有清除路径，invalidate
-  // 重取拿到的新 initialInteraction 会被旧 override 压住，用户在别处点赞
-  // 后本页卡片仍显示旧值。mutation 的 onSuccess 已经 invalidate 了
-  // feed-interaction-states，重取足以驱动 UI，本地不需要第二份真相。
   const interaction = initialInteraction ? { postId: postId ?? "", likeCount: parseLikeCount(guide.likes), favoriteCount: 0, ...initialInteraction } : null;
   const interactionPending = Boolean(postId && !interaction && !interactionUnavailable);
   const interactionDisabled = interactionUnavailable || Boolean(postId && !interaction);
   const isBookmarked = interactionUnavailable ? false : interaction ? interaction.favorited : postId ? false : bookmarked.includes(guide.id);
-  const likeMutation = useLikeMutation(postId ?? "");
+  const like = useSharedLike(postId ?? "", { liked: interaction?.liked ?? false, likeCount: interaction?.likeCount ?? parseLikeCount(guide.likes) });
   const favoriteMutation = useFavoriteMutation(postId ?? "");
   const menuWasOpen = useRef(false);
   useEffect(() => {
@@ -137,19 +121,22 @@ function PostCard({
         return;
       }
       if (!interaction) return;
-      // 收藏和点赞一样走 mutation：onSuccess 会 invalidate 首页批量状态，
-      // 去详情页时读到的是新值，不再"首页收藏了、详情页显示未收藏"
-      // 两个 mutation 的变量类型不同，分开写而不是塞进同一个联合变量——
-      // TS 会把联合推断成 never，then 也就取不到
-      // 只发请求，不写本地状态：onSuccess 的 invalidate 会让批量状态重取，
-      // 新值经 initialInteraction 流回本卡片
-      if (kind === "like") await likeMutation.mutateAsync(interaction.liked ? "unlike" : "like");
-      else await favoriteMutation.mutateAsync(interaction.favorited ? "unfavorite" : "favorite");
+      try {
+        if (kind === "like") {
+          if (!user) {
+            notify("登录后请再次点赞");
+            return;
+          }
+          if (!like.start()) notify("点赞暂不可用，请稍后重试");
+        } else await favoriteMutation.mutateAsync(interaction.favorited ? "unfavorite" : "favorite");
+      } catch (error) {
+        notify(error instanceof Error ? error.message : "操作失败，请稍后重试");
+      }
     });
   }
-  const isLiked = interactionUnavailable ? false : interaction ? interaction.liked : postId ? false : liked.includes(guide.id);
+  const isLiked = postId ? like.liked : liked.includes(guide.id);
 
-  const likeLabel = interaction ? feedCount(interaction.likeCount) : guide.likes;
+  const likeLabel = interaction || like.pending ? feedCount(like.likeCount) : guide.likes;
   const detailHref = `/guides/${guide.id}`;
   const authorRole = guide.category.includes("攻略")
     ? "攻略作者"
@@ -240,13 +227,14 @@ function PostCard({
           aria-busy={interactionPending || undefined}
           aria-pressed={interactionDisabled ? undefined : isLiked}
           className={isLiked ? "is-active" : ""}
-          disabled={interactionDisabled}
+          disabled={interactionDisabled || like.pending}
           onClick={() => change("like")}
           type="button"
         >
           <Heart fill={isLiked ? "currentColor" : "none"} size={18} />
           {likeLabel}
         </button>
+        {like.pending && <span role="status">点赞待确认</span>}
       </div>
       {reportOpen && postId && (
         <CommunityReportDialog targetId={postId} targetType="POST" onClose={() => setReportOpen(false)} onSuccess={() => setReportOpen(false)} />
@@ -292,7 +280,7 @@ export function CommunityFeed({ query }: { query: string }) {
      原先是 useState + useEffect，invalidate 叫不到它，首页点赞后
      卡片计数停留在旧值（写后读不一致的一条路径）。 */
   const interactionStatesQuery = useQuery({
-    queryKey: ["feed-interaction-states", requestKey, items.map((guide) => guide.id).join(",")],
+    queryKey: ["feed-interaction-states", user?.id ?? "guest", requestKey, items.map((guide) => guide.id).join(",")],
     queryFn: async () => {
       const ids = items.map((guide) => guide.id).filter((id) => /^[0-9a-f-]{36}$/i.test(id));
       if (!ids.length) return new Map<string, { liked: boolean; favorited: boolean }>();

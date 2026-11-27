@@ -17,11 +17,9 @@ import {
   fetchUserFollow,
   followUser,
   handleReport,
-  likePost,
   searchPosts,
   unfavoritePost,
   unfollowUser,
-  unlikePost,
   updatePost,
   type ReportReason,
   type ReportStatus,
@@ -78,33 +76,15 @@ export function useSearchPostsQuery(keyword: string) {
  * retry:false —— 与 useSearchPostsQuery 同理由：失败要立即冒泡给 UI，
  * 不做无谓重试拖慢反馈。
  */
-export function usePostInteractionsQuery(postId: string | undefined) {
+export function usePostInteractionsQuery(postId: string | undefined, userId?: string) {
   return useQuery({
-    queryKey: ["post-interactions", postId],
+    queryKey: ["post-interactions", postId, userId ?? "guest"],
     queryFn: () => fetchPostInteractions(postId!),
     enabled: Boolean(postId),
     retry: false,
   });
 }
 
-/**
- * 点赞 mutation（H-1：把写操作纳入 react-query，替换手写 setState）。
- *
- * 为什么必须用 useMutation 而不是 async 函数 + setState：
- * - **失效传播**：onSuccess 里 invalidateQueries 让所有缓存了该资源的
- *   查询（本帖详情、首页列表、批量状态）一起重取。手写 setState 只能改
- *   调用方自己的那一份 state，其他视图停留在旧值——这就是"首页点赞后进
- *   详情页显示未赞"的根因。
- * - **去重与并发控制**：同一 mutation 的重复触发由 react-query 合并，
- *   不会出现连点造成两次请求交错。
- * - **统一的 pending/error 语义**：isPending 直接驱动按钮禁用，
- *   不必每个组件各自维护 loading 布尔。
- *
- * 为什么不用乐观更新（onMutate + rollback）：后端点赞是幂等的翻转操作，
- * 且响应体就带着最新计数，等 onSuccess 拿到结果再显示的延迟可接受；
- * 乐观更新要处理回滚，复杂度更高而收益有限。真要做，下一步是
- * setQueryData 预置 liked + 计数 ±1，失败时 invalidate 拉回真相。
- */
 export function useCommentsQuery(options: { postId: string; sort: "latest" | "hot"; pageSize?: number }) {
   const { postId, sort, pageSize = 20 } = options;
   return useInfiniteQuery({
@@ -331,14 +311,6 @@ export function useFollowUserMutation(targetUserId?: string) {
   });
 }
 
-/**
- * 点赞与收藏共用的一套失效集合。
- *
- * 抽出来的理由不只是少写四行：这两个 mutation 改的是**同一个资源**（一帖的
- * 互动状态），失效集合就必须始终一致。各写一份的话，将来给点赞加一个失效
- * key 而忘了收藏，两个按钮就会出现不同的新鲜度——而这类不一致没有任何
- * 测试会报错，只会表现成"有时候数据是旧的"。
- */
 function invalidatePostInteractionViews(queryClient: ReturnType<typeof useQueryClient>, postId: string) {
   queryClient.invalidateQueries({ queryKey: ["post-interactions", postId] });
   queryClient.invalidateQueries({ queryKey: ["community-posts"] });
@@ -347,29 +319,10 @@ function invalidatePostInteractionViews(queryClient: ReturnType<typeof useQueryC
   queryClient.invalidateQueries({ queryKey: ["feed-interaction-states"] });
 }
 
-export function useLikeMutation(postId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (next: "like" | "unlike") => (next === "like" ? likePost(postId) : unlikePost(postId)),
-    onSuccess: () => {
-      // 本帖互动状态 + 所有列表查询一起失效：首页/搜索/关注流的卡片
-      // 都会在下一次渲染前重取，不再有"一头新一头旧"
-      invalidatePostInteractionViews(queryClient, postId);
-    },
-  });
-}
-
-/**
- * 收藏 mutation（H-12：写操作纳入 react-query 的第二类）。
- *
- * 与 useLikeMutation 共享同一套失效集合：点赞和收藏改的是同一个资源
- * （一帖的互动状态），任一侧写入都必须让两侧视图一起重取。
- */
 export function useFavoriteMutation(postId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (next: "favorite" | "unfavorite") => (next === "favorite" ? favoritePost(postId) : unfavoritePost(postId)),
-    // 与 useLikeMutation 共用同一套失效集合——两者改的是同一个资源
     onSuccess: () => invalidatePostInteractionViews(queryClient, postId),
   });
 }

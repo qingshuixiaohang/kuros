@@ -12,6 +12,7 @@ import {
   ChevronRight,
   ExternalLink,
   FileText,
+  Heart,
   LoaderCircle,
   MapPin,
   MessageCircle,
@@ -25,6 +26,8 @@ import { CommunityPageFrame } from "@/components/community/community-pages";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
 import { CommunityAvatar } from "@/components/community/community-avatar";
 import { useCommunityDemo } from "@/components/community/community-interactions";
+import { useSharedLike } from "@/components/community/like-operations-provider";
+import { usePostInteractionsQuery } from "@/lib/community-queries";
 import {
   deletePost,
   fetchMyProfile,
@@ -150,8 +153,10 @@ function ProfileHero({ overview }: { overview: ProfileOverview }) {
 
 function ProfilePostRow({ post, manageable = false, onDeleted }: { post: ApiPost; manageable?: boolean; onDeleted?: () => void }) {
   const slug = postSlug(post.id);
-  const { notify } = useCommunityDemo();
+  const { notify, user, requestLogin } = useCommunityDemo();
   const queryClient = useQueryClient();
+  const interaction = usePostInteractionsQuery(post.id, user?.id);
+  const like = useSharedLike(post.id, { liked: interaction.data?.liked ?? false, likeCount: interaction.data?.likeCount ?? post.likeCount });
   const [deleting, setDeleting] = useState(false);
 
   async function removePost() {
@@ -200,6 +205,22 @@ function ProfilePostRow({ post, manageable = false, onDeleted }: { post: ApiPost
         </div>
         <ChevronRight className="profile-row-arrow" size={17} />
       </Link>
+      <button
+        type="button"
+        aria-label={like.liked ? "取消点赞" : "点赞"}
+        aria-pressed={like.liked}
+        disabled={like.pending || interaction.isPending || interaction.isError}
+        onClick={() =>
+          requestLogin(() => {
+            if (user) {
+              if (!like.start()) notify("点赞暂不可用，请稍后重试");
+            } else notify("登录后请再次点赞");
+          })
+        }
+      >
+        <Heart size={16} fill={like.liked ? "currentColor" : "none"} /> {like.likeCount}
+      </button>
+      {like.pending && <span role="status">点赞待确认</span>}
       {manageable && (
         <div className="profile-post-actions">
           <Link aria-label={`编辑《${post.title}》`} href={`/publish?edit=${encodeURIComponent(post.id)}`}>
