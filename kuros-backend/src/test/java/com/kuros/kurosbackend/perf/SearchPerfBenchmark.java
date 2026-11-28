@@ -174,13 +174,13 @@ class SearchPerfBenchmark {
 
     /** LIKE 全表扫（findVisiblePosts 的谓词即 lower(title/excerpt) LIKE '%kw%'）→ 返回命中总数（含 COUNT 全扫，体现 O(n)）。 */
     private long likeSearch() {
-        return postRepository.findVisiblePosts(PostStatus.PUBLISHED, null, null, KEYWORD, PageRequest.of(0, PAGE_SIZE))
-                .getTotalElements();
+        postRepository.findVisiblePosts(PostStatus.PUBLISHED, null, null, KEYWORD, PageRequest.of(0, PAGE_SIZE));
+        return postRepository.countVisiblePosts(PostStatus.PUBLISHED, null, null, KEYWORD);
     }
 
     private List<String> likeIds(int pageSize) {
         return postRepository.findVisiblePosts(PostStatus.PUBLISHED, null, null, KEYWORD, PageRequest.of(0, pageSize))
-                .getContent().stream().map(CommunityPost::getId).toList();
+                .stream().map(CommunityPost::getId).toList();
     }
 
     /** ES 全文检索（走 se-04 生产读路径 SearchQueryService）→ 返回当页命中数。 */

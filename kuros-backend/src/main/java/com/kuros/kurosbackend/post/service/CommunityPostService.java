@@ -26,6 +26,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -84,13 +85,14 @@ public class CommunityPostService {
         int normalizedPage = Math.max(page, 1);
         int normalizedPageSize = Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE);
         Pageable pageable = PageRequest.of(normalizedPage - 1, normalizedPageSize, sortOf(sort));
-        Page<CommunityPost> posts = postRepository.findVisiblePosts(
-                PostStatus.PUBLISHED,
-                blankToNull(category),
-                blankToNull(tag),
-                blankToNull(keyword),
-                pageable
-        );
+        String normalizedCategory = blankToNull(category);
+        String normalizedTag = blankToNull(tag);
+        String normalizedKeyword = blankToNull(keyword);
+        List<CommunityPost> content = postRepository.findVisiblePosts(
+                PostStatus.PUBLISHED, normalizedCategory, normalizedTag, normalizedKeyword, pageable);
+        Page<CommunityPost> posts = PageableExecutionUtils.getPage(content, pageable,
+                () -> postRepository.countVisiblePosts(
+                        PostStatus.PUBLISHED, normalizedCategory, normalizedTag, normalizedKeyword));
         // split-08：整页作者一次批量回填（Feign），避免逐帖单查的 N+1 跨服务调用
         Map<String, UserBriefDto> authors = userDirectory.findAuthors(
                 posts.getContent().stream().map(CommunityPost::getAuthorId).toList());

@@ -2,12 +2,13 @@ import { expect, test, type Page } from "@playwright/test";
 import { mockPostDetail } from "./helpers/post-detail-mock";
 
 const coreRoutes = ["/", "/guides/10000000-0000-0000-0000-000000000001", "/profile", "/publish"];
+// 项目支持的最窄桌面宽度：频道抽屉在此断点接管侧栏，浮层与溢出校验也以此为准。
+const narrowDesktopViewport = { width: 768, height: 900 };
 const targetViewports = [
   { name: "desktop", width: 1440, height: 1000 },
   { name: "wide-tablet", width: 1280, height: 900 },
   { name: "tablet", width: 1024, height: 900 },
-  { name: "narrow-desktop", width: 768, height: 900 },
-  { name: "mobile", width: 390, height: 844 },
+  { name: "narrow-desktop", ...narrowDesktopViewport },
 ];
 
 function floatingEmojiPicker(page: Page) {
@@ -29,7 +30,7 @@ for (const route of coreRoutes) {
 }
 
 test("首页和子页面的窄桌面频道抽屉都可用键盘打开并关闭", async ({ page }) => {
-  await page.setViewportSize({ width: 768, height: 900 });
+  await page.setViewportSize(narrowDesktopViewport);
 
   for (const path of ["/", "/guides"]) {
     await page.goto(path);
@@ -196,9 +197,9 @@ test("评论编辑器提供表情、图片和提及工具", async ({ page }) => 
   await expect(page.locator(".community-toast")).toContainText("评论暂不支持图片附件");
 });
 
-test("窄视口下表情浮层脱离帖子裁剪且可以插入", async ({ page }) => {
+test("最窄桌面宽度下表情浮层脱离帖子裁剪且可以插入", async ({ page }) => {
   await mockPostDetail(page);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize(narrowDesktopViewport);
   await page.goto("/guides/10000000-0000-0000-0000-000000000001");
   const composer = page.getByRole("region", { name: "评论区" });
   const textarea = composer.getByRole("textbox", { name: "评论内容" });
@@ -225,9 +226,9 @@ test("窄视口下表情浮层脱离帖子裁剪且可以插入", async ({ page 
   const pickerBox = await emojiPicker.boundingBox();
   if (!pickerBox) throw new Error("表情浮层没有可测量的边界");
   expect(pickerBox.x).toBeGreaterThanOrEqual(0);
-  expect(pickerBox.x + pickerBox.width).toBeLessThanOrEqual(390);
+  expect(pickerBox.x + pickerBox.width).toBeLessThanOrEqual(narrowDesktopViewport.width);
   expect(pickerBox.y).toBeGreaterThanOrEqual(0);
-  expect(pickerBox.y + pickerBox.height).toBeLessThanOrEqual(844);
+  expect(pickerBox.y + pickerBox.height).toBeLessThanOrEqual(narrowDesktopViewport.height);
   await emojiPicker.getByRole("menuitem", { name: "插入🙂" }).click();
   await expect(textarea).toHaveValue(/窄屏测试 .*🙂/);
 });

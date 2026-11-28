@@ -72,8 +72,8 @@ test("帖子详情中等桌面隐藏右栏但保留左侧互动栏", async ({ pa
   expect(pageWidth.scroll).toBeLessThanOrEqual(pageWidth.client);
 });
 
-test("帖子详情移动端没有页面级横向滚动并保留互动操作条", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+test("帖子详情在最小桌面宽度收起上下文栏且保留互动操作条", async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 900 });
   await page.goto(postUrl);
 
   const pageWidth = await page.evaluate(() => ({
