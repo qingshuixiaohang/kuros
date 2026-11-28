@@ -20,6 +20,8 @@ export interface Guide {
   views: string;
   replies: number;
   likes: string;
+  /** 列表接口的原始点赞数。likes 是展示缩写（"8.6k"），互动状态需要精确值做 ±1 与阈值判断。 */
+  likeCount?: number;
   tags: string[];
   /** 首图列表由帖子正文、列表封面字段或演示内容数据提供。 */
   mediaUrls?: string[];

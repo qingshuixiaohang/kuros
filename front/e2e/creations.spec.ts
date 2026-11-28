@@ -87,8 +87,10 @@ test("同人列表按 API 分类展示作品并链接到对应帖子详情", asy
   await expect(list.getByRole("heading", { name: "API 无配图短篇" })).toBeVisible();
   await expect(list.getByText(/画师漂泊者/)).toBeVisible();
   await expect(list.getByText("一幅描绘星炬的原创插画。", { exact: true })).toBeVisible();
+  // 创作预览使用 unoptimized 的 next/image，src 直接是原始路径；
+  // 不再经 /_next/image?url=... 代理，断言不能再读 url 查询参数。
   const imageSrc = await list.getByRole("img", { name: "API 星炬插画创作预览" }).getAttribute("src");
-  expect(new URL(imageSrc!, "http://localhost").searchParams.get("url")).toBe("/art/修-守岸人 唤取动画.webp");
+  expect(imageSrc).toBe("/art/修-守岸人 唤取动画.webp");
   await expect(list.getByText("API 配队攻略")).toHaveCount(0);
   await list.getByRole("link", { name: /API 无配图短篇/ }).click();
   await expect(page).toHaveURL(/\/guides\/creation-2$/);

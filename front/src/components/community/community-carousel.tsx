@@ -16,7 +16,14 @@ function CarouselImageView({ image, priority = false }: { image: CarouselImage; 
     return (
       <span className="community-carousel-image-frame">
         <Image aria-hidden alt="" className="community-carousel-image-backdrop" fill sizes="(max-width: 720px) 100vw, 820px" src={resolvedSrc} />
-        <Image alt={image.alt} className="community-carousel-image-primary" fill priority={priority} sizes="(max-width: 720px) 100vw, 820px" src={resolvedSrc} />
+        <Image
+          alt={image.alt}
+          className="community-carousel-image-primary"
+          fill
+          priority={priority}
+          sizes="(max-width: 720px) 100vw, 820px"
+          src={resolvedSrc}
+        />
       </span>
     );
   }
@@ -26,7 +33,13 @@ function CarouselImageView({ image, priority = false }: { image: CarouselImage; 
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img aria-hidden alt="" className="community-carousel-image-backdrop" onError={() => setFailedSrc(image.src)} src={resolvedSrc} />
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img alt={image.alt} className="community-carousel-image-primary" loading={priority ? "eager" : "lazy"} onError={() => setFailedSrc(image.src)} src={resolvedSrc} />
+      <img
+        alt={image.alt}
+        className="community-carousel-image-primary"
+        loading={priority ? "eager" : "lazy"}
+        onError={() => setFailedSrc(image.src)}
+        src={resolvedSrc}
+      />
     </span>
   );
 }

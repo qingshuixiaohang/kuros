@@ -2018,4 +2018,10 @@ a.report-target:hover strong { color: var(--cyan); }
   white-space: nowrap;
 }
 
-
+/* 移动端隐藏游戏切换器：旧规则只隐藏了内部 .game-switcher，外层 .game-selector
+   仍占 32px 宽度、14px margin 和一个 24px flex gap；390px 视口下顶栏溢出到 412px。 */
+@media (max-width: 620px) {
+  .game-selector {
+    display: none;
+  }
+}

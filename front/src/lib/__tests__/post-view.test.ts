@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { extractMarkdownImages, formatPostCount, formatPublishedAt } from "@/lib/post-view";
+import { extractMarkdownImages, formatPostCount, formatPublishedAt, parsePostCount } from "@/lib/post-view";
 
 /**
  * 这三个纯函数是帖子渲染的关键路径，此前零单测（只有 Playwright 间接
@@ -69,6 +69,35 @@ describe("formatPostCount", () => {
     expect(formatPostCount(9950)).toBe("9.9k");
     expect(formatPostCount(9999)).toBe("10k");
     expect(formatPostCount(99999)).toBe("10w");
+  });
+});
+
+describe("parsePostCount", () => {
+  test("原样解析纯数字与带空格的输入", () => {
+    expect(parsePostCount("0")).toBe(0);
+    expect(parsePostCount("999")).toBe(999);
+    expect(parsePostCount("3700")).toBe(3700);
+    expect(parsePostCount(" 3700 ")).toBe(3700);
+  });
+
+  test("k/w/万 缩写还原为数量级", () => {
+    expect(parsePostCount("1k")).toBe(1000);
+    expect(parsePostCount("8.6k")).toBe(8600);
+    expect(parsePostCount("1.2w")).toBe(12000);
+    expect(parsePostCount("12w")).toBe(120000);
+    expect(parsePostCount("3万")).toBe(30000);
+  });
+
+  test("无法识别的输入返回 0，不抛异常", () => {
+    expect(parsePostCount("")).toBe(0);
+    expect(parsePostCount("abc")).toBe(0);
+    expect(parsePostCount("8.6倍")).toBe(0);
+  });
+
+  test("缩写还原对非整数原值是近似（API 列表应优先用 raw likeCount）", () => {
+    // 12345 展示为 "1.2w"，反解只能得到 12000；首页卡片在互动接口可用时
+    // 用 Guide.likeCount 的精确值初始化，缩写反解只服务演示/搜索快照。
+    expect(parsePostCount(formatPostCount(12345))).toBe(12000);
   });
 });
 

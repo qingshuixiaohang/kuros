@@ -70,6 +70,15 @@ function recommendPage(items: unknown[], meta: Record<string, unknown> = {}) {
   };
 }
 
+/** 关注流要求登录后才发请求：先让 /auth/me 返回有效用户，页面才会进入 feed 而非登录门。 */
+async function mockLoggedIn(page: Page) {
+  await page.route("**/api/v1/auth/me", (route) =>
+    route.fulfill({
+      json: { data: { id: "viewer-1", phone: "13800000000", nickname: "读者", avatarUrl: null, bio: null, role: "USER" } },
+    }),
+  );
+}
+
 /** mock 关注流 + 推荐流，两者返回不同内容以便识别串档。 */
 async function mockFeeds(page: Page, options: { followingStatus?: number } = {}) {
   const { followingStatus = 200 } = options;
@@ -102,17 +111,35 @@ async function mockFeeds(page: Page, options: { followingStatus?: number } = {})
 
 test.describe("关注流降级路径", () => {
   test("未登录（401）显示登录引导而非空态", async ({ page }) => {
+    let feedRequests = 0;
+    await page.route("**/api/v1/feed/following**", (route) => {
+      feedRequests += 1;
+      return route.fulfill({ status: 401, json: { code: "UNAUTHORIZED" } });
+    });
+    await page.route("**/api/v1/posts**", (route) => route.fulfill({ json: recommendPage([RECOMMEND_POST]) }));
+    await page.route("**/api/v1/auth/me", (route) => route.fulfill({ status: 401, json: { code: "UNAUTHORIZED" } }));
+    await page.goto("/?tab=following");
+
+    // 登录门在发请求前拦下，不能伪装成"还没关注人"的空态。
+    await expect(page.getByRole("heading", { name: "跟上你关注的创作者" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "登录后继续" })).toBeVisible();
+    await expect(page.getByText("还没有关注的创作者。去推荐页看看吧。")).toHaveCount(0);
+    expect(feedRequests).toBe(0);
+  });
+
+  test("登录态失效（关注流 401）显示登录引导而非空态", async ({ page }) => {
+    await mockLoggedIn(page);
     await mockFeeds(page, { followingStatus: 401 });
     await page.goto("/?tab=following");
 
-    // 必须是 401 专属引导，不能伪装成"还没关注人"
-    await expect(page.getByText("登录后查看关注的创作者动态")).toBeVisible();
-    await expect(page.getByRole("button", { name: "去登录" })).toBeVisible();
-    // 不应出现空态文案
+    // 会话已失效（登录态仍在本地，但服务端 401）同样回到登录门。
+    await expect(page.getByRole("heading", { name: "跟上你关注的创作者" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "登录后继续" })).toBeVisible();
     await expect(page.getByText("还没有关注的创作者。去推荐页看看吧。")).toHaveCount(0);
   });
 
   test("后端故障显示错误态与重试入口", async ({ page }) => {
+    await mockLoggedIn(page);
     await mockFeeds(page, { followingStatus: 500 });
     await page.goto("/?tab=following");
 
@@ -125,8 +152,8 @@ test.describe("关注流降级路径", () => {
 
 test.describe("关注流正常路径", () => {
   test("关注流追加失败保留首屏并可重试且不重复帖子", async ({ page }) => {
+    await mockLoggedIn(page);
     await mockFeeds(page);
-    await page.route("**/api/v1/auth/me", (route) => route.fulfill({ json: { data: { id: "viewer-1", nickname: "读者", role: "USER" } } }));
     let unavailable = true;
     await page.route("**/api/v1/feed/following**", (route) => {
       const cursor = new URL(route.request().url()).searchParams.get("cursor");
@@ -152,6 +179,7 @@ test.describe("关注流正常路径", () => {
   });
 
   test("已登录展示首屏内容、加载更多翻页并透传游标", async ({ page }) => {
+    await mockLoggedIn(page);
     const seenCursors: (string | null)[] = [];
     await page.route("**/api/v1/feed/following**", async (route) => {
       const cursor = new URL(route.request().url()).searchParams.get("cursor");
@@ -197,6 +225,7 @@ test.describe("关注流正常路径", () => {
   });
 
   test("tab 从 following 切走再切回不串数据", async ({ page }) => {
+    await mockLoggedIn(page);
     await mockFeeds(page);
 
     await page.goto("/?tab=following");
@@ -216,6 +245,7 @@ test.describe("关注流正常路径", () => {
   });
 
   test("空关注流显示空态引导", async ({ page }) => {
+    await mockLoggedIn(page);
     await page.route("**/api/v1/feed/following**", (route) =>
       route.fulfill({
         status: 200,

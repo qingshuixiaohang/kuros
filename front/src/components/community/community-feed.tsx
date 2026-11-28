@@ -16,7 +16,7 @@ import { useFavoriteMutation } from "@/lib/community-queries";
 import { useSharedLike } from "@/components/community/like-operations-provider";
 import { useCommunityFeedQuery } from "@/lib/feed-queries";
 import { topicArtwork } from "@/lib/official-art";
-import { DEMO_AUTHOR_ID_BY_NAME, toGuide } from "@/lib/post-view";
+import { DEMO_AUTHOR_ID_BY_NAME, parsePostCount, toGuide } from "@/lib/post-view";
 import type { Guide } from "@/types/community";
 const bannerSlides = [
   { alt: "鸣潮 2.6 版本前瞻", description: "版本情报 · 攻略与漂泊者记录", src: "/art/修-2.6版本PV预告图 5K.webp", title: "鸣潮" },
@@ -38,12 +38,6 @@ function feedCount(value: number) {
     : value >= 1000
       ? (value / 1000).toFixed(1).replace(/\.0$/, "") + "k"
       : String(value);
-}
-/** guide.likes 是列表响应里的字符串计数（如 "5"），批量互动状态只给 liked/favorited，
- *  卡片显示的计数要拼回 PostInteraction，故在此解析为 number。 */
-function parseLikeCount(value: string) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 function PostMediaGridTile({ alt, href, src }: { alt: string; href: string; src: string }) {
   const [failed, setFailed] = useState(false);
@@ -94,11 +88,13 @@ function PostCard({
   const menuRole = useRole(menuContext, { role: "menu" });
   const { getReferenceProps: getMenuTriggerProps, getFloatingProps: getMenuProps } = useInteractions([menuClick, menuDismiss, menuRole]);
   const postId = postIdBySlug[guide.id] ?? (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(guide.id) ? guide.id : undefined);
-  const interaction = initialInteraction ? { postId: postId ?? "", likeCount: parseLikeCount(guide.likes), favoriteCount: 0, ...initialInteraction } : null;
+  // API 列表带精确 likeCount；演示/搜索快照只有展示缩写，按 k/w 解析回近似值。
+  const fallbackLikeCount = guide.likeCount ?? parsePostCount(guide.likes);
+  const interaction = initialInteraction ? { postId: postId ?? "", likeCount: fallbackLikeCount, favoriteCount: 0, ...initialInteraction } : null;
   const interactionPending = Boolean(postId && !interaction && !interactionUnavailable);
   const interactionDisabled = interactionUnavailable || Boolean(postId && !interaction);
   const isBookmarked = interactionUnavailable ? false : interaction ? interaction.favorited : postId ? false : bookmarked.includes(guide.id);
-  const like = useSharedLike(postId ?? "", { liked: interaction?.liked ?? false, likeCount: interaction?.likeCount ?? parseLikeCount(guide.likes) });
+  const like = useSharedLike(postId ?? "", { liked: interaction?.liked ?? false, likeCount: interaction?.likeCount ?? fallbackLikeCount });
   const favoriteMutation = useFavoriteMutation(postId ?? "");
   const menuWasOpen = useRef(false);
   useEffect(() => {

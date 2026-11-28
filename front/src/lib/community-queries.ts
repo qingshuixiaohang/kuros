@@ -319,10 +319,41 @@ function invalidatePostInteractionViews(queryClient: ReturnType<typeof useQueryC
   queryClient.invalidateQueries({ queryKey: ["feed-interaction-states"] });
 }
 
+/** 收藏写接口只保证"已受理"：投影由 MQ 消费者异步落库，接口返回时关系表可能还是旧值。 */
+const FAVORITE_CONFIRM_TIMEOUT_MS = 10_000;
+const FAVORITE_CONFIRM_INTERVAL_MS = 400;
+
+/**
+ * 等投影真正落到关系表后再算收藏成功。
+ *
+ * 原实现 POST/DELETE 成功后立刻 invalidate，重取很可能跑在消费者前面：真实验收中
+ * 出现过 favoriteCount 已是 0、favorited 仍为 true 的快照，界面停在"已藏"，直到
+ * 下一次导航才恢复。点赞由 LikeCoordinator 轮询 operation 确认，收藏没有对应机制；
+ * 这里用同一个权威读接口（GET /posts/{id}/interactions）轮询到目标关系态，再让
+ * invalidate 去刷新所有视图。超时说明消费者没有在合理时间内落库，按失败提示，
+ * 不把未确认的写当成成功。
+ */
+async function awaitFavoriteProjection(postId: string, favorited: boolean) {
+  const deadline = Date.now() + FAVORITE_CONFIRM_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    try {
+      if ((await fetchPostInteractions(postId)).favorited === favorited) return;
+    } catch {
+      // 读接口瞬时失败（网关/服务重启）继续重试；持续失败由超时统一报错。
+    }
+    await new Promise((resolve) => setTimeout(resolve, FAVORITE_CONFIRM_INTERVAL_MS));
+  }
+  throw new Error("收藏状态同步超时，请稍后重试");
+}
+
 export function useFavoriteMutation(postId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (next: "favorite" | "unfavorite") => (next === "favorite" ? favoritePost(postId) : unfavoritePost(postId)),
+    mutationFn: async (next: "favorite" | "unfavorite") => {
+      const accepted = next === "favorite" ? await favoritePost(postId) : await unfavoritePost(postId);
+      await awaitFavoriteProjection(postId, next === "favorite");
+      return accepted;
+    },
     onSuccess: () => invalidatePostInteractionViews(queryClient, postId),
   });
 }

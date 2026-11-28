@@ -26,7 +26,7 @@ import { CommunityReportDialog } from "@/components/community/community-report-d
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { ApiError, fetchPost, type ApiComment, type PostInteraction, type ReportTargetType } from "@/lib/api";
 import { guides } from "@/lib/mock";
-import { DEMO_COVER_BY_SLUG, DEMO_POST_ID_BY_SLUG, extractMarkdownImages, formatPublishedAt } from "@/lib/post-view";
+import { DEMO_COVER_BY_SLUG, DEMO_POST_ID_BY_SLUG, extractMarkdownImages, formatPublishedAt, parsePostCount } from "@/lib/post-view";
 import { parseMarkdownHeading, renderMarkdown, sectionIdForTitle } from "./markdown";
 import type { Guide } from "@/types/community";
 
@@ -87,12 +87,6 @@ function getArticleSections(content?: string): ArticleSection[] {
   return titles.map((title, index) => ({ id: sectionIdForTitle(title, index), title }));
 }
 
-function parseCount(value: string) {
-  const number = Number.parseFloat(value.replace(/[万w]/gi, ""));
-  if (!Number.isFinite(number)) return 0;
-  return /[万w]/i.test(value) ? Math.round(number * 10000) : /k/i.test(value) ? Math.round(number * 1000) : Math.round(number);
-}
-
 function scrollToElement(element: HTMLElement | null) {
   if (!element) return;
   element.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
@@ -105,7 +99,7 @@ function PostReactionRail({ guide, postId }: { guide: Guide; postId: string }) {
   const interactionUnavailable = interactionsQuery.isError;
   const interaction: PostInteraction = interactionsQuery.data ?? {
     postId,
-    likeCount: parseCount(guide.likes),
+    likeCount: guide.likeCount ?? parsePostCount(guide.likes),
     favoriteCount: 0,
     liked: false,
     favorited: false,
