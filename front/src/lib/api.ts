@@ -424,14 +424,6 @@ export async function fetchPostInteractionsBatch(postIds: string[]): Promise<Map
   return result;
 }
 
-export function likePost(postId: string) {
-  return ensureCsrfToken().then(() => request<PostInteraction>(`/api/v1/posts/${encodeURIComponent(postId)}/interactions/like`, { method: "POST" }));
-}
-
-export function unlikePost(postId: string) {
-  return ensureCsrfToken().then(() => request<PostInteraction>(`/api/v1/posts/${encodeURIComponent(postId)}/interactions/like`, { method: "DELETE" }));
-}
-
 export function favoritePost(postId: string) {
   return ensureCsrfToken().then(() => request<PostInteraction>(`/api/v1/posts/${encodeURIComponent(postId)}/interactions/favorite`, { method: "POST" }));
 }
@@ -529,4 +521,38 @@ export async function fetchMyProfile(options: { page?: number; pageSize?: number
 
 export function logoutFromApi() {
   return request<void>("/api/v1/auth/logout", { method: "POST" });
+}
+
+export type LikeOperationResult = { status: "UNKNOWN" } | { status: "APPLIED"; state: { postId: string; liked: boolean; likeCount: number } };
+
+export async function submitLikeOperation(operationId: string, postId: string, liked: boolean, signal?: AbortSignal) {
+  await ensureCsrfToken();
+  return request<unknown>("/api/v1/interaction-operations", {
+    method: "POST",
+    body: JSON.stringify({ operationId, postId, type: liked ? "LIKE" : "UNLIKE" }),
+    signal,
+  });
+}
+
+export async function fetchLikeOperation(operationId: string, signal?: AbortSignal): Promise<LikeOperationResult> {
+  const result = await request<unknown>(`/api/v1/interaction-operations/${encodeURIComponent(operationId)}`, { signal });
+  if (!result || typeof result !== "object" || !("status" in result)) throw new Error("Invalid operation response");
+  if (result.status === "UNKNOWN") return { status: "UNKNOWN" };
+  if (
+    result.status === "APPLIED" &&
+    "state" in result &&
+    result.state &&
+    typeof result.state === "object" &&
+    "postId" in result.state &&
+    typeof result.state.postId === "string" &&
+    "liked" in result.state &&
+    typeof result.state.liked === "boolean" &&
+    "likeCount" in result.state &&
+    typeof result.state.likeCount === "number" &&
+    Number.isSafeInteger(result.state.likeCount) &&
+    result.state.likeCount >= 0
+  ) {
+    return { status: "APPLIED", state: { postId: result.state.postId, liked: result.state.liked, likeCount: result.state.likeCount } };
+  }
+  throw new Error("Invalid operation response");
 }

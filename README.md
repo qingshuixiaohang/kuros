@@ -3,14 +3,15 @@
 这是项目工作区：Next.js 前端（react-query 接真实 API，含按页面定义的降级）+ Spring
 Boot 后端微服务群。
 
-当前完成状态、已合并发布批次和实际测试基线以
-[`docs/roadmap/current-status.md`](docs/roadmap/current-status.md) 为准。历史和审计文档
-保留旧快照，不用于判断当前进度。
+查看[文档导航](docs/README.md)可找到架构决策、开发复盘和使用说明。当前进度请核对
+[GitHub Issue](https://github.com/qingshuixiaohang/kuros/issues) 和
+[合并记录](https://github.com/qingshuixiaohang/kuros/pulls?q=is%3Apr+is%3Amerged)；
+历史文档中的测试数字是当时的快照。
 
 ## 目录
 
 - `front/`：Next.js + TypeScript 前端
-- `docs/`：产品计划、规格、工单、学习复盘与人为准备事项
+- `docs/`：架构决策、技术规格、工单和学习复盘
 - `kuros-backend/`：内容服务（帖子/评论/互动/举报/媒体），Spring Boot + Maven
 - `kuros-user/`：用户域微服务（认证/会话/RBAC/资料/关注），切片 #10 拆出，独立库 `kuros_user`
 - `kuros-gateway/`：Spring Cloud Gateway 统一入口（占 8080 正门，`lb://` 路由）
@@ -51,6 +52,10 @@ npm run dev
 RocketMQ 9876、ES 9200、MinIO 9000），裸跑**不需要任何环境变量**；Docker 容器模式才用
 环境变量把它们覆盖成容器网络地址。默认不启用固定验证码；需要本地演示登录时，在 `.env`
 显式设置 `APP_AUTH_DEV_CODE`。
+
+Compose 会在 Broker 注册后初始化 `post-interaction-topic`（4 个读队列、4 个写队列）；
+已有路由不兼容时初始化失败，不会修改现有 Topic。使用外部 RocketMQ 时，部署流程须在后端
+启动前预建同名 Topic，配置 4 个读队列和 4 个写队列。
 
 ### 全栈打包模式（演示/冒烟/出门前体检）：连应用容器一起起
 
@@ -126,4 +131,3 @@ npm run build
 cd .\kuros-backend
 .\mvnw.cmd spring-boot:run
 ```
-<!-- dsh-superagent pipeline smoke test -->

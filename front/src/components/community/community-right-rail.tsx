@@ -7,6 +7,15 @@ import { useState } from "react";
 import { fetchPosts } from "@/lib/api";
 import { useNewsListQuery } from "@/lib/community-queries";
 import { topicArtwork } from "@/lib/official-art";
+function TopicThumb({ cover, tag }: { cover?: string; tag: string }) {
+  const [failed, setFailed] = useState(false);
+  const src = !failed && cover ? cover : topicArtwork(tag);
+  return (
+    <span className="topic-thumb">
+      <Image alt="" fill onError={() => setFailed(true)} sizes="44px" src={src} unoptimized />
+    </span>
+  );
+}
 const quickTools = [
   { title: "养成计算器", href: "/tools/calculator", iconSrc: "/icons/upgrade-calculator.webp" },
   { title: "声骸图鉴", href: "/echoes", iconSrc: "/icons/echo-archive.webp" },
@@ -100,9 +109,7 @@ export function RightRail() {
           <div className="topic-list">
             {hotTopics.data.map(({ tag, count, cover }) => (
               <Link className="topic-card" href={"/search?q=" + encodeURIComponent(tag)} key={tag}>
-                <span className="topic-thumb">
-                  <Image alt="" fill sizes="44px" src={cover ?? topicArtwork(tag)} unoptimized />
-                </span>
+                <TopicThumb cover={cover} tag={tag} />
                 <span className="topic-copy">
                   <strong>#{tag}</strong>
                   <small>{count} 篇帖子</small>

@@ -25,13 +25,15 @@ for (const viewport of [
   });
 }
 
-test("首页桌面端保留 300px 推荐工具栏，小屏时收起", async ({ page }) => {
+// 桌面三栏采用库街区精确节奏：240 + 12 + 640 + 12 + 304 = 1208，
+// 因此右栏固定宽度是 304px（globals.css 的 @media (min-width: 1101px)）。
+test("首页桌面端保留 304px 推荐工具栏，小屏时收起", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/");
 
   const rail = page.getByRole("complementary", { name: "推荐与工具" });
   await expect(rail).toBeVisible();
-  await expect(rail).toHaveCSS("width", "300px");
+  await expect(rail).toHaveCSS("width", "304px");
 
   await page.setViewportSize({ width: 1024, height: 900 });
   await expect(rail).toBeHidden();

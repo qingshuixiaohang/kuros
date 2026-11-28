@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "d3c9921c-1ce8-4125-b3bb-26e5bae2e6cf",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\candidate.json",
+  "output": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\kuros-architecture.html",
+  "specification": {
+    "sha256": "deee61e58132ed0fc98c5d4f2ad2c9031ef2ec20d69f5d4f7b766a0909377623",
+    "bytes": 12925
+  },
+  "artifact": {
+    "sha256": "0ab1776772f75ff1eac8016a705c71f4c0117b68dc20e158ea12fa019d50f39f",
+    "bytes": 871427
+  }
+}

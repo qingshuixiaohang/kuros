@@ -1,0 +1,62 @@
+[ERROR] Tests run: 2, Failures: 2, Errors: 0, Skipped: 0, Time elapsed: 0.538 s <<< FAILURE! -- in com.kuros.kurosuser.config.ProductionCodeExposureTest
+[ERROR] com.kuros.kurosuser.config.ProductionCodeExposureTest.productionCannotBeMadeTrustedByAddingDevProfile -- Time elapsed: 0.483 s <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+ <Started application [AnnotationConfigApplicationContext@4fc5e095 id = 'org.springframework.context.annotation.AnnotationConfigApplicationContext@4fc5e095', applicationName = '', beanDefinitionCount = 7]>
+to have failed
+but context started successfully
+	at com.kuros.kurosuser.config.ProductionCodeExposureTest.lambda$productionCannotBeMadeTrustedByAddingDevProfile$1(ProductionCodeExposureTest.java:25)
+	at org.springframework.boot.test.context.runner.AbstractApplicationContextRunner.accept(AbstractApplicationContextRunner.java:457)
+	at org.springframework.boot.test.context.runner.AbstractApplicationContextRunner.consumeAssertableContext(AbstractApplicationContextRunner.java:371)
+	at org.springframework.boot.test.context.runner.AbstractApplicationContextRunner.lambda$run$1(AbstractApplicationContextRunner.java:349)
+	at org.springframework.boot.test.util.TestPropertyValues.lambda$applyToSystemProperties$0(TestPropertyValues.java:176)
+	at org.springframework.boot.test.util.TestPropertyValues.applyToSystemProperties(TestPropertyValues.java:190)
+	at org.springframework.boot.test.util.TestPropertyValues.applyToSystemProperties(TestPropertyValues.java:175)
+	at org.springframework.boot.test.context.runner.AbstractApplicationContextRunner.lambda$run$0(AbstractApplicationContextRunner.java:349)
+	at org.springframework.boot.test.context.runner.AbstractApplicationContextRunner.withContextClassLoader(AbstractApplicationContextRunner.java:377)
+	at org.springframework.boot.test.context.runner.AbstractApplicationContextRunner.run(AbstractApplicationContextRunner.java:348)
+	at com.kuros.kurosuser.config.ProductionCodeExposureTest.productionCannotBeMadeTrustedByAddingDevProfile(ProductionCodeExposureTest.java:25)
+
+[ERROR] com.kuros.kurosuser.config.ProductionCodeExposureTest.productionCannotEnableCodeExposureEvenWithoutFixedCode -- Time elapsed: 0.019 s <<< FAILURE!
+java.lang.AssertionError: 
+
+Expecting:
+ <Started application [AnnotationConfigApplicationContext@4bff2185 id = 'org.springframework.context.annotation.AnnotationConfigApplicationContext@4bff2185', applicationName = '', beanDefinitionCount = 7]>
+to have failed
+but context started successfully
+	at com.kuros.kurosuser.config.ProductionCodeExposureTest.lambda$productionCannotEnableCodeExposureEvenWithoutFixedCode$0(ProductionCodeExposureTest.java:16)
+	at org.springframework.boot.test.context.runner.AbstractApplicationContextRunner.accept(AbstractApplicationContextRunner.java:457)
+	at org.springframework.boot.test.context.runner.AbstractApplicationContextRunner.consumeAssertableContext(AbstractApplicationContextRunner.java:371)
+	at org.springframework.boot.test.context.runner.AbstractApplicationContextRunner.lambda$run$1(AbstractApplicationContextRunner.java:349)
+	at org.springframework.boot.test.util.TestPropertyValues.lambda$applyToSystemProperties$0(TestPropertyValues.java:176)
+	at org.springframework.boot.test.util.TestPropertyValues.applyToSystemProperties(TestPropertyValues.java:190)
+	at org.springframework.boot.test.util.TestPropertyValues.applyToSystemProperties(TestPropertyValues.java:175)
+	at org.springframework.boot.test.context.runner.AbstractApplicationContextRunner.lambda$run$0(AbstractApplicationContextRunner.java:349)
+	at org.springframework.boot.test.context.runner.AbstractApplicationContextRunner.withContextClassLoader(AbstractApplicationContextRunner.java:377)
+	at org.springframework.boot.test.context.runner.AbstractApplicationContextRunner.run(AbstractApplicationContextRunner.java:348)
+	at com.kuros.kurosuser.config.ProductionCodeExposureTest.productionCannotEnableCodeExposureEvenWithoutFixedCode(ProductionCodeExposureTest.java:15)
+
+[ERROR] Failures: 
+[ERROR]   ProductionCodeExposureTest.productionCannotBeMadeTrustedByAddingDevProfile:25->lambda$productionCannotBeMadeTrustedByAddingDevProfile$1:25 
+Expecting:
+ <Started application [AnnotationConfigApplicationContext@4fc5e095 id = 'org.springframework.context.annotation.AnnotationConfigApplicationContext@4fc5e095', applicationName = '', beanDefinitionCount = 7]>
+to have failed
+but context started successfully
+[ERROR]   ProductionCodeExposureTest.productionCannotEnableCodeExposureEvenWithoutFixedCode:15->lambda$productionCannotEnableCodeExposureEvenWithoutFixedCode$0:16 
+Expecting:
+ <Started application [AnnotationConfigApplicationContext@4bff2185 id = 'org.springframework.context.annotation.AnnotationConfigApplicationContext@4bff2185', applicationName = '', beanDefinitionCount = 7]>
+to have failed
+but context started successfully
+[ERROR] Tests run: 2, Failures: 2, Errors: 0, Skipped: 0
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.6:test (default-test) on project kuros-user: There are test failures.
+[ERROR] 
+[ERROR] See G:\kuros-web\.scratch\worktrees\product-readiness\kuros-user\target\surefire-reports for the individual test results.
+[ERROR] See dump files (if any exist) [date].dump, [date]-jvmRun[N].dump and [date].dumpstream.
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException

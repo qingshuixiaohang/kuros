@@ -1,40 +1,21 @@
 package com.kuros.kurosbackend.interaction.service;
 
 import com.kuros.kurosbackend.interaction.domain.PostFavorite;
+import com.kuros.kurosbackend.interaction.api.PostInteractionResponse;
 import com.kuros.kurosbackend.interaction.domain.PostFavoriteId;
 import com.kuros.kurosbackend.interaction.domain.PostLike;
 import com.kuros.kurosbackend.interaction.domain.PostLikeId;
 import com.kuros.kurosbackend.interaction.event.InteractionEvent;
+import com.kuros.kurosbackend.interaction.redis.InteractionRedisStore;
 import com.kuros.kurosbackend.interaction.repository.PostFavoriteRepository;
 import com.kuros.kurosbackend.interaction.repository.PostLikeRepository;
 import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 
-/**
- * 互动投影服务（切片 #11）：把一条互动事件「幂等地」落到 MySQL——写关系行 + 刷 DB 冗余计数列。
- *
- * 它是「异步落库」与「同步降级落库」共用的唯一落库逻辑：
- * - 异步：RocketMQ 顺序消费到事件 → InteractionStreamConfig 的 Consumer 调 apply；
- * - 降级：写路径 publish 返回 false（未启用/投递失败）→ 直接调 apply 同步落库。
- * 两处复用同一段代码，保证「最终 DB 状态」一致，避免异步/同步两套逻辑漂移。
- *
- * 幂等如何保证（消费端可能重复投递）？
- * 靠 DB 复合主键 + existsById 前置判断：LIKE 仅在关系不存在时 insert，UNLIKE 仅在存在时 delete。
- * 重复消费同一事件不会二次增减计数——这是「至少一次投递 + 幂等消费」组合的关键。
- *
- * 事务纪律（对应 HANDOFF 陷阱 #7）：
- * apply 用 TransactionTemplate 自开自提交，而非类级 @Transactional。这样在同步降级路径中，
- * 落库事务在「锁内」就已 commit 完成，随后才 unlock——杜绝「先 unlock 后 commit」的竞态窗口。
- *
- * 为什么 apply 不再驱逐 postDetail 缓存（切片 #13 计数解耦）？
- * #13 之前详情缓存内嵌 likeCount/favoriteCount，互动落库改了 DB 计数列就必须驱逐详情缓存。
- * 计数解耦后（ADR 0006 D3），详情两级缓存只存内容字段，计数在读取时从 #11 实时 Redis 源叠加——
- * 互动投影只改计数列、不动任何内容字段，故不再使详情缓存过期。移除驱逐反而是解耦的收益：
- * 热帖每次互动落库不再击穿内容缓存（否则越热的帖子被点赞越频繁、缓存被清得越勤，命中率崩塌）。
- */
 @Service
 public class InteractionProjectionService {
 
@@ -42,24 +23,146 @@ public class InteractionProjectionService {
     private final PostFavoriteRepository favoriteRepository;
     private final CommunityPostRepository postRepository;
     private final TransactionTemplate transactionTemplate;
+    private final InteractionRedisStore redisStore;
+    private final JdbcTemplate jdbc;
+    private final InteractionCrashPoint crashPoint;
 
     public InteractionProjectionService(PostLikeRepository likeRepository,
                                         PostFavoriteRepository favoriteRepository,
                                         CommunityPostRepository postRepository,
-                                        TransactionTemplate transactionTemplate) {
+                                        TransactionTemplate transactionTemplate,
+                                        InteractionRedisStore redisStore,
+                                        JdbcTemplate jdbc,
+                                        InteractionCrashPoint crashPoint) {
         this.likeRepository = likeRepository;
         this.favoriteRepository = favoriteRepository;
         this.postRepository = postRepository;
         this.transactionTemplate = transactionTemplate;
+        this.redisStore = redisStore;
+        this.jdbc = jdbc;
+        this.crashPoint = crashPoint;
     }
 
     public void apply(InteractionEvent event) {
-        transactionTemplate.executeWithoutResult(status -> persist(event));
+        transactionTemplate.executeWithoutResult(status -> {
+            crashPoint.reached(InteractionCrashPoint.BEFORE_COMMIT, event.eventId());
+            persist(event);
+        });
+        crashPoint.reached(InteractionCrashPoint.AFTER_COMMIT, event.eventId());
+        // 重投也要失效缓存，前一次可能在提交之后、失效之前失败。
+        redisStore.invalidate(event.type().kind(), event.postId(), event.userId());
+        crashPoint.reached(InteractionCrashPoint.AFTER_INVALIDATE, event.eventId());
+        rebuildLikes(event.type().kind(), event.userId());
+        jdbc.update("update interaction_operations set cache_pending = false where operation_id = ?", event.eventId());
+        jdbc.update("update interaction_failures set status = 'RESOLVED', updated_at = ? where operation_id = ? and post_id = ? and user_id = ? and operation_type = ?",
+                LocalDateTime.now(), event.eventId(), event.postId(), event.userId(), event.type().name());
+    }
+
+    public boolean isFailurePaused(String operationId) {
+        return !jdbc.query("select operation_id from interaction_failures where operation_id = ? and status = 'PAUSED'",
+                (rs, row) -> rs.getString(1), operationId).isEmpty();
+    }
+
+    public boolean isPostBlocked(String postId) {
+        return !jdbc.query("select operation_id from interaction_failures where post_id = ? and status = 'PAUSED'",
+                (rs, row) -> rs.getString(1), postId).isEmpty();
+    }
+
+    public boolean isApplied(InteractionEvent event) {
+        return !jdbc.query("select operation_id from interaction_operations where operation_id = ? and post_id = ? and user_id = ? and operation_type = ?",
+                (rs, row) -> rs.getString(1), event.eventId(), event.postId(), event.userId(), event.type().name()).isEmpty();
+    }
+
+    public void requireCompatible(InteractionEvent event) {
+        var previous = jdbc.query("select post_id, user_id, operation_type from interaction_operations where operation_id = ?",
+                (rs, row) -> new String[]{rs.getString(1), rs.getString(2), rs.getString(3)}, event.eventId());
+        if (!previous.isEmpty()) {
+            String[] operation = previous.getFirst();
+            if (!event.postId().equals(operation[0]) || !event.userId().equals(operation[1]) || !event.type().name().equals(operation[2])) {
+                throw new com.kuros.kurosbackend.shared.exception.AuthRequestException("INTERACTION_OPERATION_CONFLICT", "操作编号已绑定其他互动");
+            }
+        }
+    }
+
+    public record Failure(String operationId, String postId, String userId, String type, long occurredAt,
+                          String errorType, String status) { }
+
+    public java.util.List<Failure> pendingFailures() {
+        return jdbc.query("select operation_id, post_id, user_id, operation_type, occurred_at, error_type, status from interaction_failures where status <> 'RESOLVED' order by updated_at limit 100",
+                (rs, row) -> new Failure(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4),
+                        rs.getLong(5), rs.getString(6), rs.getString(7)));
+    }
+
+    public void recordFailure(InteractionEvent event, String errorType) {
+        int changed = jdbc.update("update interaction_failures set status = 'PAUSED', error_type = ?, updated_at = ? where operation_id = ?",
+                errorType, LocalDateTime.now(), event.eventId());
+        if (changed == 0) {
+            jdbc.update("insert into interaction_failures (operation_id, post_id, user_id, operation_type, occurred_at, error_type, status, updated_at) values (?, ?, ?, ?, ?, ?, 'PAUSED', ?)",
+                    event.eventId(), event.postId(), event.userId(), event.type().name(), event.occurredAt(), errorType, LocalDateTime.now());
+        }
+    }
+
+    public void resumeFailure(String operationId) {
+        var events = jdbc.query("select post_id, user_id, operation_type, occurred_at from interaction_failures where operation_id = ? and status = 'PAUSED'",
+                (rs, row) -> new InteractionEvent(operationId, rs.getString(1), rs.getString(2),
+                        com.kuros.kurosbackend.interaction.event.InteractionType.valueOf(rs.getString(3)), rs.getLong(4)), operationId);
+        if (events.isEmpty()) {
+            throw new com.kuros.kurosbackend.shared.exception.ResourceNotFoundException("INTERACTION_FAILURE_NOT_FOUND", "待恢复任务不存在");
+        }
+        apply(events.getFirst());
+    }
+
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelayString = "${app.interaction.cache-recovery-delay-ms:30000}")
+    public void recoverPending() {
+        var pending = jdbc.query("select operation_id, post_id, user_id, operation_type from interaction_operations where cache_pending = true order by applied_at limit 100",
+                (rs, row) -> new String[]{rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4)});
+        for (String[] operation : pending) {
+            redisStore.invalidate(com.kuros.kurosbackend.interaction.event.InteractionType.valueOf(operation[3]).kind(), operation[1], operation[2]);
+            rebuildLikes(com.kuros.kurosbackend.interaction.event.InteractionType.valueOf(operation[3]).kind(), operation[2]);
+            jdbc.update("update interaction_operations set cache_pending = false where operation_id = ?", operation[0]);
+            jdbc.update("update interaction_failures set status = 'RESOLVED', updated_at = ? where operation_id = ? and post_id = ? and user_id = ? and operation_type = ?",
+                    LocalDateTime.now(), operation[0], operation[1], operation[2], operation[3]);
+        }
+    }
+
+    private void rebuildLikes(com.kuros.kurosbackend.interaction.event.InteractionKind kind, String userId) {
+        if (kind == com.kuros.kurosbackend.interaction.event.InteractionKind.LIKE) {
+            redisStore.recentLikes(userId, () -> likeRepository.findByUserIdOrderByCreatedAtDescPostIdDesc(
+                    userId, org.springframework.data.domain.PageRequest.of(0, redisStore.likesMaxSize())));
+        }
+    }
+
+    public record OperationResult(String status, PostInteractionResponse state) { }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public OperationResult findOperation(String operationId, String userId) {
+        var posts = jdbc.query("select post_id from interaction_operations where operation_id = ? and user_id = ?",
+                (rs, row) -> rs.getString(1), operationId, userId);
+        if (posts.isEmpty()) {
+            return new OperationResult("UNKNOWN", null);
+        }
+        String postId = posts.getFirst();
+        var post = postRepository.findById(postId).orElseThrow();
+        return new OperationResult("APPLIED", new PostInteractionResponse(postId, post.getLikeCount(),
+                post.getFavoriteCount(), likeRepository.existsById(new PostLikeId(userId, postId)),
+                favoriteRepository.existsById(new PostFavoriteId(userId, postId))));
     }
 
     private void persist(InteractionEvent event) {
         String postId = event.postId();
         String userId = event.userId();
+        jdbc.queryForObject("select id from posts where id = ? for update", String.class, postId);
+        var previous = jdbc.query("select post_id, user_id, operation_type from interaction_operations where operation_id = ?",
+                (rs, row) -> new String[]{rs.getString(1), rs.getString(2), rs.getString(3)}, event.eventId());
+        if (!previous.isEmpty()) {
+            String[] operation = previous.getFirst();
+            if (!postId.equals(operation[0]) || !userId.equals(operation[1]) || !event.type().name().equals(operation[2])) {
+                throw new IllegalArgumentException("Operation ID is bound to a different interaction");
+            }
+            return;
+        }
+        jdbc.update("insert into interaction_operations (operation_id, post_id, user_id, operation_type, applied_at) values (?, ?, ?, ?, ?)",
+                event.eventId(), postId, userId, event.type().name(), LocalDateTime.now());
         LocalDateTime now = LocalDateTime.now();
         switch (event.type()) {
             case LIKE -> {

@@ -1,18 +1,12 @@
-name: Agent 任务单（dsh-superagent）
-description: 准备可独立验收的任务；确认准备完成后再派发
+name: Agent 任务单
+description: 准备可独立验收的任务
 title: "[agent] "
 body:
   - type: markdown
     attributes:
       value: |
-        讨论中的任务保留为草稿，不填写派发账号。首次提交时填写派发字段；已经创建的 Issue 请新增一条 @ 评论派发，编辑旧正文添加 @ 不会触发。派发前确认范围、验收、依赖和环境；标签不触发执行。
+        开始实现前确认范围、验收、依赖和环境；标签不触发执行。
         仓库规范见 docs/agents/issue-tracker.md，无需在正文重复通用命令。
-  - type: input
-    id: dispatch
-    attributes:
-      label: 派发
-      description: 准备完成后填写机器人账号；留空仅记录需求。这个字段会进入正文。
-      placeholder: "@qingshuixiaohan-dotcom"
   - type: textarea
     id: goal
     attributes:

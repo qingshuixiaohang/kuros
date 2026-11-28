@@ -1,0 +1,221 @@
+/* ============================================================
+   kuros-web 亲手验证课程 · 共享样式表
+   所有 lesson / reference 都链接这个文件，保证整门课视觉统一。
+   风格：Tufte 式——大量留白、衬线标题、克制配色、可打印。
+   ============================================================ */
+
+:root {
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-faint: #7a7a7a;
+  --paper: #fdfcf9;
+  --card: #ffffff;
+  --rule: #e6e2d8;
+  --accent: #b4531f;      /* 砖红——标题强调 */
+  --accent-soft: #f6ece4;
+  --ok: #2f7a3d;          /* 绿——healthy / 通过 */
+  --ok-soft: #eaf4ec;
+  --warn: #b5820a;        /* 琥珀——等待 / 注意 */
+  --warn-soft: #fbf3e0;
+  --danger: #b3261e;      /* 红——错误 */
+  --code-bg: #1e1e22;
+  --code-ink: #e8e6e0;
+  --link: #1f5fb4;
+}
+
+* { box-sizing: border-box; }
+
+html { font-size: 17px; }
+
+body {
+  margin: 0;
+  padding: 0 1.2rem 6rem;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Iowan Old Style", "Palatino Linotype", "Source Han Serif SC",
+               "Noto Serif CJK SC", Georgia, serif;
+  line-height: 1.68;
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  max-width: 46rem;
+  margin: 0 auto;
+}
+
+/* ---------- 页眉 ---------- */
+header.lesson-head {
+  padding: 3rem 0 1.4rem;
+  border-bottom: 2px solid var(--ink);
+  margin-bottom: 2rem;
+}
+.kicker {
+  font-family: "SF Mono", "Cascadia Code", Consolas, monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+h1 {
+  font-size: 2.1rem;
+  line-height: 1.2;
+  margin: 0.5rem 0 0.6rem;
+  font-weight: 600;
+}
+.subtitle {
+  font-size: 1.06rem;
+  color: var(--ink-soft);
+  font-style: italic;
+  margin: 0;
+}
+
+h2 {
+  font-size: 1.42rem;
+  margin: 2.6rem 0 0.8rem;
+  padding-top: 0.4rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+h3 {
+  font-size: 1.12rem;
+  margin: 1.7rem 0 0.5rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+p { margin: 0.7rem 0; }
+a { color: var(--link); text-decoration: none; border-bottom: 1px solid rgba(31,95,180,.3); }
+a:hover { border-bottom-color: var(--link); }
+
+strong { font-weight: 700; }
+em { color: var(--ink-soft); }
+
+/* ---------- 目标卡片（本课要拿下的胜利）---------- */
+.win {
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  padding: 1rem 1.2rem;
+  border-radius: 0 6px 6px 0;
+  margin: 1.4rem 0;
+}
+.win .label {
+  font-family: "SF Mono", Consolas, monospace;
+  font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--accent); display: block; margin-bottom: 0.3rem;
+}
+
+/* ---------- 步骤 ---------- */
+ol.steps { counter-reset: step; list-style: none; padding: 0; margin: 1.2rem 0; }
+ol.steps > li {
+  counter-increment: step;
+  position: relative;
+  padding: 0 0 1.6rem 3rem;
+  border-left: 2px solid var(--rule);
+  margin-left: 0.9rem;
+}
+ol.steps > li:last-child { border-left-color: transparent; padding-bottom: 0.2rem; }
+ol.steps > li::before {
+  content: counter(step);
+  position: absolute; left: -0.9rem; top: -0.1rem;
+  width: 1.8rem; height: 1.8rem;
+  background: var(--ink); color: #fff;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: "SF Mono", Consolas, monospace; font-size: 0.9rem; font-weight: 700;
+}
+.step-title { font-weight: 700; font-size: 1.06rem; display: block; margin-bottom: 0.3rem; }
+.who {
+  font-family: "SF Mono", Consolas, monospace; font-size: 0.7rem;
+  padding: 0.1rem 0.45rem; border-radius: 3px; margin-left: 0.4rem; vertical-align: middle;
+}
+.who.you { background: var(--ok-soft); color: var(--ok); border: 1px solid #cfe3d3; }
+.who.ai  { background: #eaf0f7; color: var(--link); border: 1px solid #d3e0ee; }
+
+/* ---------- 代码块 ---------- */
+pre {
+  background: var(--code-bg); color: var(--code-ink);
+  padding: 0.9rem 1.1rem; border-radius: 7px;
+  overflow-x: auto; font-size: 0.86rem; line-height: 1.55;
+  font-family: "SF Mono", "Cascadia Code", Consolas, monospace;
+  margin: 0.8rem 0;
+}
+pre .c { color: #8a8f98; }          /* 注释 */
+pre .p { color: #7fd1a0; }          /* 提示符/路径 */
+code {
+  font-family: "SF Mono", "Cascadia Code", Consolas, monospace;
+  font-size: 0.86em; background: #f0ede4; padding: 0.1em 0.38em;
+  border-radius: 3px; color: #8a3d12;
+}
+pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+
+/* ---------- "你会看到" 期望输出 ---------- */
+.expect {
+  background: var(--ok-soft); border: 1px solid #cfe3d3;
+  border-radius: 6px; padding: 0.8rem 1rem; margin: 0.8rem 0;
+}
+.expect .label {
+  font-family: "SF Mono", Consolas, monospace; font-size: 0.72rem;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--ok);
+  display: block; margin-bottom: 0.35rem;
+}
+.expect pre { background: #f4f7f4; color: #243524; margin: 0.3rem 0 0; font-size: 0.82rem; }
+
+/* ---------- 提示 / 警告 ---------- */
+.note, .warn-box, .danger-box {
+  border-radius: 6px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.95rem;
+}
+.note { background: #eef2f7; border-left: 4px solid var(--link); }
+.warn-box { background: var(--warn-soft); border-left: 4px solid var(--warn); }
+.danger-box { background: #fbeceb; border-left: 4px solid var(--danger); }
+.note .label, .warn-box .label, .danger-box .label {
+  font-family: "SF Mono", Consolas, monospace; font-size: 0.72rem;
+  letter-spacing: 0.08em; text-transform: uppercase; display: block; margin-bottom: 0.25rem;
+}
+.note .label { color: var(--link); }
+.warn-box .label { color: var(--warn); }
+.danger-box .label { color: var(--danger); }
+
+/* ---------- 表格 ---------- */
+table { border-collapse: collapse; width: 100%; margin: 1.1rem 0; font-size: 0.9rem; }
+th, td { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--rule); }
+th { font-family: "SF Mono", Consolas, monospace; font-size: 0.76rem;
+     letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-faint); }
+tbody tr:hover { background: #faf8f2; }
+td code { font-size: 0.82em; }
+.pill { font-family: "SF Mono", Consolas, monospace; font-size: 0.72rem;
+        padding: 0.08rem 0.4rem; border-radius: 10px; white-space: nowrap; }
+.pill.ok { background: var(--ok-soft); color: var(--ok); }
+.pill.wait { background: var(--warn-soft); color: var(--warn); }
+
+/* ---------- 复选清单 ---------- */
+ul.checklist { list-style: none; padding: 0; }
+ul.checklist li { padding: 0.35rem 0 0.35rem 1.9rem; position: relative; }
+ul.checklist li::before {
+  content: "☐"; position: absolute; left: 0; top: 0.28rem;
+  font-size: 1.1rem; color: var(--ink-faint);
+}
+
+/* ---------- 页脚导航 ---------- */
+footer.lesson-foot {
+  margin-top: 3rem; padding-top: 1.4rem; border-top: 1px solid var(--rule);
+  font-size: 0.92rem; color: var(--ink-soft);
+}
+.ask-teacher {
+  background: var(--card); border: 1px dashed var(--accent);
+  border-radius: 8px; padding: 1rem 1.2rem; margin: 1.5rem 0;
+}
+.ask-teacher .label { color: var(--accent); font-weight: 700; display: block; margin-bottom: 0.3rem; }
+.nav-links { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem; }
+.nav-links a {
+  font-family: "SF Mono", Consolas, monospace; font-size: 0.82rem;
+  padding: 0.4rem 0.8rem; border: 1px solid var(--rule); border-radius: 5px;
+}
+
+/* ---------- 打印 ---------- */
+@media print {
+  body { background: #fff; font-size: 11pt; }
+  pre { white-space: pre-wrap; border: 1px solid #ccc; background: #f7f7f7; color: #000; }
+  .nav-links, .ask-teacher { display: none; }
+  a { color: #000; border: none; }
+  a::after { content: " (" attr(href) ")"; font-size: 0.8em; color: #555; }
+}

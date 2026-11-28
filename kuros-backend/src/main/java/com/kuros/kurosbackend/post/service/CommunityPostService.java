@@ -28,7 +28,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -54,6 +57,7 @@ public class CommunityPostService {
     private final UserDirectoryFacade userDirectory;
     private final TwoLevelCache twoLevelCache;
     private final PostInteractionCountReader interactionCountReader;
+    private final TransactionTemplate detailReadTransaction;
     private final String publicBaseUrl;
 
     public CommunityPostService(
@@ -63,6 +67,7 @@ public class CommunityPostService {
             UserDirectoryFacade userDirectory,
             TwoLevelCache twoLevelCache,
             PostInteractionCountReader interactionCountReader,
+            PlatformTransactionManager transactionManager,
             @Value("${app.storage.public-base-url:http://localhost:8080}") String publicBaseUrl
     ) {
         this.postRepository = postRepository;
@@ -71,6 +76,8 @@ public class CommunityPostService {
         this.userDirectory = userDirectory;
         this.twoLevelCache = twoLevelCache;
         this.interactionCountReader = interactionCountReader;
+        this.detailReadTransaction = new TransactionTemplate(transactionManager);
+        this.detailReadTransaction.setReadOnly(true);
         this.publicBaseUrl = publicBaseUrl.replaceAll("/$", "");
     }
 
@@ -124,18 +131,27 @@ public class CommunityPostService {
      * 返回 null 让缓存层写下 __NULL__ 哨兵，第二次起命中哨兵直接返回 null、不再查 DB；
      * 「不存在」的对外语义（404）由本方法在拿到 null 内容后统一抛 ResourceNotFoundException。
      */
+    // 独立详情请求只给本地数据读取开事务。发帖和编辑仍可在调用方事务里读取尚未提交的内容。
+    @Transactional(propagation = Propagation.SUPPORTS, readOnly = true)
     public PostDetailResponse findPublishedById(String id) {
         AtomicReference<CommunityPost> postRef = new AtomicReference<>();
-        Supplier<CommunityPost> lazyPost = () -> postRef.updateAndGet(cached -> cached != null ? cached
+        Supplier<CommunityPost> loadPost = () -> postRef.updateAndGet(cached -> cached != null ? cached
                 : postRepository.findByIdAndStatus(id, PostStatus.PUBLISHED).orElse(null));
+        Supplier<CommunityPost> lazyPost = () -> {
+            CommunityPost post = postRef.get();
+            return post != null ? post : detailReadTransaction.execute(status -> loadPost.get());
+        };
 
         PostDetailContent content = twoLevelCache.get(CacheNames.POST_DETAIL, id, PostDetailContent.class, () -> {
-            CommunityPost post = lazyPost.get();
-            if (post == null) {
+            PostDetailData detail = detailReadTransaction.execute(status -> {
+                CommunityPost post = loadPost.get();
+                return post == null ? null : new PostDetailData(post, tagNames(post), media(post.getId()));
+            });
+            if (detail == null) {
                 return null; // 查无此帖：返回 null 让缓存层写空值哨兵，而非在此抛异常穿透缓存
             }
             // 详情单帖：批量接口取单元素（内部契约只有 batch，无需为单查扩面）
-            return toContent(post, userDirectory.findAuthors(List.of(post.getAuthorId())));
+            return toContent(detail, userDirectory.findAuthors(List.of(detail.post().getAuthorId())));
         });
         if (content == null) {
             // 内容 null = 本次查无 或 命中空值哨兵，二者对外语义一致：帖子不存在或已删除
@@ -344,13 +360,16 @@ public class CommunityPostService {
         return toSummary(post, authors, mediaFor(List.of(post.getId())));
     }
 
-    /** 实体 → 内容缓存载体（不含 like/favorite 计数，计数解耦见 PostDetailContent 注释）。 */
-    private PostDetailContent toContent(CommunityPost post, Map<String, UserBriefDto> authors) {
-        List<PostMediaResponse> media = media(post.getId());
+    private record PostDetailData(CommunityPost post, List<String> tags, List<PostMediaResponse> media) {
+    }
+
+    /** 本地查询结果 → 内容缓存载体（不含 like/favorite 计数）。 */
+    private PostDetailContent toContent(PostDetailData detail, Map<String, UserBriefDto> authors) {
+        CommunityPost post = detail.post();
         return new PostDetailContent(
                 post.getId(), post.getType(), post.getCategory(), post.getTitle(), post.getExcerpt(), post.getContent(),
                 userDirectory.toAuthor(post.getAuthorId(), authors), post.getPublishedAt(), post.getViewCount(),
-                post.getCommentCount(), tagNames(post), coverUrl(media), media
+                post.getCommentCount(), detail.tags(), coverUrl(detail.media()), detail.media()
         );
     }
 

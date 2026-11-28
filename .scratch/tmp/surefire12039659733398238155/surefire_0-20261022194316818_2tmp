@@ -1,0 +1,5 @@
+#surefire_0
+#Thu Oct 22 19:43:16 CST 2026
+basedir=G\:\\kuros-web\\.scratch\\worktrees\\product-readiness\\kuros-backend
+localRepository=G\:\\dev\\m2repo
+test=TemporaryAssetCleanupTest

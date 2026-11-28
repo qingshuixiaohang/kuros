@@ -11,6 +11,8 @@ import java.util.List;
 
 public interface PostLikeRepository extends JpaRepository<PostLike, PostLikeId> {
 
+    List<PostLike> findByUserIdOrderByCreatedAtDescPostIdDesc(String userId, org.springframework.data.domain.Pageable page);
+
     /**
      * 统计某帖的真实点赞数（审计 M5 / B3：计数对账的真相来源）。
      *
@@ -21,6 +23,7 @@ public interface PostLikeRepository extends JpaRepository<PostLike, PostLikeId> 
      * 所以 COUNT(*) 才是能自我修复的真相，冗余列只是读优化。
      */
     @Query("select count(l) from PostLike l where l.postId = :postId")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true, propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     long countByPostId(@Param("postId") String postId);
 
     /**

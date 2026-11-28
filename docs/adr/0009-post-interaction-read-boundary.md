@@ -12,6 +12,8 @@ ADR-0006 的详情读取约束继续有效：详情缓存只保存帖子内容�
 
 ## 决策
 
+例子：某篇帖子正文刚从 Caffeine 读到，但点赞数已经从 10 变成 11。帖子服务拿着帖子 ID 调用 `PostInteractionCountReader`，互动模块返回 Redis 里的 11。这里的「端口」是一个 Java 接口，用来约定返回什么。访问存储的细节藏在实现里，调用发生在同一个后端进程。
+
 1. 由帖子域定义一个小型实时互动计数读取端口；互动域提供实现。帖子应用服务只依赖帖子域端口，不再导入互动包。
 2. 端口只负责读取点赞数和收藏数，并接受惰性基线供给器。Redis 命中时不得执行基线查询；Redis 未命中时使用数据库冗余列作为基线并按现有规则回填。
 3. 本切片只调整帖子详情的计数读取边界。互动写接口、当前用户 liked/favorited 状态、帖子可见性校验、消息投影、对外 DTO/API 和一致性语义保持不变。
@@ -29,4 +31,4 @@ ADR-0006 的详情读取约束继续有效：详情缓存只保存帖子内容�
 - 单元测试验证 Redis 命中时使用实时值且不调用基线供给器；Redis 未命中时调用对应数据库基线。
 - 帖子详情集成测试验证响应计数语义保持，且缓存内容仍不包含互动计数。
 - 源码依赖检查确认 `post` 主代码不再导入 `interaction` 包，`interaction` 仍可依赖帖子域的实体/仓储。
-- 运行后端编译和受影响的定向测试。
+- [读取接口](../../kuros-backend/src/main/java/com/kuros/kurosbackend/post/service/PostInteractionCountReader.java) · [Redis 实现](../../kuros-backend/src/main/java/com/kuros/kurosbackend/interaction/service/RedisPostInteractionCountReader.java) · [复盘](../learning/25-post-interaction-read-boundary.md)。

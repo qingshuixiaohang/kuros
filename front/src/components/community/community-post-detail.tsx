@@ -20,19 +20,13 @@ import { CommunityPageFrame } from "@/components/community/community-pages";
 import { CommunityImageCarousel } from "@/components/community/community-carousel";
 import { CommunityFollowButton } from "@/components/community/community-follow-button";
 import { CommunityAvatar } from "@/components/community/community-avatar";
-import {
-  useCommentsQuery,
-  useCreateCommentMutation,
-  useDeleteCommentMutation,
-  useFavoriteMutation,
-  useLikeMutation,
-  usePostInteractionsQuery,
-} from "@/lib/community-queries";
+import { useCommentsQuery, useCreateCommentMutation, useDeleteCommentMutation, useFavoriteMutation, usePostInteractionsQuery } from "@/lib/community-queries";
+import { useSharedLike } from "@/components/community/like-operations-provider";
 import { CommunityReportDialog } from "@/components/community/community-report-dialog";
 import { useCommunityDemo } from "@/components/community/community-interactions";
 import { ApiError, fetchPost, type ApiComment, type PostInteraction, type ReportTargetType } from "@/lib/api";
 import { guides } from "@/lib/mock";
-import { DEMO_COVER_BY_SLUG, DEMO_POST_ID_BY_SLUG, extractMarkdownImages, formatPublishedAt } from "@/lib/post-view";
+import { DEMO_COVER_BY_SLUG, DEMO_POST_ID_BY_SLUG, extractMarkdownImages, formatPublishedAt, parsePostCount } from "@/lib/post-view";
 import { parseMarkdownHeading, renderMarkdown, sectionIdForTitle } from "./markdown";
 import type { Guide } from "@/types/community";
 
@@ -93,43 +87,35 @@ function getArticleSections(content?: string): ArticleSection[] {
   return titles.map((title, index) => ({ id: sectionIdForTitle(title, index), title }));
 }
 
-function parseCount(value: string) {
-  const number = Number.parseFloat(value.replace(/[万w]/gi, ""));
-  if (!Number.isFinite(number)) return 0;
-  return /[万w]/i.test(value) ? Math.round(number * 10000) : /k/i.test(value) ? Math.round(number * 1000) : Math.round(number);
-}
-
 function scrollToElement(element: HTMLElement | null) {
   if (!element) return;
   element.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
 }
 
 function PostReactionRail({ guide, postId }: { guide: Guide; postId: string }) {
-  const { requestLogin, notify } = useCommunityDemo();
-  // H-1/H-3：读走 react-query（key ["post-interactions", postId]），写走 mutation。
-  // 原实现是本地 useState + useEffect fetch，key 不进缓存——于是首页点赞后
-  // 进详情页拿到的是后端旧值（两份 state 各说各话）。统一到同一份缓存后，
-  // mutation 的 onSuccess invalidate 会让两侧一起重取。
-  const interactionsQuery = usePostInteractionsQuery(postId);
-  const likeMutation = useLikeMutation(postId);
+  const { requestLogin, notify, user } = useCommunityDemo();
+  const interactionsQuery = usePostInteractionsQuery(postId, user?.id);
   const favoriteMutation = useFavoriteMutation(postId);
   const interactionUnavailable = interactionsQuery.isError;
   const interaction: PostInteraction = interactionsQuery.data ?? {
     postId,
-    likeCount: parseCount(guide.likes),
+    likeCount: guide.likeCount ?? parsePostCount(guide.likes),
     favoriteCount: 0,
     liked: false,
     favorited: false,
   };
-  // 收藏也走 mutation 了：点赞/收藏改的是同一个互动状态资源，
-  // 任一侧写入都要让首页卡片、搜索卡片、关注流一起重取。
-  const display = interaction;
-  const loading = likeMutation.isPending || favoriteMutation.isPending;
+  const like = useSharedLike(postId, interaction);
+  const display = { ...interaction, liked: like.liked, likeCount: like.likeCount };
+  const loading = favoriteMutation.isPending;
   async function change(kind: "like" | "favorite") {
     if (loading) return;
     try {
       if (kind === "like") {
-        await likeMutation.mutateAsync(display.liked ? "unlike" : "like");
+        if (!user) {
+          notify("登录后请再次点赞");
+          return;
+        }
+        if (!like.start()) notify("点赞暂不可用，请稍后重试");
       } else {
         await favoriteMutation.mutateAsync(display.favorited ? "unfavorite" : "favorite");
       }
@@ -146,7 +132,7 @@ function PostReactionRail({ guide, postId }: { guide: Guide; postId: string }) {
         <MessageCircle size={26} />
         <span>{guide.replies}</span>
       </button>
-      {interactionUnavailable ? (
+      {interactionUnavailable && !like.pending ? (
         <div className="post-reaction-error" role="status">
           <span>互动状态暂不可用，请重试。</span>
           <button className="secondary-button" onClick={() => interactionsQuery.refetch()} type="button">
@@ -157,7 +143,7 @@ function PostReactionRail({ guide, postId }: { guide: Guide; postId: string }) {
         <>
           <button
             className={display.liked ? "is-active" : ""}
-            disabled={loading}
+            disabled={loading || like.pending}
             type="button"
             onClick={() =>
               protect(() => {
@@ -169,6 +155,7 @@ function PostReactionRail({ guide, postId }: { guide: Guide; postId: string }) {
             <Heart fill={display.liked ? "currentColor" : "none"} size={27} />
             <span>{display.likeCount}</span>
           </button>
+          {like.pending && <span role="status">点赞待确认</span>}
           <button
             className={display.favorited ? "is-active is-bookmarked" : ""}
             disabled={loading}

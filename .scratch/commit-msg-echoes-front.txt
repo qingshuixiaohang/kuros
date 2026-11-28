@@ -1,0 +1,36 @@
+feat(front): /echoes 接真 API——echoSets 硬编码数组彻底退役
+
+前端审计 H-9 的第二半（后端域见上一个提交 6e74123）。
+
+echoSets 是 mock.ts 里的 4 条硬编码数据，/echoes 列表页与 /echoes/[id]
+详情页都读它——改声骸数据要改前端代码重新发版。
+
+改动：
+- api.ts 加 ApiEchoSet 类型 + fetchEchoPage/fetchEchoSet。用 requestEnvelope
+  而不是 request——前者才拿得到 meta（news 域同一坑）
+- community-queries.ts 加 useEchoListQuery / useEchoDetailQuery。列表带
+  placeholderData: keepPreviousData + staleTime 5 分钟（声骸是低频静态内容）
+- echoes-page.tsx 列表与详情都改走 query，补加载中/失败/空结果三态；
+  链接从 mock 的 id 换成后端 slug
+- mock.ts 删 echoSets、types/community.ts 删 EchoSet 接口——真删不是注释掉。
+  （news 域当时留着 newsItems/NewsItem 没删，提交信息却说"退役"，那是失实；
+  这里不留这种坑）
+
+两处与 news 域的差异，理由：
+- 三个 tab（套装/单体声骸/掉落位置）刻意不做成数据过滤。它们在 mock 时代
+  就是"视角"——只切第二列显示 effect 还是 location，数据行不变。后端支持
+  ?role= 过滤，但页面上没有 role 入口，加 UI 属于新功能不是 H-9 的范围。
+  e2e 用一条用例钉住这个语义，防止后人误改
+- 详情的「查看适配攻略」按钮改为 guideSlug 有值才渲染。mock 时代的 guideId
+  全是假攻略 slug（changli-team 等），按钮点进去必然打不开；后端种子数据
+  暂不关联攻略，所以按钮整体消失——渲染死链接比没有按钮更糟
+
+踩坑：
+- 我第一版 e2e 把三个 tab 当成 role 过滤来断言（抄 news 的分类过滤），
+  立刻红。红得对：那是我把两个不同语义混为一谈。改成"切 tab 只换列"
+  再补一条本地搜索过滤用例
+- JSX 注释 {/* ... */} 的闭合括号被 patch 操作吃掉过一次，tsc 报错位置
+  （118 行）离真正出错的行（117 行）差一行——看报错行号时要往上检查一行
+
+验证：tsc 0 error、eslint 0 warning、format:check 全绿、vitest 39/39、
+Playwright 106 passed / 0 failed（新增 echoes 6 例）。

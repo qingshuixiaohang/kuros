@@ -1,0 +1,32 @@
+feat(release): complete MVP readiness hardening
+
+Complete the #159 readiness batch across security, media, feed, frontend,
+dependencies, CI, and release documentation.
+
+- Fail closed for production verification-code exposure, internal tokens,
+  development credentials, profile mixing, and missing SMS adapters.
+- Close the media lifecycle across upload, publish, edit, moderation,
+  visibility, cleanup, and repair of published references.
+- Reconcile unfollowed authors, rebuild timelines after Redis loss, and use
+  the full Redis member as the same-score feed cursor.
+- Move feed reads and writes onto React Query failure semantics, disable
+  real-post interactions while state is pending or unavailable, and add
+  comment/report pagination with batch target context.
+- Complete category, detail-error, and accessibility contracts; update Next,
+  Actions, production media allowlists, and CI configuration.
+
+RED/GREEN evidence:
+- New pagination, pending-interaction, menu-focus, cross-author cursor,
+  unfollow/rebuild, and media-reference tests failed before implementation.
+- Targeted green suites: backend 19/19, user security 13/13, production
+  configuration 4/4, and final Playwright 161/161.
+
+Validation:
+- npm audit --omit=dev --audit-level=high: 0 vulnerabilities
+- npm run test: 42/42
+- npx tsc --noEmit, npm run lint, npm run format:check: passed
+- npm run build: Next.js 16.4.2 production build passed
+
+Known limits:
+- A real production SMS provider and HTTPS ingress are deployment inputs.
+- Five-job CI success must be verified after the branch is pushed.

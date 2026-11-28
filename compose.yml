@@ -192,11 +192,9 @@ services:
       # Nacos 是硬依赖：注册失败等于服务不在微服务体系中（Q10 决策，fail-fast 由编排层承担）
       nacos:
         condition: service_healthy
-      # RocketMQ 是软依赖（切片 #11）：broker 就绪时优先异步落库；未就绪/不可用时
-      # 写路径同步降级（不丢互动），故用 required:false —— 编排层等待但不因它失败
-      rocketmq-broker:
-        condition: service_healthy
-        required: false
+      # 启动前先确认互动 Topic 已有可用路由。
+      rocketmq-interaction-topic-init:
+        condition: service_completed_successfully
       # Elasticsearch 软依赖（切片 #14 se-02）：就绪时优先用，未就绪/冷启中不阻断 backend 启动。
       # 搜索读路径（se-04）在 ES 不可用时显式降级返回"搜索服务暂不可用"，故用 required:false。
       elasticsearch:
@@ -347,6 +345,19 @@ services:
       timeout: 10s
       retries: 30
       start_period: 30s
+
+  rocketmq-interaction-topic-init:
+    image: apache/rocketmq:5.3.1
+    restart: "no"
+    environment:
+      NAMESRV_ADDR: rocketmq-namesrv:9876
+      JAVA_OPT_EXT: "-Xms32m -Xmx128m"
+    command: ["sh", "/home/rocketmq/init-interaction-topic.sh"]
+    volumes:
+      - ./docker/rocketmq/init-interaction-topic.sh:/home/rocketmq/init-interaction-topic.sh:ro
+    depends_on:
+      rocketmq-broker:
+        condition: service_healthy
 
   # RocketMQ Dashboard（切片 #11）：可视化 topic/消费组/死信，运维观测面。
   # 宿主 8082（避开 gateway 8080 / nacos 8081）；不参与业务链路，仅排障用

@@ -32,4 +32,7 @@ public class PostLike {
         this.postId = postId;
         this.createdAt = createdAt;
     }
+
+    public String getPostId() { return postId; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
 }

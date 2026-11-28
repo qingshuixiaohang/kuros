@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 2 课 · 逐切片验证手册（超详细版）</title>
+<link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+<header class="lesson-head">
+  <span class="kicker">Lesson 0002 · 验证阶梯 L1~L5 · 超详细版</span>
+  <h1>逐切片验证手册</h1>
+  <p class="subtitle">每个切片四件套：【操作】精确到按钮和 URL ·【亲眼确认】精确到文案和数字 ·【看哪】观测点编号+具体命令 ·【翻车对照】症状→原因。前置：按《本地开发速查表》点亮环境。</p>
+</header>
+
+<div class="note">
+  <span class="label">学习路线说明（2026-10-20）</span>
+  本手册用于需要时验证已有功能，不要求逐切片打卡，也不是当前功能学习课程。当前学习进度见 <code>../PROGRESS.md</code>。
+</div>
+
+<h2>第 0 章 · 开始前的一次性准备</h2>
+
+<h3>0.1 你的 GUI 工具箱（把黑乎乎的命令行换成可视化界面）</h2>
+<table>
+  <thead><tr><th>中间件</th><th>推荐工具</th><th>连接参数</th></tr></thead>
+  <tbody>
+    <tr><td><strong>MySQL</strong></td><td>Navicat（你已有）/ DBeaver（免费）/ IDEA 自带 Database 面板</td><td>主机 <code>localhost</code> · 端口 <code>3307</code> · 用户 <code>root</code> / <code>kuros_dev_root_password</code>。三个库：<code>kuros</code>（内容）、<code>kuros_user</code>（用户）、<code>nacos_config</code>（别动）</td></tr>
+    <tr><td><strong>Redis</strong></td><td>Tiny RDM（国产，好看）/ RedisInsight（Redis 官方，免费）/ Another Redis Desktop Manager</td><td>主机 <code>localhost</code> · 端口 <code>6379</code> · 无密码 · db0</td></tr>
+    <tr><td><strong>Elasticsearch</strong></td><td>Kibana（官方，项目自带配置）</td><td>先 <code>docker compose --profile observability up -d kibana</code> → 开 <code>localhost:5601</code> → 左侧菜单 Dev Tools 里直接写 ES 查询</td></tr>
+    <tr><td>RocketMQ</td><td>自带控制台</td><td><code>localhost:8082</code>（无需登录）</td></tr>
+    <tr><td>MinIO</td><td>自带控制台</td><td><code>localhost:9001</code> · minioadmin / minioadmin</td></tr>
+    <tr><td>Nacos</td><td>自带控制台</td><td><code>localhost:8081</code> · nacos / nacos123</td></tr>
+    <tr><td>容器日志</td><td>Docker Desktop → Containers → 点进容器 → Logs 标签</td><td>比 <code>docker compose logs</code> 更直观</td></tr>
+    <tr><td>后端日志</td><td>IDEA 三个控制台就是最好的日志 GUI</td><td>Run 窗口可搜索、可调字体、可按行折叠</td></tr>
+  </tbody>
+</table>
+<div class="note"><span class="label">Navicat 30 秒上手</span>连接 → MySQL → 填上表参数 → 测试连接 → 打开 <code>kuros</code> 库 → 双击任意表看数据 → 工具栏"新建查询"可以直接写 SQL。<strong>本课最常用的两条 SQL</strong>：<code>SELECT * FROM media_assets ORDER BY created_at DESC;</code> 和 <code>SELECT * FROM kuros_user.user_follows;</code></div>
+
+<h3>0.2 接口测试的三种姿势（不装任何东西就能开始）</h3>
+<table>
+  <thead><tr><th>姿势</th><th>怎么用</th><th>适合</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Swagger UI</strong></td><td>开 <code>localhost:8090/swagger-ui/index.html</code> → 展开任意 GET 接口 → Try it out → Execute。全部接口定义来自代码自动生成（切片 #6）</td><td>读接口直接调；写接口会 401（Swagger 里没有登录态，属预期）</td></tr>
+    <tr><td><strong>Apifox / Postman</strong></td><td>新建项目 → 导入 → URL 填 <code>http://localhost:8090/v3/api-docs</code> → 整个 API 集合自动生成。调写接口：先登录拿 Cookie（浏览器 F12 复制 <code>KUROS_SESSION</code> 和 <code>XSRF-TOKEN</code> 两个 Cookie 值），请求头加 <code>Cookie: KUROS_SESSION=...; XSRF-TOKEN=...</code> 和 <code>X-XSRF-TOKEN: (XSRF-TOKEN的值)</code></td><td>想保存请求、写测试脚本、团队共享时用</td></tr>
+    <tr><td><strong>浏览器 F12 Network</strong></td><td>操作页面 → Network 里右键任意请求 → Copy as fetch / Copy as cURL → 改参数重放</td><td>复现"刚才那个请求"最快</td></tr>
+  </tbody>
+</table>
+<div class="note"><span class="label">为什么没有 JMeter？</span>按路线图（CONTEXT.md 2026-09-21 方向纠偏），<strong>Jmeter 压测排在切片 #15+</strong> 还没立项。原因：项目纪律"禁止无压测依据的并发表述"——压测数据必须真实采集，所以要专门立一个切片：写压测计划 → 跑出 P95/吞吐数据 → 写进复盘。现在手头工具（Swagger/Apifox/F12）覆盖"功能验证"；等你 ready 说一声，#15 就从 JMeter 压测 + Sentinel 触发实验开始立项。</div>
+
+<h2>黄金闭环（10 分钟热身）</h2>
+<div class="win">
+  <span class="label">一条线穿过 5 个切片</span>
+  ① 游客开 <code>localhost:3000</code> 首页（帖子列表来自真实 API）→ ② 随便点一个 ♡ → 弹登录框 → ③ 输 13800000002 → "获取验证码"（自动填 123456）→ 勾协议 → 登录 → ④ "发布"写一篇标题带独特词的帖子（例："汐语测试甲乙丙"）→ 发布跳详情 → ⑤ 首页"最新"看到它 → ⑥ 搜索页搜"汐语测试"看到 <mark>红色高亮</mark>。做完这条再往下逐切片细看。
+</div>
+
+<h2>日志地图：10 个观测点</h2>
+<table>
+  <thead><tr><th>#</th><th>观测点</th><th>看什么 / 命令</th></tr></thead>
+  <tbody>
+    <tr><td>①</td><td><strong>IDEA 三个控制台</strong></td><td>后端实时日志：HTTP 请求、异常堆栈、MQ 消费、Feign 调用、Flyway。默认常开</td></tr>
+    <tr><td>②</td><td><strong>F12 → Network</strong></td><td>前端每个请求：URL、查询参数、状态码、Set-Cookie。筛选栏输入 <code>api</code> 只看接口</td></tr>
+    <tr><td>③</td><td>Docker Desktop → 容器 → Logs</td><td>mysql/nacos/canal/elasticsearch 的日志</td></tr>
+    <tr><td>④</td><td><code>docker compose logs -f canal-server</code></td><td>CDC 链路：binlog 订阅、投递 MQ</td></tr>
+    <tr><td>⑤</td><td>Redis GUI（Tiny RDM 等）或 <code>docker exec kuros-web-redis-1 redis-cli --scan --pattern 'cache:*'</code></td><td>键分布：会话 satoken*、缓存 cache:*、计数 interaction:*、时间线 feed:*</td></tr>
+    <tr><td>⑥</td><td>Nacos 控制台 8081</td><td>服务列表（3 个健康实例）、配置管理</td></tr>
+    <tr><td>⑦</td><td>RocketMQ 控制台 8082</td><td>消息 → Topic：<code>post-interaction-topic</code>、<code>kuros-post-cdc</code>；消息轨迹</td></tr>
+    <tr><td>⑧</td><td>MinIO 控制台 9001</td><td>对象文件（仅 minio 存储模式）</td></tr>
+    <tr><td>⑨</td><td>actuator</td><td><code>:8090/actuator/health</code> · <code>/metrics</code> · <code>/prometheus</code></td></tr>
+    <tr><td>⑩</td><td><code>curl localhost:9200/_cat/indices?v</code></td><td>ES 索引列表与文档数（post_search）</td></tr>
+  </tbody>
+</table>
+
+<h2>切片 #1 · 分布式会话 + RBAC（登录）</h2>
+<p><strong>【是什么】</strong>手机号+验证码登录（首次登录自动注册），会话存 Redis，管理员有专属权限。</p>
+<p><strong>【操作】</strong>① 首页随便点一个 ♡ → 弹"欢迎登录"框。② 手机号输入 <code>13800000002</code> → 点"获取验证码"→ 出现 toast"开发验证码已填入：123456"且输入框自动填好。③ 勾选用户协议 → 点"登录" → toast"已登录鸣潮社区"，右上角出现昵称"无音区夜行者"。④ 退出登录 → 换 <code>13800000001</code> 登录 → 地址栏进 <code>/admin/reports</code>。</p>
+<p><strong>【亲眼确认】</strong>F12 → Application → Cookies → <code>KUROS_SESSION</code>（HttpOnly，JS 读不到——这就是安全点）；Network 里 <code>POST /api/v1/auth/code</code>、<code>POST /api/v1/auth/login</code>（响应 Set-Cookie）、<code>GET /api/v1/auth/me</code> 返回 <code>{"nickname":"无音区夜行者","role":"USER"}</code>；ADMIN 进审核台正常、USER 进同页被拒（403）——RBAC 生效。</p>
+<p><strong>【看哪】</strong>user 服务 IDEA 控制台（验证码签发、登录日志）；观测点⑤ <code>keys 'satoken*'</code>——会话键在 Redis 里，所以重启 user 服务你也不掉线；Redis GUI 里能看到键的 TTL（30 天）。</p>
+<p><strong>【翻车对照】</strong>验证码没自动填 → <code>APP_AUTH_DEV_CODE_EXPOSED</code> 没开；登录报"验证码无效" → 超过 5 分钟过期或输错；整页打不开 → gateway 没起（所有请求都走 8080）。</p>
+
+<h2>切片 #2 · 存储策略模式（图片上传）</h2>
+<p><strong>【是什么】</strong>图片字节存"仓库"（本地目录或 MinIO），MySQL 只存档案卡（media_assets 表），策略可切换。</p>
+<p><strong>【操作】</strong>① 开 <code>/publish?type=guide</code> → 标题"素材测试帖"、随便写正文 → 点图片上传区选 1~2 张小图（可拖拽排序）→ 点发布。② 跳转详情页，图片正常显示。</p>
+<p><strong>【亲眼确认】</strong>Network 里 <code>POST /api/v1/files/images</code> 返回 2xx（实测 201 Created，因为新建了文件），响应体带 <code>http://localhost:8080/media/xxxx.png</code>；文件管理器打开后端"工作目录 + storage"下的文件夹——IDEA 启动时工作目录是项目根，即 <code>G:\kuros-web\storage\</code>（若从 kuros-backend 目录命令行启动则是 <code>kuros-backend\storage\</code>）——图片变成 UUID 名躺在里面；Navicat 执行 <code>SELECT * FROM kuros.media_assets ORDER BY created_at DESC;</code> 最顶上多一行（storage_key、content_type、size_bytes、owner_id）。</p>
+<p><strong>【看哪】</strong>storage 目录 + media_assets 表（这就是"仓库+档案卡"的证据）；MinIO 9001 默认为空——因为默认 local 模式不经过它。</p>
+<p><strong>【进阶实验】</strong>.env 里加 <code>APP_STORAGE_TYPE=minio</code> → 重启 backend（IDEA 重跑）→ 再传图 → MinIO 9001 的 kuros-media 桶出现同样文件——业务代码零改动，换的只是策略实现。</p>
+<p><strong>【翻车对照】</strong>上传 413/报错且图大于 1MB → Spring 默认 multipart 上限 1MB（已知待修项）；401 → 没登录；图片 404 → 后端重启后 storage 目录变了（本地模式文件在工作目录里）。</p>
+
+<h2>切片 #3 · 两级缓存（Caffeine L1 + Redis L2）</h2>
+<p><strong>【操作】</strong>进任意帖子详情 → 返回列表 → 再进同一个帖子 → 等 60 秒后再进一次。</p>
+<p><strong>【亲眼确认】</strong>观测点⑤出现 <code>cache:postDetail:&lt;postId&gt;</code>（这是 L2，TTL 60 秒）；第二次进详情明显更快（L1 Caffeine 在进程内存里，纳秒级）；60 秒后键消失，再访问时重建——TTL 到期的工作方式肉眼可见。注意：<strong>点赞数不在这个键里</strong>（详情只缓存内容字段，计数永远实时读 Redis——防止缓存和计数打架，#13 的架构决策）。</p>
+<p><strong>【看哪】</strong>观测点⑤；backend 控制台（缓存重建/广播失效日志）。</p>
+<p><strong>【翻车对照】</strong>键一直不出现 → 看后端控制台有无 Redis 连接错误；改了帖子标题但详情没变 → 缓存未失效就该变了（有 afterCommit 失效逻辑，如果真出现请截图给我——那是个 bug）。</p>
+
+<h2>切片 #4 · Sentinel 限流</h2>
+<p><strong>【是什么】</strong>帖子列表接口 100 QPS 阈值，超了返回 429。<strong>手点不可能触发</strong>（阈值刻意放大避免误伤演示）。</p>
+<p><strong>【现在能看的】</strong>⑨ 号观测点 <code>:8090/actuator/metrics</code> 页面 Ctrl+F 搜 sentinel；backend IDEA 控制台确认 SentinelRateLimitInterceptor 装配日志（启动时）。真正的触发实验需要 JMeter 压测——#15 立项后补上，到时能看到 429 和限流指标曲线。</p>
+
+<h2>切片 #5 · Redis 分布式锁（并发防护）</h2>
+<p><strong>【操作】</strong>02 号登录 → 开 <code>/users/10000000-0000-0000-0000-000000000001</code>（01 号主页）→ 快速连点"关注"按钮 5~10 次。</p>
+<p><strong>【亲眼确认】</strong>Navicat：<code>SELECT * FROM kuros_user.user_follows;</code> ——不管点多快，follower=02 &amp; following=01 <strong>永远只有一行</strong>，全程无 500。锁的存在让并发请求排队+幂等检查兜底。</p>
+<p><strong>【看哪】</strong>user 服务 IDEA 控制台（锁获取/释放日志）；Redis GUI 里 <code>lock*</code> 键——存在窗口极短（毫秒级），手速快能撞见。</p>
+<p><strong>【翻车对照】</strong>出现两行重复关系 → 截图给我，那是严重 bug（历史上修过"锁-事务竞态"，见 HANDOFF 陷阱 7）；点关注 401 → 没登录。</p>
+
+<h2>切片 #6 · OpenAPI 文档</h2>
+<p><strong>【操作】</strong>开 <code>localhost:8090/swagger-ui/index.html</code> → 按 tag 分组浏览 → 展开 <code>GET /api/v1/posts</code> → Try it out → page=1 pageSize=5 → Execute。</p>
+<p><strong>【亲眼确认】</strong>200 响应体是完整 JSON（data + meta 分页信息）；每个接口的参数说明都来自代码注解。</p>
+
+<h2>切片 #7 · Actuator + Micrometer</h2>
+<p><strong>【操作】</strong>依次开 <code>:8090/actuator/health</code>（各组件健康明细）、<code>:8090/actuator/metrics</code>（指标清单，点进任意一个看数值）、<code>:8090/actuator/prometheus</code>（Prometheus 抓取格式——找 <code>jvm_memory_used_bytes</code>、<code>http_server_requests_seconds_count</code>）。</p>
+<p><strong>【亲眼确认】</strong>health 里 mysql/redis/diskspace 各自 UP；prometheus 文本里能搜到你刚才发请求产生的计数增长——这就是"可观测性"的原料。</p>
+
+<h2>切片 #8 · Nacos 注册与配置</h2>
+<p><strong>【操作】</strong>8081 → 服务管理 → 服务列表 → 逐个点开 kuros-backend / kuros-user / kuros-gateway。配置管理 → 配置列表 → kuros-backend.properties。</p>
+<p><strong>【亲眼确认】</strong>三个服务的健康实例数=1（你只起了一个 JVM），点开能看 IP+端口（本机局域网 IP）；这就是 gateway 能"找到"另外两个服务的原因——没有 Nacos，网关就是个瞎子。</p>
+
+<h2>切片 #9 · Gateway 统一入口</h2>
+<p><strong>【亲眼确认】</strong>② 号观测点：前端发任何请求，域名全部是 <code>localhost:8080</code>。<strong>路由实验</strong>：浏览器直接开 <code>localhost:8090/api/v1/auth/me</code> → 404（auth 在 user 服务上，直连 backend 当然没有）→ 同样请求走 <code>localhost:8080/api/v1/auth/me</code> → 401（网关把它转给了 user，user 说你没登录）。404 vs 401 的差别就是网关路由存在的证明。</p>
+
+<h2>切片 #10 · 服务拆分（跨服务组合与降级）</h2>
+<p><strong>【亲眼确认】</strong>详情页作者昵称"无音区夜行者"只存在于 kuros_user 库（Navicat 看 kuros_user.users）——backend 的 kuros 库里没有 users 表，昵称是 backend 通过 Feign 实时拉回来填的。</p>
+<p><strong>【降级实验（本课最精彩）】</strong>IDEA 停掉 user 服务 → 刷新帖子列表 → 作者显示占位"用户"，页面不报错 → IDEA 重启 user → 刷新 → 真实昵称恢复。这就是"组合视图降级不 500"：强依赖（登录）挂了才 503，弱依赖（昵称回填）挂了优雅占位。</p>
+<p><strong>【看哪】</strong>backend 控制台在 user 停机瞬间会刷 Feign 调用异常（连接拒绝），随后是降级逻辑日志。</p>
+
+<h2>切片 #11 · 互动异步化（RocketMQ）</h2>
+<p><strong>【操作】</strong>登录后对任意帖子点赞。立刻做两件事：看数字、开 8082。</p>
+<p><strong>【亲眼确认】</strong>① 点赞数字<strong>瞬间</strong> +1——这个数来自 Redis 前置计数，不是数据库（互动写路径：Redis 计数 → RocketMQ 消息 → 消费者异步落库）。② 8082 → 消息 → Topic 列表 → <code>post-interaction-topic</code> → 消息量 +1 → 点"消息轨迹"看到被 interaction-consumer-group 成功消费。</p>
+<p><strong>【看哪】</strong>backend IDEA 控制台消费日志；观测点⑤ <code>keys 'interaction:*'</code>（count 键 + 用户状态键）。</p>
+<p><strong>【翻车对照】</strong>点赞 500 → 罕见（MQ 挂了会同步降级直写数据库）；数字加了但 Topic 没消息 → 看 backend 控制台 MQ 发送失败降级日志。</p>
+
+<h2>切片 #12 · Feed 流（ZSet Timeline）</h2>
+<p><strong>【操作】</strong>02 号关注 01 号 → 退出换 01 登录 → 发一帖 → 换回 02 → 首页点"关注" tab。</p>
+<p><strong>【亲眼确认】</strong>01 刚发的帖子出现在 02 的关注流里——发帖瞬间 backend 把帖子 ID 推进每个粉丝的时间线（Push-on-publish，Feign 拉粉丝列表→Redis Pipeline 批量写）。观测点⑤ <code>keys 'feed:timeline:*'</code>——01 号一个键，ZSet 结构，score 是发布时间戳，容量 500、30 天过期。</p>
+<p><strong>【翻车对照】</strong>关注 tab 空 → 没关注任何人或对方没发过帖（时间线只存关注后产生的推文）。</p>
+
+<h2>切片 #13 · 读路径加固（游标分页）</h2>
+<p><strong>【亲眼确认】</strong>首页往下滚触发"加载更多"→ ② 号观测点看请求：<code>GET /api/v1/posts?limit=10&amp;cursor=eyJzb3J0S2V5Ijo...（base64 不透明串）</code>——不是 page=2。响应 meta 里带 nextCursor，下一页请求透传它。深翻第 1000 页和第 2 页耗时相同（这就是游标分页的存在意义）；代价：不能跳页、没有总条数——所以界面上没有页码按钮。</p>
+<p><strong>【对照实验】</strong>Swagger 里调 <code>GET /api/v1/posts?page=2&amp;pageSize=10</code>（不传 limit）→ 走旧 offset 模式也通——双契约并存，cursor 是给前端的，offset 是兼容保留。</p>
+
+<h2>切片 #14 · 全文检索 + CDC（四站接力，最精彩）</h2>
+<p><strong>【操作】</strong>发一篇标题带独特词的帖子（"汐语测试甲乙丙"），同时按下秒表，然后逐站观察：</p>
+<table>
+  <thead><tr><th>站</th><th>去哪</th><th>看到什么</th></tr></thead>
+  <tbody>
+    <tr><td>① canal</td><td><code>docker compose logs -f canal-server</code></td><td>捕获 posts 表 binlog 变更的日志滚动</td></tr>
+    <tr><td>② MQ</td><td>8082 → Topic <code>kuros-post-cdc</code></td><td>消息量 +1（canal 投递）</td></tr>
+    <tr><td>③ backend</td><td>IDEA 控制台</td><td>PostCdcHandler 消费日志：拿 postId → 回源查库组装 → 写 ES</td></tr>
+    <tr><td>④ ES</td><td><code>curl localhost:9200/_cat/indices?v</code></td><td>post_search 索引 docs 数 +1；再 <code>curl "localhost:9200/post_search/_search?q=汐语测试"</code> 直接看到文档</td></tr>
+  </tbody>
+</table>
+<p><strong>【亲眼确认】</strong>90 秒内搜索页搜"汐语测试"→ 你的帖子出现，关键词带 <mark> 高亮。实测基线：发帖→可搜全程 ~1.9 秒。</p>
+<p><strong>【翻车对照】</strong>搜索页显示"搜索服务暂不可用" → ES 没起（软依赖降级，起 ES 即恢复）；90 秒还没进索引 → 按四站顺序查哪站断：①没日志=canal 挂 ②topic 没消息=canal→MQ 断 ③控制台无消费=consumer 挂 ④docs 没涨=回源写 ES 失败。</p>
+
+<h2>学完之后</h2>
+<ul class="checklist">
+  <li>我能不查资料走完"登录→发帖→点赞→关注流→搜索"全链路，并说出每步调了哪个服务</li>
+  <li>我能用 Navicat/Redis GUI/控制台四件套验证任何一个切片的数据落点</li>
+  <li>我能亲手演示两次降级：user 停机昵称占位（#10）、ES 停机搜索降级（#14）</li>
+  <li>我知道 Sentinel 和 JMeter 压测为什么排在 #15，以及现在用什么替代</li>
+</ul>
+
+<div class="ask-teacher">
+  <span class="label">卡住就贴给我</span>
+  "我做了什么 + 在哪个观测点看到了什么（截图或文本）"。原理与面试话术在 docs/learning/01~14 复盘里。
+</div>
+
+<footer class="lesson-foot">
+  <div class="nav-links">
+    <a href="../reference/local-dev-runbook.html">↑ 本地开发速查表</a>
+    <a href="../lessons/0001-light-up-the-stack.html">第 1 课：点亮全栈</a>
+    <a href="../reference/verification-ladder.html">验证阶梯</a>
+  </div>
+</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,520 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "startedAt": "2026-11-11T13:01:08.280Z",
+  "specification": {
+    "path": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\candidate.json",
+    "sha256": "9596542d76be9c36581cae667c1a10fbf5fb474e2ad130096de97953b48efe40",
+    "bytes": 12924
+  },
+  "artifact": {
+    "path": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\kuros-architecture.html",
+    "sha256": "0ab1776772f75ff1eac8016a705c71f4c0117b68dc20e158ea12fa019d50f39f",
+    "bytes": 871427
+  },
+  "stages": {
+    "validate": {
+      "status": "fail",
+      "exitCode": 1,
+      "durationMs": null,
+      "command": [
+        "C:\\nvm4w\\nodejs\\node.exe",
+        "C:\\Users\\Administrator\\.codex\\skills\\archify\\bin\\archify.mjs",
+        "deliver",
+        "architecture",
+        "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\candidate.json",
+        "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\kuros-architecture.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "G:\\kuros-web",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": false,
+        "command": "deliver",
+        "receiptId": "449d640b-c71d-41b6-bcba-b8798768f88d",
+        "stage": "check",
+        "type": "architecture",
+        "input": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\candidate.json",
+        "output": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\kuros-architecture.html",
+        "error": "Final artifact check failed; the previous artifact was preserved.",
+        "diagnostics": [
+          {
+            "code": "composition/desktop-readability",
+            "severity": "error",
+            "message": "Final artifact failed composition/desktop-readability.",
+            "subject": {
+              "check": "composition"
+            },
+            "evidence": {
+              "owner": {
+                "kind": "edge",
+                "id": "browser-to-frontend",
+                "from": "browser",
+                "to": "frontend"
+              },
+              "viewportWidth": 1440,
+              "viewportHeight": 900,
+              "availableDiagramWidth": 930,
+              "budgetBasis": "legacy-930",
+              "readerContract": "declared-wide-v1",
+              "requestedTargetPx": 7.5,
+              "requestedTargetMet": false,
+              "budgetLimit": "legacy",
+              "viewBoxWidth": 1250,
+              "scale": 0.744,
+              "text": "HTTPS",
+              "detail": "edge",
+              "sourceFontPx": 8,
+              "projectedFontPx": 5.952,
+              "minimumProjectedFontPx": 6
+            },
+            "supportedFixes": [
+              "Preserve the semantic text and any supplied coordinates, routes, sides, channels, and labels. Compactly reflow automatic spacing and empty corridors so the complete viewBox width is at most 1240px (current 1250px; 8px source text at 930px desktop budget). If supplied geometry fixes that width, use a renderer-supported semantic text-size setting or renderer-level fix instead. Position-only label controls cannot repair its projection."
+            ]
+          }
+        ],
+        "provenance": "failed",
+        "checker": {
+          "ok": false,
+          "file": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\kuros-architecture.html",
+          "artifact": {
+            "sha256": "a1af2540fe7a28e2b89126fa2e6131a1ab3967d0311be3e2479edccd7c529de4",
+            "bytes": 871084
+          },
+          "checks": [
+            {
+              "name": "single_svg",
+              "ok": true,
+              "details": [
+                "found 1 <svg> block(s)"
+              ]
+            },
+            {
+              "name": "finite_svg",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "orthogonal_arrows",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "label_route_clearance",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "relationship_crossings",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "relationship_corridors",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "container_border_runs",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "route_rhythm",
+              "ok": true,
+              "details": []
+            },
+            {
+              "name": "legend_clearance",
+              "ok": true,
+              "details": []
+            }
+          ],
+          "composition": {
+            "schemaVersion": 1,
+            "profile": "showcase",
+            "status": "fail",
+            "summary": {
+              "errors": 1,
+              "warnings": 0
+            },
+            "metrics": {
+              "properCrossings": 0,
+              "resolvedCrossovers": 8,
+              "ambiguousCorridors": 0,
+              "arrowheadCollisions": 0,
+              "containerBorderRuns": 0,
+              "labelRouteClearanceIssues": 0,
+              "labelCanvasOverflowIssues": 0,
+              "minLabelRouteClearance": 5,
+              "desktopReadabilityIssues": 1,
+              "viewportHeightIssues": 0,
+              "minProjectedNodeTextPx": 5.952,
+              "maxBends": 4,
+              "routesOverSuggestedBends": 2,
+              "maxStretch": 1.403,
+              "routesOverSuggestedStretch": 1,
+              "minSegmentPx": 24,
+              "minInteriorSegmentPx": 88,
+              "shortSegmentCount": 0,
+              "shortEndpointSegmentCount": 0,
+              "shortInteriorSegmentCount": 0,
+              "microSegmentCount": 0
+            },
+            "suggestedLimits": {
+              "bendsPerRelationship": 2,
+              "stretch": 1.35,
+              "segmentPx": 16,
+              "microSegmentPx": 8
+            },
+            "routeReview": {
+              "crossings": [
+                {
+                  "left": {
+                    "id": "frontend-to-gateway",
+                    "from": "frontend",
+                    "to": "gateway",
+                    "label": "REST /api/**",
+                    "collectionIndex": 1,
+                    "artifactIndex": 2
+                  },
+                  "right": {
+                    "id": "mysql-to-canal",
+                    "from": "mysql",
+                    "to": "canal",
+                    "label": "binlog",
+                    "collectionIndex": 14,
+                    "artifactIndex": 15
+                  },
+                  "point": [
+                    393,
+                    514
+                  ]
+                },
+                {
+                  "left": {
+                    "id": "gateway-to-user",
+                    "from": "gateway",
+                    "to": "user",
+                    "label": "认证 / 关注路由",
+                    "collectionIndex": 2,
+                    "artifactIndex": 3
+                  },
+                  "right": {
+                    "id": "content-to-mysql",
+                    "from": "content",
+                    "to": "mysql",
+                    "label": "内容库 SQL",
+                    "collectionIndex": 9,
+                    "artifactIndex": 10
+                  },
+                  "point": [
+                    516.95,
+                    303
+                  ]
+                },
+                {
+                  "left": {
+                    "id": "content-to-user",
+                    "from": "content",
+                    "to": "user",
+                    "label": "OpenFeign · 内部令牌",
+                    "collectionIndex": 4,
+                    "artifactIndex": 5
+                  },
+                  "right": {
+                    "id": "gateway-to-nacos",
+                    "from": "gateway",
+                    "to": "nacos",
+                    "label": "lb:// 服务查找",
+                    "collectionIndex": 5,
+                    "artifactIndex": 6
+                  },
+                  "point": [
+                    803,
+                    191.26923076923077
+                  ]
+                },
+                {
+                  "left": {
+                    "id": "gateway-to-nacos",
+                    "from": "gateway",
+                    "to": "nacos",
+                    "label": "lb:// 服务查找",
+                    "collectionIndex": 5,
+                    "artifactIndex": 6
+                  },
+                  "right": {
+                    "id": "content-to-mysql",
+                    "from": "content",
+                    "to": "mysql",
+                    "label": "内容库 SQL",
+                    "collectionIndex": 9,
+                    "artifactIndex": 10
+                  },
+                  "point": [
+                    532,
+                    303
+                  ]
+                },
+                {
+                  "left": {
+                    "id": "gateway-to-nacos",
+                    "from": "gateway",
+                    "to": "nacos",
+                    "label": "lb:// 服务查找",
+                    "collectionIndex": 5,
+                    "artifactIndex": 6
+                  },
+                  "right": {
+                    "id": "user-to-redis",
+                    "from": "user",
+                    "to": "redis",
+                    "label": "会话 · 权限",
+                    "collectionIndex": 10,
+                    "artifactIndex": 11
+                  },
+                  "point": [
+                    803,
+                    177
+                  ]
+                },
+                {
+                  "left": {
+                    "id": "content-to-nacos",
+                    "from": "content",
+                    "to": "nacos",
+                    "label": "注册 · 配置",
+                    "collectionIndex": 7,
+                    "artifactIndex": 8
+                  },
+                  "right": {
+                    "id": "user-to-redis",
+                    "from": "user",
+                    "to": "redis",
+                    "label": "会话 · 权限",
+                    "collectionIndex": 10,
+                    "artifactIndex": 11
+                  },
+                  "point": [
+                    822.5,
+                    177
+                  ]
+                },
+                {
+                  "left": {
+                    "id": "content-to-redis",
+                    "from": "content",
+                    "to": "redis",
+                    "label": "缓存 · 计数 · Feed",
+                    "collectionIndex": 11,
+                    "artifactIndex": 12
+                  },
+                  "right": {
+                    "id": "mq-to-content",
+                    "from": "rocketmq",
+                    "to": "content",
+                    "label": "投影 / CDC 消费",
+                    "collectionIndex": 13,
+                    "artifactIndex": 14
+                  },
+                  "point": [
+                    1016,
+                    366
+                  ],
+                  "sharedNode": "content"
+                },
+                {
+                  "left": {
+                    "id": "canal-to-mq",
+                    "from": "canal",
+                    "to": "rocketmq",
+                    "label": "kuros-post-cdc",
+                    "collectionIndex": 15,
+                    "artifactIndex": 16
+                  },
+                  "right": {
+                    "id": "content-to-es",
+                    "from": "content",
+                    "to": "elasticsearch",
+                    "label": "索引 / 查询",
+                    "collectionIndex": 16,
+                    "artifactIndex": 17
+                  },
+                  "point": [
+                    1006,
+                    700
+                  ]
+                }
+              ],
+              "detours": [
+                {
+                  "relationship": {
+                    "id": "mysql-to-canal",
+                    "from": "mysql",
+                    "to": "canal",
+                    "label": "binlog",
+                    "collectionIndex": 14,
+                    "artifactIndex": 15
+                  },
+                  "bends": 4,
+                  "stretch": 1.403
+                },
+                {
+                  "relationship": {
+                    "id": "canal-to-mq",
+                    "from": "canal",
+                    "to": "rocketmq",
+                    "label": "kuros-post-cdc",
+                    "collectionIndex": 15,
+                    "artifactIndex": 16
+                  },
+                  "bends": 3,
+                  "stretch": 1.047
+                }
+              ]
+            },
+            "leadingSpace": {
+              "measured": true,
+              "emptyTopPx": 40,
+              "emptyTopRatio": 0.048,
+              "occupiedTop": 40,
+              "viewBoxTop": 0,
+              "canvasHeight": 842,
+              "typicalNodeHeight": 100,
+              "reviewSuggested": false
+            },
+            "desktopReadability": {
+              "budgetBasis": "legacy-930",
+              "readerContract": "declared-wide-v1",
+              "availableDiagramWidth": 930,
+              "actualBudgetPx": 930,
+              "limit": "legacy",
+              "requestedTargetPx": 7.5,
+              "requestedTargetMet": false,
+              "hardFloorPx": 6,
+              "hardFloorMet": false,
+              "minimumOwner": {
+                "kind": "edge",
+                "id": "browser-to-frontend",
+                "from": "browser",
+                "to": "frontend"
+              },
+              "minimumSourceTextPx": 8,
+              "minimumProjectedTextPx": 5.952,
+              "semanticTextCount": 42
+            },
+            "issues": [
+              {
+                "severity": "error",
+                "code": "composition/desktop-readability",
+                "owner": {
+                  "kind": "edge",
+                  "id": "browser-to-frontend",
+                  "from": "browser",
+                  "to": "frontend"
+                },
+                "viewportWidth": 1440,
+                "viewportHeight": 900,
+                "availableDiagramWidth": 930,
+                "budgetBasis": "legacy-930",
+                "readerContract": "declared-wide-v1",
+                "requestedTargetPx": 7.5,
+                "requestedTargetMet": false,
+                "budgetLimit": "legacy",
+                "viewBoxWidth": 1250,
+                "scale": 0.744,
+                "text": "HTTPS",
+                "detail": "edge",
+                "sourceFontPx": 8,
+                "projectedFontPx": 5.952,
+                "minimumProjectedFontPx": 6
+              }
+            ]
+          }
+        },
+        "update": {
+          "status": "unavailable",
+          "installedVersion": null,
+          "availableVersion": null,
+          "releaseNotes": null,
+          "checkedAt": null,
+          "source": null,
+          "noticeRequired": false,
+          "noticeText": null,
+          "reason": "disabled"
+        }
+      },
+      "execution": "embedded-in-deliver"
+    },
+    "deliver": {
+      "status": "not-run",
+      "execution": "blocked-by-validate"
+    }
+  },
+  "browserCheck": {
+    "requested": true,
+    "ran": false
+  },
+  "diagnostics": [
+    {
+      "code": "composition/desktop-readability",
+      "severity": "error",
+      "message": "Final artifact failed composition/desktop-readability.",
+      "subject": {
+        "check": "composition"
+      },
+      "evidence": {
+        "owner": {
+          "kind": "edge",
+          "id": "browser-to-frontend",
+          "from": "browser",
+          "to": "frontend"
+        },
+        "viewportWidth": 1440,
+        "viewportHeight": 900,
+        "availableDiagramWidth": 930,
+        "budgetBasis": "legacy-930",
+        "readerContract": "declared-wide-v1",
+        "requestedTargetPx": 7.5,
+        "requestedTargetMet": false,
+        "budgetLimit": "legacy",
+        "viewBoxWidth": 1250,
+        "scale": 0.744,
+        "text": "HTTPS",
+        "detail": "edge",
+        "sourceFontPx": 8,
+        "projectedFontPx": 5.952,
+        "minimumProjectedFontPx": 6
+      },
+      "supportedFixes": [
+        "Preserve the semantic text and any supplied coordinates, routes, sides, channels, and labels. Compactly reflow automatic spacing and empty corridors so the complete viewBox width is at most 1240px (current 1250px; 8px source text at 930px desktop budget). If supplied geometry fixes that width, use a renderer-supported semantic text-size setting or renderer-level fix instead. Position-only label controls cannot repair its projection."
+      ]
+    }
+  ],
+  "evidence": {
+    "receipt": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\review-2\\kuros-architecture.finalize.json",
+    "summaryReceipt": "G:\\kuros-web\\.archify\\architecture-kuros-overview-20261111-205808\\review-2\\kuros-architecture.finalize-summary.json"
+  },
+  "visualReview": "not-requested",
+  "failedStage": "validate",
+  "finishedAt": "2026-11-11T13:01:09.144Z",
+  "durationMs": 863,
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-11-11T12:43:50.229Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  }
+}
