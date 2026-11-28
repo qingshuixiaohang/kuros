@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-public interface CommunityPostRepository extends JpaRepository<CommunityPost, String> {
+public interface CommunityPostRepository extends JpaRepository<CommunityPost, String>, CommunityPostCountRepository {
 
     /**
      * 可见帖子分页（列表读路径）。
@@ -25,7 +25,7 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, St
      * 把整页的 tags 拉齐，SQL 数降为常数。
      *
      * distinct 不可省：collection fetch join 会因 tags 笛卡尔积产生重复行，
-     * 不 distinct 会让分页条数虚增、Page 元数据错乱。
+     * 不 distinct 会让分页条数虚增。总数查询独立统计帖子，不经过标签关联。
      */
     @Query("""
             select distinct p from CommunityPost p
@@ -36,7 +36,7 @@ public interface CommunityPostRepository extends JpaRepository<CommunityPost, St
               and (:keyword is null or lower(p.title) like lower(concat('%', :keyword, '%'))
                    or lower(p.excerpt) like lower(concat('%', :keyword, '%')))
             """)
-    Page<CommunityPost> findVisiblePosts(
+    List<CommunityPost> findVisiblePosts(
             @Param("status") PostStatus status,
             @Param("category") String category,
             @Param("tag") String tag,

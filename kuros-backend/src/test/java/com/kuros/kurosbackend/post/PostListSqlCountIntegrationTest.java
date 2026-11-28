@@ -3,6 +3,7 @@ package com.kuros.kurosbackend.post;
 import com.kuros.kurosbackend.TestDatabases;
 import com.kuros.kurosbackend.UserDirectoryStub;
 import com.kuros.kurosbackend.post.api.CreatePostRequest;
+import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.post.service.CommunityPostService;
 import com.kuros.kurosbackend.post.service.PostPublishingService;
 import jakarta.persistence.EntityManager;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -20,7 +22,10 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,6 +51,7 @@ class PostListSqlCountIntegrationTest {
 
     /** 测试帖数：取一页的上界（生产 MAX_PAGE_SIZE=50），N+1 在此规模下最明显。 */
     private static final int POST_COUNT = 50;
+    private static final LocalDateTime BASE_PUBLISHED_AT = LocalDateTime.of(2026, 9, 21, 10, 0);
 
     @Container
     static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
@@ -64,6 +70,8 @@ class PostListSqlCountIntegrationTest {
         // Feign 直连桩，用户域不经网络，避免干扰 SQL 计数
         registry.add("app.feign.kuros-user.url", userDirectory::baseUrl);
         registry.add("app.internal.token", () -> "test-internal-token");
+        registry.add("spring.jpa.properties.hibernate.session_factory.statement_inspector",
+                PostListSqlInspector.class::getName);
     }
 
     @Autowired
@@ -78,25 +86,193 @@ class PostListSqlCountIntegrationTest {
     @Autowired
     private StringRedisTemplate redisTemplate;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private CommunityPostRepository postRepository;
+
     private Statistics statistics;
+    private List<String> publishedPostIds;
 
     @BeforeEach
     void setUp() {
         Objects.requireNonNull(redisTemplate.getConnectionFactory())
                 .getConnection().serverCommands().flushDb();
 
+        // 每个用例都要从确定的数据集开始：否则 @BeforeEach 的造数会叠加，
+        // totalItems 断言会随执行顺序变化（实测首测读到 54 而不是 50）。
+        jdbcTemplate.update("DELETE FROM post_media");
+        jdbcTemplate.update("DELETE FROM post_tags");
+        jdbcTemplate.update("DELETE FROM comments");
+        jdbcTemplate.update("DELETE FROM post_likes");
+        jdbcTemplate.update("DELETE FROM post_favorites");
+        postRepository.deleteAll();
+
         SessionFactory sessionFactory = entityManager.getEntityManagerFactory().unwrap(SessionFactory.class);
         statistics = sessionFactory.getStatistics();
         statistics.setStatisticsEnabled(true);
 
         String authorId = "10000000-0000-0000-0000-000000000001";
+        publishedPostIds = new ArrayList<>(POST_COUNT);
         for (int i = 0; i < POST_COUNT; i++) {
-            publishingService.publish(new CreatePostRequest(
+            List<String> tags = i < 2 ? List.of("guide", "beginner") : List.of();
+            var published = publishingService.publish(new CreatePostRequest(
                     "GUIDE", "配队攻略", "SQL 计数测试帖 " + i,
-                    "摘要 " + i, "正文 " + i, List.of(), List.of()
+                    "摘要 " + i, "正文 " + i, tags, List.of()
             ), authorId);
+            publishedPostIds.add(published.id());
+            jdbcTemplate.update("UPDATE posts SET published_at = ?, like_count = ? WHERE id = ?",
+                    BASE_PUBLISHED_AT.plusMinutes(i), (long) i, published.id());
         }
+        var deletedPost = publishingService.publish(new CreatePostRequest(
+                "GUIDE", "配队攻略", "已删除计数测试帖",
+                "已删除摘要", "已删除正文", List.of(), List.of()
+        ), authorId);
+        publishingService.delete(deletedPost.id(), authorId);
         statistics.clear();
+    }
+
+    @Test
+    void 精确计数不连接标签且分页元数据不受多标签帖子影响() {
+        PostListSqlInspector.clear();
+
+        var result = postService.findPublished(1, 10, "latest", null, null, null);
+
+        assertThat(result.items()).hasSize(10);
+        assertThat(result.meta().totalItems()).isEqualTo(POST_COUNT);
+        assertThat(result.meta().totalPages()).isEqualTo(5);
+
+        String countSql = PostListSqlInspector.statements().stream()
+                .filter(sql -> sql.toLowerCase().contains("select count("))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Expected pagination count SQL"))
+                .toLowerCase();
+        assertThat(countSql).doesNotContain("left join post_tags", "distinct", "category", "title", "excerpt", "post_tags");
+    }
+
+    @Test
+    void 标签筛选精确计数且结果保留帖子的完整标签() {
+        // 分类必须与建帖时的实际分类一致；传 "GUIDE"（帖子类型）会得到 0 条，测不到计数。
+        var result = postService.findPublished(1, 10, "hot", "配队攻略", "guide", null);
+
+        assertThat(result.items()).extracting(item -> item.id())
+                .containsExactly(publishedPostIds.get(1), publishedPostIds.get(0));
+        assertThat(result.meta().totalItems()).isEqualTo(2);
+        assertThat(result.meta().totalPages()).isEqualTo(1);
+        assertThat(result.items()).allSatisfy(item ->
+                assertThat(item.tags()).containsExactlyInAnyOrder("guide", "beginner"));
+    }
+
+    @Test
+    void 动态计数只保留已提供的条件且短页可省略计数() {
+        PostListSqlInspector.clear();
+        var fullPage = postService.findPublished(1, 1, "latest", "配队攻略", "guide", null);
+        assertThat(fullPage.meta().totalItems()).isEqualTo(2);
+        String countSql = PostListSqlInspector.statements().stream()
+                .filter(sql -> sql.toLowerCase().contains("select count("))
+                .findFirst().orElseThrow().toLowerCase();
+        assertThat(countSql).contains("category", "post_tags").doesNotContain("title", "excerpt");
+
+        PostListSqlInspector.clear();
+        var shortPage = postService.findPublished(1, 10, "latest", "配队攻略", "guide", null);
+        assertThat(shortPage.meta().totalItems()).isEqualTo(2);
+        assertThat(PostListSqlInspector.statements()).noneMatch(sql -> sql.toLowerCase().contains("select count("));
+
+        PostListSqlInspector.clear();
+        var hotFullPage = postService.findPublished(1, 1, "hot", "配队攻略", "guide", null);
+        assertThat(hotFullPage.items()).extracting(item -> item.id()).containsExactly(publishedPostIds.get(1));
+        assertThat(hotFullPage.meta().totalItems()).isEqualTo(2);
+        assertThat(hotFullPage.meta().totalPages()).isEqualTo(2);
+        assertThat(PostListSqlInspector.statements()).anyMatch(sql -> sql.toLowerCase().contains("select count("));
+    }
+
+    @Test
+    void latest与hot跨页顺序及末页元数据保持稳定() {
+        var latestPage1 = postService.findPublished(1, 2, "latest", null, null, null);
+        var latestPage2 = postService.findPublished(2, 2, "latest", null, null, null);
+        assertThat(latestPage1.items()).extracting(item -> item.id())
+                .containsExactly(publishedPostIds.get(49), publishedPostIds.get(48));
+        assertThat(latestPage2.items()).extracting(item -> item.id())
+                .containsExactly(publishedPostIds.get(47), publishedPostIds.get(46));
+        assertThat(latestPage1.meta().totalItems()).isEqualTo(POST_COUNT);
+        assertThat(latestPage1.meta().totalPages()).isEqualTo(25);
+        assertThat(latestPage2.meta().totalItems()).isEqualTo(POST_COUNT);
+        assertThat(latestPage2.meta().totalPages()).isEqualTo(25);
+
+        var hotPage1 = postService.findPublished(1, 2, "hot", null, null, null);
+        var hotPage2 = postService.findPublished(2, 2, "hot", null, null, null);
+        assertThat(hotPage1.items()).extracting(item -> item.id())
+                .containsExactly(publishedPostIds.get(49), publishedPostIds.get(48));
+        assertThat(hotPage2.items()).extracting(item -> item.id())
+                .containsExactly(publishedPostIds.get(47), publishedPostIds.get(46));
+        assertThat(hotPage1.meta().totalItems()).isEqualTo(POST_COUNT);
+        assertThat(hotPage1.meta().totalPages()).isEqualTo(25);
+        assertThat(hotPage2.meta().totalItems()).isEqualTo(POST_COUNT);
+        assertThat(hotPage2.meta().totalPages()).isEqualTo(25);
+
+        PostListSqlInspector.clear();
+        var shortLastPage = postService.findPublished(17, 3, "latest", null, null, null);
+        assertThat(shortLastPage.items()).extracting(item -> item.id())
+                .containsExactly(publishedPostIds.get(1), publishedPostIds.get(0));
+        assertThat(shortLastPage.meta().totalItems()).isEqualTo(POST_COUNT);
+        assertThat(shortLastPage.meta().totalPages()).isEqualTo(17);
+        assertThat(PostListSqlInspector.statements()).noneMatch(sql -> sql.toLowerCase().contains("select count("));
+
+        var beyondLastPage = postService.findPublished(18, 3, "latest", null, null, null);
+        assertThat(beyondLastPage.items()).isEmpty();
+        assertThat(beyondLastPage.meta().totalItems()).isEqualTo(POST_COUNT);
+        assertThat(beyondLastPage.meta().totalPages()).isEqualTo(17);
+    }
+
+    @Test
+    void 动态计数与所有筛选组合的列表结果一致() {
+        assertFilteredTotal(null, null, null, 50);
+        assertFilteredTotal("配队攻略", null, null, 50);
+        assertFilteredTotal(null, "guide", null, 2);
+        assertFilteredTotal(null, null, "摘要 0", 1);
+        assertFilteredTotal(null, null, "SQL 计数测试帖 0", 1);
+        assertFilteredTotal(null, null, "sql 计数测试帖 0", 1);
+        assertFilteredTotal(null, null, "帖%", POST_COUNT);
+        assertFilteredTotal(null, null, "帖_", POST_COUNT);
+        assertFilteredTotal(null, null, "已删除计数测试帖", 0);
+        assertFilteredTotal("配队攻略", null, "摘要 0", 1);
+        assertFilteredTotal(null, "guide", "摘要 0", 1);
+        assertFilteredTotal("配队攻略", "guide", "SQL 计数测试帖 0", 1);
+        assertFilteredTotal("配队攻略", "guide", "摘要 0", 1);
+        assertFilteredTotal("不存在", "guide", "摘要 0", 0);
+        var lastPage = postService.findPublished(5, 10, "latest", null, null, null);
+        assertThat(lastPage.items()).hasSize(10);
+        assertThat(lastPage.meta().totalItems()).isEqualTo(POST_COUNT);
+        assertThat(lastPage.meta().totalPages()).isEqualTo(5);
+        assertThat(postService.findPublished(99, 10, "latest", null, null, null).meta().totalItems())
+                .isEqualTo(50);
+    }
+
+    private void assertFilteredTotal(String category, String tag, String keyword, int expected) {
+        var result = postService.findPublished(1, 1, "latest", category, tag, keyword);
+        assertThat(result.meta().totalItems()).isEqualTo(expected);
+        assertThat(result.meta().totalPages()).isEqualTo(expected);
+        assertThat(result.items()).hasSize(expected == 0 ? 0 : 1);
+        if (expected == 0) {
+            return;
+        }
+
+        var item = result.items().get(0);
+        if (category != null) {
+            assertThat(item.category()).isEqualTo(category);
+        }
+        if (tag != null) {
+            assertThat(item.tags()).contains(tag);
+        }
+        if (keyword != null) {
+            String content = (item.title() + " " + item.excerpt()).toLowerCase(Locale.ROOT);
+            if (keyword.contains("%") || keyword.contains("_")) {
+                assertThat(item.title()).contains("SQL 计数测试帖");
+            } else {
+                assertThat(content).contains(keyword.toLowerCase(Locale.ROOT));
+            }
+        }
     }
 
     @Test
