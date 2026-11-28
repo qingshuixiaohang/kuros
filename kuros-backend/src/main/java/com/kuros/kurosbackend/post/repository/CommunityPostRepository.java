@@ -16,6 +16,14 @@ import java.util.Optional;
 public interface CommunityPostRepository extends JpaRepository<CommunityPost, String> {
 
     /**
+     * 已提交快照中的点赞数。REQUIRES_NEW 保证不读当前会话的一级缓存；聚合 + coalesce 保证
+     * 帖子的插入尚未提交（发帖事务内回读详情）或行不存在时仍返回 0，而不是让基本类型代理收到 null。
+     */
+    @Query("select coalesce(sum(p.likeCount), 0) from CommunityPost p where p.id = :postId")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true, propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    long readCommittedLikeCount(@Param("postId") String postId);
+
+    /**
      * 可见帖子分页（列表读路径）。
      *
      * 为什么是 fetch join 而不是普通 join（审计 M5 / C1）：tags 是 LAZY

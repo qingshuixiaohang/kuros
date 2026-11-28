@@ -14,31 +14,15 @@ import com.kuros.kurosbackend.post.domain.CommunityPost;
 import com.kuros.kurosbackend.post.domain.PostStatus;
 import com.kuros.kurosbackend.post.repository.CommunityPostRepository;
 import com.kuros.kurosbackend.shared.exception.ResourceNotFoundException;
+import com.kuros.kurosbackend.shared.exception.ServiceUnavailableException;
 import com.kuros.kurosbackend.shared.lock.DistributedLock;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * 帖子互动服务（切片 #11 改造）：点赞/收藏写路径由「同步写 MySQL」改为「Redis 计数前置 + RocketMQ 异步落库」。
- *
- * 写路径（like/favorite/unlike/unfavorite）新时序：
- *   per-user 锁 → 校验帖子存在 → Redis 翻转（实时计数即时返回）→ 投递 MQ（失败则同步降级落库）→ 解锁
- * 请求线程只碰 Redis（O(1)），不再等待 DB 写；跨用户对热点帖计数行的 DB 行锁竞争，
- * 被「按 postId 顺序消费」串行化到消费端单队列单线程根除（ADR 0004）。
- *
- * 关键纪律：本类**不加类级 @Transactional**。
- * 落库统一委托 InteractionProjectionService.apply（内部 TransactionTemplate 自开自提交），
- * 使降级同步落库的 commit 发生在锁内、unlock 之前——规避「先解锁后提交」竞态（HANDOFF 陷阱 #7）。
- * 缓存驱逐也随之下沉到 apply（真正改 DB 的那一刻），异步/降级两条路都能正确失效 postDetail。
- *
- * 锁粒度：lock:{like|favorite}:{postId}:{userId} 只串行化「同一用户对同一帖」的并发点击，不跨用户互斥；
- * 跨用户竞争已由消费端顺序消费根除，无需再用粗粒度锁把热帖写路径堵成单线程。
- */
 @Service
 public class PostInteractionService {
 
@@ -55,6 +39,7 @@ public class PostInteractionService {
     private final InteractionRedisStore redisStore;
     private final InteractionEventPublisher eventPublisher;
     private final InteractionProjectionService projectionService;
+    private final InteractionAcceptanceService acceptanceService;
 
     public PostInteractionService(
             CommunityPostRepository postRepository,
@@ -63,7 +48,8 @@ public class PostInteractionService {
             DistributedLock distributedLock,
             InteractionRedisStore redisStore,
             InteractionEventPublisher eventPublisher,
-            InteractionProjectionService projectionService
+            InteractionProjectionService projectionService,
+            InteractionAcceptanceService acceptanceService
     ) {
         this.postRepository = postRepository;
         this.likeRepository = likeRepository;
@@ -72,16 +58,16 @@ public class PostInteractionService {
         this.redisStore = redisStore;
         this.eventPublisher = eventPublisher;
         this.projectionService = projectionService;
+        this.acceptanceService = acceptanceService;
     }
 
     /** 读互动状态：计数与关系状态均 Redis 优先，miss 回源 DB（冗余计数列 / 关系行）并回填。 */
-    @Transactional(readOnly = true)
     public PostInteractionResponse findPost(String postId, String userId) {
         CommunityPost post = findPublishedPost(postId);
-        long likeCount = redisStore.readCount(InteractionKind.LIKE, postId, post::getLikeCount);
+        long likeCount = redisStore.readCount(InteractionKind.LIKE, postId, () -> postRepository.readCommittedLikeCount(postId));
         long favoriteCount = redisStore.readCount(InteractionKind.FAVORITE, postId, post::getFavoriteCount);
-        boolean liked = userId != null && redisStore.readState(InteractionKind.LIKE, postId, userId,
-                () -> likeRepository.existsById(new PostLikeId(userId, postId)));
+        boolean liked = userId != null && (recentLikes(userId).contains(postId)
+                || likeRepository.existsById(new PostLikeId(userId, postId)));
         boolean favorited = userId != null && redisStore.readState(InteractionKind.FAVORITE, postId, userId,
                 () -> favoriteRepository.existsById(new PostFavoriteId(userId, postId)));
         return new PostInteractionResponse(postId, likeCount, favoriteCount, liked, favorited);
@@ -104,7 +90,6 @@ public class PostInteractionService {
      * @return postId → {liked, favorited}；每个输入的 postId 都有条目
      *         （无关系的帖子是 {false, false}），调用方不必再判空
      */
-    @Transactional(readOnly = true)
     public Map<String, boolean[]> findStatesFor(Collection<String> postIds, String userId) {
         if (postIds == null || postIds.isEmpty()) {
             return Map.of();
@@ -117,8 +102,12 @@ public class PostInteractionService {
         if (userId == null) {
             return states;
         }
-        // 两次常数查询覆盖整页，与帖子数无关（这是消除 N+1 的硬指标）
-        for (String postId : likeRepository.findLikedPostIds(userId, distinctIds)) {
+        var recent = recentLikes(userId);
+        for (String postId : distinctIds) {
+            if (recent.contains(postId)) states.get(postId)[0] = true;
+        }
+        var missing = distinctIds.stream().filter(id -> !recent.contains(id)).toList();
+        for (String postId : missing.isEmpty() ? List.<String>of() : likeRepository.findLikedPostIds(userId, missing)) {
             boolean[] state = states.get(postId);
             if (state != null) {
                 state[0] = true;
@@ -131,6 +120,11 @@ public class PostInteractionService {
             }
         }
         return states;
+    }
+
+    private java.util.Set<String> recentLikes(String userId) {
+        return redisStore.recentLikes(userId, () -> likeRepository.findByUserIdOrderByCreatedAtDescPostIdDesc(
+                userId, org.springframework.data.domain.PageRequest.of(0, redisStore.likesMaxSize())));
     }
 
     public PostInteractionResponse like(String postId, String userId) {
@@ -149,41 +143,49 @@ public class PostInteractionService {
         return interact(postId, userId, InteractionType.UNFAVORITE, "favorite");
     }
 
-    /**
-     * 互动写路径统一入口：锁 → Redis 翻转 → 投递/降级 → 返回实时快照。
-     * 未抢到锁（同用户并发点击）直接返回当前快照，不阻塞、不重复计。
-     */
+    public void submit(String postId, String userId, String operationId, InteractionType type) {
+        String lockKey = "lock:" + type.kind().keyPrefix() + ":" + postId + ":" + userId;
+        Boolean accepted = distributedLock.withLock(lockKey, LOCK_TTL_SECONDS, () -> {
+            findPublishedPost(postId);
+            InteractionEvent event = new InteractionEvent(operationId, postId, userId, type, System.currentTimeMillis());
+            projectionService.requireCompatible(event);
+            switch (acceptanceService.submit(event)) {
+                case DISABLED -> throw new IllegalStateException("Unexpected delivery state");
+                case REJECTED -> throw new ServiceUnavailableException("INTERACTION_NOT_ACCEPTED", "互动暂无法受理，请稍后重试");
+                case UNKNOWN -> throw new ServiceUnavailableException("INTERACTION_DELIVERY_UNKNOWN", "互动投递结果暂未确认");
+                case SENT -> { }
+            }
+            return true;
+        });
+        if (accepted == null) {
+            throw new ServiceUnavailableException("INTERACTION_NOT_ACCEPTED", "上一条互动请求正在提交，请稍后重试");
+        }
+    }
+
     private PostInteractionResponse interact(String postId, String userId, InteractionType type, String lockPrefix) {
         String lockKey = "lock:" + lockPrefix + ":" + postId + ":" + userId;
-        // 用 withLock 而不是裸 tryLock/unlock：临界区含 MQ 投递（慢时数秒），
-        // 远超原来硬编码的 3 秒 TTL。看门狗持锁期间定时续期，互斥不因业务慢而失效。
-        // 未抢到锁（同用户并发点击）时 withLock 返回 null，此时直接返回当前快照，
-        // 不阻塞、不重复计——与原来的语义一致。
         PostInteractionResponse result = distributedLock.withLock(lockKey, LOCK_TTL_SECONDS, () -> {
             CommunityPost post = findPublishedPost(postId);
-            // Redis 翻转：仅在状态真正变化时增减计数；key miss 时用传入的 DB 供给器回源回填
-            redisStore.flip(type, postId, userId,
-                    () -> existsRelationInDb(type, postId, userId),
-                    () -> baselineCount(type, post));
-            // 投递 MQ；未启用异步或投递失败 → 同步降级落库（apply 在锁内 commit），互动绝不丢
             InteractionEvent event = InteractionEvent.of(postId, userId, type);
-            if (!eventPublisher.publish(event)) {
-                projectionService.apply(event);
-            }
-            return findPost(postId, userId);
+            return switch (eventPublisher.publish(event)) {
+                case DISABLED -> {
+                    projectionService.apply(event);
+                    yield findPost(postId, userId);
+                }
+                case REJECTED -> throw new ServiceUnavailableException("INTERACTION_NOT_ACCEPTED", "互动暂无法受理，请稍后重试");
+                case UNKNOWN -> throw new ServiceUnavailableException("INTERACTION_DELIVERY_UNKNOWN", "互动投递结果暂未确认");
+                case SENT -> {
+                    // 旧接口仍返回快照。异步写请求不回填缓存，避免和消费者的失效操作竞争。
+                    yield new PostInteractionResponse(postId, post.getLikeCount(), post.getFavoriteCount(),
+                            likeRepository.existsById(new PostLikeId(userId, postId)),
+                            favoriteRepository.existsById(new PostFavoriteId(userId, postId)));
+                }
+            };
         });
-        return result != null ? result : findPost(postId, userId);
-    }
-
-    private boolean existsRelationInDb(InteractionType type, String postId, String userId) {
-        return switch (type.kind()) {
-            case LIKE -> likeRepository.existsById(new PostLikeId(userId, postId));
-            case FAVORITE -> favoriteRepository.existsById(new PostFavoriteId(userId, postId));
-        };
-    }
-
-    private long baselineCount(InteractionType type, CommunityPost post) {
-        return type.kind() == InteractionKind.LIKE ? post.getLikeCount() : post.getFavoriteCount();
+        if (result == null) {
+            throw new ServiceUnavailableException("INTERACTION_NOT_ACCEPTED", "上一条互动请求正在提交，请稍后重试");
+        }
+        return result;
     }
 
     private CommunityPost findPublishedPost(String postId) {

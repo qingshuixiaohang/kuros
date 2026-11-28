@@ -102,18 +102,21 @@ async function mockBackend(page: Page) {
     }),
   );
 
-  // 写操作：真正改服务端状态（这样"重新拉取"才能拿到新值）
-  await page.route(new RegExp(`/api/v1/posts/${POST_ID}/interactions/like`), async (route) => {
-    if (route.request().method() === "POST") {
-      state[POST_ID] = { ...state[POST_ID], liked: true, likeCount: state[POST_ID].likeCount + 1 };
-    } else {
-      state[POST_ID] = { ...state[POST_ID], liked: false, likeCount: Math.max(0, state[POST_ID].likeCount - 1) };
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ code: "SUCCESS", data: { postId: POST_ID, ...state[POST_ID] } }),
-    });
+  // 新的点赞操作接口按操作 ID 查询已提交的权威结果。
+  const operations = new Map<string, string>();
+  await page.route("**/api/v1/interaction-operations", async (route) => {
+    const input = route.request().postDataJSON() as { operationId: string; postId: string; type: string };
+    const item = state[input.postId];
+    const liked = input.type === "LIKE";
+    if (item.liked !== liked) item.likeCount += liked ? 1 : -1;
+    item.liked = liked;
+    operations.set(input.operationId, input.postId);
+    await route.fulfill({ status: 202, json: { data: { operationId: input.operationId } } });
+  });
+  await page.route("**/api/v1/interaction-operations/*", async (route) => {
+    const id = route.request().url().split("/").pop()!;
+    const postId = operations.get(id);
+    await route.fulfill({ json: { data: postId ? { status: "APPLIED", state: { postId, ...state[postId] } } : { status: "UNKNOWN" } } });
   });
 
   // 收藏：与点赞同样的处理。缺了这条路由，收藏 mutation 的请求会落到
@@ -317,4 +320,93 @@ test.describe("收藏的写后读一致性", () => {
     await expect(page.getByText("写后读一致性测试帖").first()).toBeVisible();
     await expect(page.locator('button[aria-label="取消收藏"]').first()).toBeVisible();
   });
+});
+
+test("待确认点赞跨页面及刷新保留，账号隔离后由权威结果校正", async ({ page }) => {
+  await seedLogin(page);
+  await mockBackend(page);
+  let userId = "test-user-1";
+  let applied = false;
+  let operationId = "";
+  let submissions = 0;
+  await page.route("**/api/v1/auth/me", (route) => route.fulfill({ json: { data: { id: userId, nickname: "测试用户", role: "USER" } } }));
+  await page.route("**/api/v1/interaction-operations", (route) => {
+    submissions++;
+    const request = route.request().postDataJSON() as { operationId: string; postId: string; type: string };
+    operationId = request.operationId;
+    expect(request.postId).toBe(POST_ID);
+    expect(request.type).toBe("LIKE");
+    return route.fulfill({ status: 202, json: { data: { operationId } } });
+  });
+  await page.route("**/api/v1/interaction-operations/*", (route) =>
+    route.fulfill({
+      json: {
+        data: applied
+          ? { status: "APPLIED", state: { postId: POST_ID, liked: true, likeCount: 8, favoriteCount: 1, favorited: false } }
+          : { status: "UNKNOWN" },
+      },
+    }),
+  );
+  await page.route("**/api/v1/users/me/profile?*", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          profile: { id: userId, nickname: "测试用户", avatarUrl: null, bio: null, postCount: 1, likeCount: 5 },
+          stats: { postCount: 1, likeCount: 5, commentCount: 0 },
+          posts: { items: [post(POST_ID, "写后读一致性测试帖")] },
+          comments: { items: [] },
+          favorites: { items: [] },
+          following: { items: [] },
+          fans: { items: [] },
+        },
+      },
+    }),
+  );
+  await page.goto("/");
+  const card = page.locator("article.post-card").filter({ hasText: "写后读一致性测试帖" });
+  const button = card.locator("button[aria-pressed]").last();
+  await expect(button).toBeEnabled();
+  await button.click();
+  await expect(button).toHaveAttribute("aria-pressed", "true");
+  await expect(button).toContainText("6");
+  await expect(card.getByText("点赞待确认")).toBeVisible();
+  await expect(button).toBeDisabled();
+  await expect.poll(() => submissions).toBe(1);
+  await page.goto(`/guides/${POST_ID}`);
+  const rail = page.getByRole("complementary", { name: "帖子互动" });
+  await expect(rail.getByRole("button", { name: "取消点赞" })).toContainText("6");
+  await expect(rail.getByText("点赞待确认")).toBeVisible();
+  await page.goto("/profile");
+  const row = page.locator(".profile-post-row").filter({ hasText: "写后读一致性测试帖" });
+  await expect(row.getByRole("button", { name: "取消点赞" })).toContainText("6");
+  await expect(row.getByText("点赞待确认")).toBeVisible();
+  await page.reload();
+  await expect(row.getByRole("button", { name: "取消点赞" })).toContainText("6");
+  expect(submissions).toBe(1);
+  userId = "test-user-2";
+  await page.reload();
+  await expect(row.getByRole("button", { name: "点赞", exact: true })).toBeEnabled();
+  await expect(row.getByText("点赞待确认")).toHaveCount(0);
+  userId = "test-user-1";
+  applied = true;
+  await page.reload();
+  await expect(row.getByRole("button", { name: "取消点赞" })).toContainText("8");
+  await expect(row.getByText("点赞待确认")).toHaveCount(0);
+  expect(submissions).toBe(1);
+});
+
+test("明确拒绝后撤回乐观点赞并提示用户", async ({ page }) => {
+  await seedLogin(page);
+  await mockBackend(page);
+  await page.route("**/api/v1/interaction-operations", (route) =>
+    route.fulfill({ status: 503, json: { code: "INTERACTION_NOT_ACCEPTED", message: "未受理" } }),
+  );
+  await page.goto(`/guides/${POST_ID}`);
+  const rail = page.getByRole("complementary", { name: "帖子互动" });
+  const button = rail.getByRole("button", { name: "点赞", exact: true });
+  await expect(button).toBeEnabled();
+  await button.click();
+  await expect(page.getByText("点赞未受理，请稍后重试")).toBeVisible();
+  await expect(rail.getByRole("button", { name: "点赞", exact: true })).toContainText("5");
+  await expect(rail.getByText("点赞待确认")).toHaveCount(0);
 });

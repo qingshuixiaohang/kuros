@@ -1,82 +1,94 @@
 package com.kuros.kurosbackend.interaction.redis;
 
 import com.kuros.kurosbackend.interaction.event.InteractionKind;
-import com.kuros.kurosbackend.interaction.event.InteractionType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.LongSupplier;
+import java.util.function.Supplier;
+import java.util.Set;
+import java.util.ArrayList;
+import com.kuros.kurosbackend.interaction.domain.PostLike;
+import java.time.ZoneOffset;
 
 /**
- * 互动实时读源（切片 #11）：Redis 前置计数 + 关系状态，写路径即时返回、读路径 Redis 优先。
+ * 互动旁路缓存，未命中时从数据库回填。
  *
- * 数据模型（两类 key，均 String）：
- * - 状态：interaction:{like|favorite}:{postId}:{userId} = "1"(已赞/藏) | "0"(未)
- * - 计数：interaction:count:{like|favorite}:{postId} = 整数字符串
- *
- * 为什么状态用「单 key/用户」而不是「一个 Set 存全部点赞用户」？
- * Set 方案在热帖上会退化成大 key（百万成员），且回填（把 DB 关系灌进 Set）非幂等、有竞态；
- * 单 key 天然按用户分片、回填只是「不存在则用 DB 值 set 一次」，幂等且无大 key 风险。
- *
- * 计数回填的竞态如何用 Lua 根除？
- * 多个请求同时 miss 同一计数 key 时，若「GET-miss → 查 DB → SET 基线 → INCR」分步执行，
- * 后来的 SET 会覆盖先到者的 INCR 结果（丢失更新）。COUNT_BACKFILL_DELTA 把
- * 「exists 判断 + set 基线 + expire + incrby」放进单个 Lua（Redis 单线程原子执行）：
- * 基线只在 key 不存在时设一次，之后每次只叠加 delta，绝不覆盖。
+ * 点赞计数、收藏计数、互动状态和用户近期点赞窗口都使用「版本键」围栏：
+ * 读路径先取版本、再读数据库、最后由 Lua 在版本未变时写入。失效会先递增版本再删除缓存，
+ * 因此「提交前读到旧值、提交后才回填」的请求会被拦下并重新读取，不会把旧快照装回缓存。
  */
 @Component
 public class InteractionRedisStore {
 
-    /** 计数回填+增量：KEYS[1]=计数key，ARGV[1]=DB基线，ARGV[2]=delta，ARGV[3]=ttl；返回增量后的新值。 */
-    private static final DefaultRedisScript<Long> COUNT_BACKFILL_DELTA = new DefaultRedisScript<>(
-            "if redis.call('exists', KEYS[1]) == 0 then "
-                    + "redis.call('set', KEYS[1], ARGV[1]); "
-                    + "redis.call('expire', KEYS[1], ARGV[3]); "
-                    + "end "
-                    + "return redis.call('incrby', KEYS[1], ARGV[2])",
-            Long.class);
-
-    /** 状态回填：KEYS[1]=状态key，ARGV[1]=DB状态("1"/"0")，ARGV[2]=ttl；返回当前值。 */
-    private static final DefaultRedisScript<String> STATE_BACKFILL = new DefaultRedisScript<>(
-            "if redis.call('exists', KEYS[1]) == 0 then "
-                    + "redis.call('set', KEYS[1], ARGV[1]); "
-                    + "redis.call('expire', KEYS[1], ARGV[2]); "
-                    + "end "
-                    + "return redis.call('get', KEYS[1])",
-            String.class);
-
     /**
-     * 对账：把计数 key 设为 DB 真相值，返回修正后的值（审计 M5 / B3）。
-     *
-     * KEYS[1]=计数key，ARGV[1]=真相值，ARGV[2]=ttl。
-     * 返回值语义（供调用方判断是否需要记录/告警）：
-     *   1 = 原本就一致，未改动
-     *   0 = 原本不一致，已修正为真相值
-     *
-     * 为什么用 Lua 而不是「GET 比一下再 SET」：分步执行时，两次操作之间
-     * 可能有正常写路径的 flip 插进来（把计数改成新值），那样对账会用旧真相
-     * 覆盖掉一次合法增量——为了修偏差反而制造偏差。Lua 让「比对 + 修正」
-     * 原子完成，等价于持锁对账。
-     *
-     * 注意这里不复用 B2 踩过的坑（static 脚本实例复用导致 execute 返回 null），
-     * 每次调用本地构造脚本对象。
+     * 版本围栏回填：KEYS[1]=版本key，KEYS[2]=值key；
+     * ARGV[1]=读取时的版本，ARGV[2]=DB 值，ARGV[3]=ttl。
+     * 版本已变返回 nil（调用方重试），否则写入缺失值并返回当前值。
      */
-    private static final String RECONCILE_SCRIPT =
-            "local current = redis.call('get', KEYS[1]); "
-                    + "if current == ARGV[1] then "
-                    + "  return 1; "
-                    + "end; "
-                    + "redis.call('set', KEYS[1], ARGV[1]); "
-                    + "redis.call('expire', KEYS[1], ARGV[2]); "
-                    + "return 0";
+    private static final DefaultRedisScript<String> BACKFILL_IF_VERSION_UNCHANGED = new DefaultRedisScript<>(
+            "if (redis.call('get', KEYS[1]) or '0') ~= ARGV[1] then return nil end; "
+                    + "if redis.call('exists', KEYS[2]) == 1 then return redis.call('get', KEYS[2]) end; "
+                    + "redis.call('set', KEYS[2], ARGV[2], 'EX', ARGV[3]); return redis.call('get', KEYS[2])",
+            String.class);
 
     private final StringRedisTemplate redisTemplate;
     private final long ttlSeconds;
+    @Value("${app.interaction.redis.likes-max-size:1000}")
+    private int likesMaxSize = 1000;
+
+    /**
+     * 失效点赞：KEYS[1]=计数版本、KEYS[2]=窗口版本、KEYS[3]=状态版本，
+     * KEYS[4]=计数、KEYS[5]=近期窗口、KEYS[6]=窗口 ready、KEYS[7]=状态；ARGV[1]=状态版本 ttl。
+     */
+    private static final DefaultRedisScript<Long> INVALIDATE_LIKES = new DefaultRedisScript<>(
+            "redis.call('incr', KEYS[1]); redis.call('incr', KEYS[2]); redis.call('incr', KEYS[3]); "
+                    + "redis.call('expire', KEYS[3], ARGV[1]); "
+                    + "redis.call('del', KEYS[4], KEYS[5], KEYS[6], KEYS[7]); return 1", Long.class);
+    private static final DefaultRedisScript<Long> BACKFILL_LIKES = new DefaultRedisScript<>(
+            "if (redis.call('get', KEYS[1]) or '0') ~= ARGV[1] then return 0 end; "
+                    + "if redis.call('exists', KEYS[3]) == 1 then return 1 end; "
+                    + "redis.call('del', KEYS[2]); for i=3,#ARGV,2 do redis.call('zadd', KEYS[2], ARGV[i], ARGV[i+1]) end; "
+                    + "redis.call('expire', KEYS[2], ARGV[2]); redis.call('set', KEYS[3], '1', 'EX', ARGV[2]); return 1", Long.class);
+    /**
+     * 失效收藏/其他状态：KEYS[1]=状态版本、KEYS[2]=计数版本、KEYS[3]=状态、KEYS[4]=计数；
+     * ARGV[1]=状态版本 ttl。
+     */
+    private static final DefaultRedisScript<Long> INVALIDATE_KIND = new DefaultRedisScript<>(
+            "redis.call('incr', KEYS[1]); redis.call('expire', KEYS[1], ARGV[1]); "
+                    + "redis.call('incr', KEYS[2]); redis.call('del', KEYS[3], KEYS[4]); return 1", Long.class);
+
+    public int likesMaxSize() { return likesMaxSize; }
+
+    public Set<String> recentLikes(String userId, Supplier<List<PostLike>> load) {
+        String key = likesKey(userId);
+        String marker = key + ":ready";
+        String versionKey = key + ":version";
+        while (true) {
+            if (Boolean.TRUE.equals(redisTemplate.hasKey(marker))) {
+                Set<String> cached = redisTemplate.opsForZSet().reverseRange(key, 0, -1);
+                return cached == null ? Set.of() : cached;
+            }
+            String version = redisTemplate.opsForValue().get(versionKey);
+            List<PostLike> rows = load.get();
+            List<String> args = new ArrayList<>();
+            args.add(version == null ? "0" : version);
+            args.add(Long.toString(ttlSeconds));
+            for (PostLike row : rows) {
+                var timestamp = row.getCreatedAt().toInstant(ZoneOffset.UTC);
+                args.add(Long.toString(timestamp.getEpochSecond() * 1_000_000 + timestamp.getNano() / 1_000));
+                args.add(row.getPostId());
+            }
+            Long installed = redisTemplate.execute(BACKFILL_LIKES, List.of(versionKey, key, marker), args.toArray());
+            if (Long.valueOf(1).equals(installed)) continue;
+        }
+    }
+
+    private String likesKey(String userId) { return "user:likes:patten:" + userId + ":post"; }
 
     public InteractionRedisStore(StringRedisTemplate redisTemplate,
                                  @Value("${app.interaction.redis.ttl-seconds:86400}") long ttlSeconds) {
@@ -84,51 +96,57 @@ public class InteractionRedisStore {
         this.ttlSeconds = ttlSeconds;
     }
 
-    /** 读计数：Redis 命中直接返回；miss 则用 DB 基线回填（delta=0）后返回。 */
+    /** 读计数：Redis 命中直接返回；未命中时带版本围栏的回填，版本已变则重读数据库。 */
     public long readCount(InteractionKind kind, String postId, LongSupplier dbBaseline) {
         String key = countKey(kind, postId);
-        String cached = redisTemplate.opsForValue().get(key);
-        if (cached != null) {
-            return Long.parseLong(cached);
+        String versionKey = key + ":version";
+        while (true) {
+            String cached = redisTemplate.opsForValue().get(key);
+            if (cached != null) return Long.parseLong(cached);
+            String version = redisTemplate.opsForValue().get(versionKey);
+            String value = redisTemplate.execute(BACKFILL_IF_VERSION_UNCHANGED, List.of(versionKey, key),
+                    version == null ? "0" : version, Long.toString(dbBaseline.getAsLong()),
+                    Long.toString(ttlSeconds));
+            if (value != null) return Long.parseLong(value);
         }
-        Long value = redisTemplate.execute(COUNT_BACKFILL_DELTA, List.of(key),
-                Long.toString(dbBaseline.getAsLong()), "0", Long.toString(ttlSeconds));
-        return value != null ? value : dbBaseline.getAsLong();
     }
 
-    /** 读关系状态：Redis 命中直接返回；miss 则用 DB 存在性回填后返回。 */
+    /** 读关系状态：Redis 命中直接返回；miss 则带版本围栏回填，失效后不改写旧快照。 */
     public boolean readState(InteractionKind kind, String postId, String userId, BooleanSupplier dbExists) {
         String key = stateKey(kind, postId, userId);
-        String cached = redisTemplate.opsForValue().get(key);
-        if (cached != null) {
-            return "1".equals(cached);
+        String versionKey = key + ":version";
+        while (true) {
+            String cached = redisTemplate.opsForValue().get(key);
+            if (cached != null) return "1".equals(cached);
+            String version = redisTemplate.opsForValue().get(versionKey);
+            String value = redisTemplate.execute(BACKFILL_IF_VERSION_UNCHANGED, List.of(versionKey, key),
+                    version == null ? "0" : version, dbExists.getAsBoolean() ? "1" : "0", Long.toString(ttlSeconds));
+            if (value != null) return "1".equals(value);
         }
-        String value = redisTemplate.execute(STATE_BACKFILL, List.of(key),
-                dbExists.getAsBoolean() ? "1" : "0", Long.toString(ttlSeconds));
-        return "1".equals(value);
     }
 
-    /**
-     * 写路径翻转（必须在 per-user 分布式锁内调用）：
-     * 读当前态（miss 回源 DB）→ 仅当目标态≠当前态才 delta=±1、置新状态、更新计数 → 返回实时计数。
-     *
-     * 重复点击（当前态==目标态）不动计数，保证幂等——这也是「先判翻转再增减」的核心。
-     * 计数用 Lua 回填+增量：即使计数 key 恰好过期/首次访问，也能原子地在 DB 基线上叠加本次 delta。
-     */
-    public long flip(InteractionType type, String postId, String userId,
-                     BooleanSupplier dbExists, LongSupplier dbBaseline) {
-        InteractionKind kind = type.kind();
-        boolean current = readState(kind, postId, userId, dbExists);
-        boolean target = type.targetState();
-        if (current == target) {
-            return readCount(kind, postId, dbBaseline);
+    public void invalidate(InteractionKind kind, String postId, String userId) {
+        String state = stateKey(kind, postId, userId);
+        if (kind == InteractionKind.LIKE) {
+            String count = countKey(kind, postId);
+            String likes = likesKey(userId);
+            redisTemplate.execute(INVALIDATE_LIKES, List.of(
+                            count + ":version", likes + ":version", state + ":version",
+                            count, likes, likes + ":ready", state),
+                    Long.toString(ttlSeconds));
+            return;
         }
-        long delta = target ? 1L : -1L;
-        // 用 Duration 重载而非已废弃的 set(K,V,long,TimeUnit)——Spring Data Redis 4 起统一以 Duration 表达 TTL
-        redisTemplate.opsForValue().set(stateKey(kind, postId, userId), target ? "1" : "0", Duration.ofSeconds(ttlSeconds));
-        Long value = redisTemplate.execute(COUNT_BACKFILL_DELTA, List.of(countKey(kind, postId)),
-                Long.toString(dbBaseline.getAsLong()), Long.toString(delta), Long.toString(ttlSeconds));
-        return value != null ? value : dbBaseline.getAsLong() + delta;
+        String count = countKey(kind, postId);
+        redisTemplate.execute(INVALIDATE_KIND, List.of(state + ":version", count + ":version", state, count),
+                Long.toString(ttlSeconds));
+    }
+
+    public void invalidateCounts(String postId) {
+        String likeKey = countKey(InteractionKind.LIKE, postId);
+        String favoriteKey = countKey(InteractionKind.FAVORITE, postId);
+        redisTemplate.execute(new DefaultRedisScript<>(
+                        "redis.call('incr', KEYS[1]); redis.call('incr', KEYS[2]); redis.call('del', KEYS[3], KEYS[4]); return 1", Long.class),
+                List.of(likeKey + ":version", favoriteKey + ":version", likeKey, favoriteKey));
     }
 
     /**
@@ -151,25 +169,37 @@ public class InteractionRedisStore {
      * （见 InteractionCountReconciler.reconcile），因为那是 DB 写、要
      * 走事务，不能跟 Redis 操作混在一个非事务方法里。
      *
+     * 同样使用版本围栏：读取真相后若版本已变（期间发生过提交失效），Lua 返回 -1，
+     * 调用方重读真相，避免把失效前读到的旧真相装回缓存。
+     *
      * @param truthSupplier 真相来源，通常是关系表的 COUNT(*)——幂等可重算，
      *                       比增量维护的冗余列更可信
      */
     public ReconcileResult reconcileCount(InteractionKind kind, String postId, LongSupplier truthSupplier) {
         String key = countKey(kind, postId);
-        long truth = truthSupplier.getAsLong();
+        String versionKey = key + ":version";
         // 本地构造脚本对象：static 实例复用会导致 execute 返回 null（B2 踩过的坑）
-        DefaultRedisScript<Long> script = new DefaultRedisScript<>(RECONCILE_SCRIPT, Long.class);
-        Long changed = redisTemplate.execute(script, List.of(key),
-                Long.toString(truth), Long.toString(ttlSeconds));
-        // Lua 返回 0=修正了偏差、1=原本一致；execute 返回 null 时保守地当作"未修正"
-        boolean corrected = Long.valueOf(0L).equals(changed);
-        return new ReconcileResult(truth, corrected);
+        var script = new DefaultRedisScript<Long>(
+                "if (redis.call('get', KEYS[1]) or '0') ~= ARGV[1] then return -1 end; "
+                        + "local old = redis.call('get', KEYS[2]); redis.call('incr', KEYS[1]); "
+                        + "redis.call('set', KEYS[2], ARGV[2], 'EX', ARGV[3]); if old == ARGV[2] then return 1 else return 0 end", Long.class);
+        while (true) {
+            String version = redisTemplate.opsForValue().get(versionKey);
+            long truth = truthSupplier.getAsLong();
+            Long result = redisTemplate.execute(script, List.of(versionKey, key), version == null ? "0" : version,
+                    Long.toString(truth), Long.toString(ttlSeconds));
+            // Lua 返回 0=修正了偏差、1=原本一致、-1=并发失效后真相已过期
+            if (Long.valueOf(0).equals(result) || Long.valueOf(1).equals(result)) {
+                return new ReconcileResult(truth, Long.valueOf(0).equals(result));
+            }
+        }
     }
 
     private String stateKey(InteractionKind kind, String postId, String userId) {
         return "interaction:" + kind.keyPrefix() + ":" + postId + ":" + userId;
     }
 
+    /** 计数 key 沿用 #11 契约：interaction:count:{like|favorite}:{postId}，值为整数字符串。 */
     private String countKey(InteractionKind kind, String postId) {
         return "interaction:count:" + kind.keyPrefix() + ":" + postId;
     }

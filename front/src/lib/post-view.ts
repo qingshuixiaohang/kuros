@@ -16,6 +16,23 @@ export function formatPostCount(value: number) {
   return String(value);
 }
 
+/**
+ * 解析展示缩写（formatPostCount 的逆操作，兼容 "8.6k" / "1.2w" / "3万"）。
+ *
+ * 只用于没有原始数值的旧视图模型（演示数据、搜索快照）。API 列表已保留
+ * `Guide.likeCount`，互动计数优先用原始值，避免 9999 → "10k" → 10000 的
+ * 双重取整漂移。无法识别的输入返回 0，与旧实现一致。
+ */
+export function parsePostCount(value: string) {
+  const match = /^\s*(\d+(?:\.\d+)?)\s*([kKwW万])?\s*$/.exec(value);
+  if (!match) return 0;
+  const amount = Number(match[1]);
+  const unit = match[2]?.toLowerCase();
+  if (unit === "k") return Math.round(amount * 1000);
+  if (unit === "w" || unit === "万") return Math.round(amount * 10000);
+  return Math.round(amount);
+}
+
 export function formatPublishedAt(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -38,6 +55,7 @@ export function toGuide(post: ApiPost): Guide {
     views: formatPostCount(post.viewCount),
     replies: post.commentCount,
     likes: formatPostCount(post.likeCount),
+    likeCount: post.likeCount,
     tags: post.tags,
     mediaUrls: post.media?.length
       ? post.media
@@ -73,6 +91,7 @@ export function searchItemToGuide(item: PostSearchItem): Guide {
     views: formatPostCount(item.viewCount),
     replies: item.commentCount,
     likes: formatPostCount(item.likeCount),
+    likeCount: item.likeCount,
     tags: item.tags,
     highlight: item.highlight,
   };

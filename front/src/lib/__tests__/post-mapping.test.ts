@@ -62,6 +62,8 @@ describe("toGuide 的字段格式化", () => {
     const guide = toGuide({ ...basePost, viewCount: 1200, likeCount: 12345 });
     expect(guide.views).toBe("1.2k");
     expect(guide.likes).toBe("1.2w");
+    // 展示值是缩写，互动计数必须保留原始值，否则 12345 → "1.2w" → 12000。
+    expect(guide.likeCount).toBe(12345);
   });
 
   test("replies 用 commentCount 原值（前端要拼「条」字，不能被 k/w 化）", () => {

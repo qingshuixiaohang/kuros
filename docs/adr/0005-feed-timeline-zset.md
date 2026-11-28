@@ -1,43 +1,25 @@
-# 0005. Feed 流：Redis ZSet Timeline + Push-on-publish
+# 0005. 发帖时把帖子推入粉丝的 Redis 关注时间线
 
-**状态**: 已接受（2026-09-21）  
-**上下文**: 切片 #12「Feed 流（ZSet Timeline + Push/Pull 混合）」  
-**关联**: [spec](../specs/feed-timeline.md) · [前序 ADR 0004](0004-async-interaction-rocketmq.md)
+日期：2026-09-21
+
+状态：已接受，当前行为补录包含后续的游标分页和关注关系校准
+
+## 背景
+
+用户打开「关注」页时，需要看到其关注作者发布的帖子。每次刷新都从关注作者的帖子重新计算时间线，读取成本会随关注人数和帖子数上升。社区希望把部分工作放到发帖时完成。
 
 ## 决策
 
-关注流采用 **Redis ZSet Timeline + Push-on-publish** 模型：
+- **发帖时推送。** 例如小明关注了小雨。小雨的帖子事务提交后，内容服务通过 Feign 分页查粉丝，把新帖索引写进小明等粉丝的 Redis ZSet（带排序分数的集合）。分数为发布时间，成员包含用于定位的作者和帖子信息。事务提交后监听器在发帖调用链上执行，耗时可能计入发帖响应，失败会记录日志。
+- **读时组装。** 小明打开关注页，先确认当前关注集合，再从时间线取一页帖子 ID，批量回 MySQL 读取仍已发布的内容。关注集合变化时会剔除取消关注的作者，并回填近期帖子。时间线默认最多 500 条，TTL 默认 30 天。推荐和最新流继续走各自的数据库查询。
+- **继续翻页。** 旧页码路径保留。游标路径以 Redis 分数和完整成员为边界，按原始时间线推进，即使本页部分帖子已删除或被过滤。见 [ADR 0006](0006-read-path-hardening.md)。
 
-1. 每个用户一个 ZSet（key `feed:timeline:{userId}`），member=postId，
-   score=publishedAt epoch millis。
-2. 帖子发布后（事务提交后），`@TransactionalEventListener(phase = AFTER_COMMIT)`
-   异步触发扇出：经 Feign 取作者粉丝列表，对每个粉丝 `ZADD` 到其 timeline ZSet。
-3. 读路径从 ZSet `ZREVRANGE` 按时间倒序取 postId 分页，再 `findAllById` 查帖子详情。
-4. 容量上限 500 条（`ZREMRANGEBYRANK` 裁剪）+ 30 天 TTL 惰性过期。
-5. 推荐流和最新流**复用现有 DB 查询路径**（不改排序逻辑，留 #13 增强）。
+## 备选与代价
 
-## 理由
+读时统一从数据库合并各作者的帖子可以减少发帖时要做的写入，代价是把合并成本移到每次刷新。发帖推送把更多成本移到写入侧，每位粉丝都有一份索引。粉丝列表会分页取全，单页大小与时间线容量都不能当作粉丝人数上限。
 
-| 维度 | 选 Push-on-publish ZSet | 拒绝 Pull-on-read | 拒绝 RocketMQ 异步扇出 |
-|---|---|---|---|
-| 读延迟 | 一次 ZREVRANGE + 批量 DB 查 | 先查关注列表再逐作者查帖子（N+1） | 同 ZSet 但多 MQ 链路 |
-| 写放大 | 发帖时 N 次 ZADD（N=粉丝数） | 零（读时算） | N 条 MQ 消息 |
-| 一致性 | 发帖事务提交后立即可见于粉丝 | 可能延迟/不一致 | 最终一致（MQ 延迟） |
-| 复杂度 | 中（Feign + ZSet） | 低（纯 DB 查） | 高（MQ + ZSet + 补偿） |
-| 适用边界 | 粉丝数 <5000、发帖频率中等（**本项目**） | 粉丝极多但读少（反本项目场景） | 大 V 场景/超大规模 |
+用持久消息队列做扇出可增加重试能力，但需要额外维护消息和补偿。本项目使用应用内事件，偶发推送失败时，粉丝的列表可能缺这条帖；关注集合变化时的回填只处理该次关系变化。大粉丝量场景的推拉混合留待另行设计。
 
-本项目是求职作品，数据规模小，Push-on-publish 是最简单且最易讲清的架构选择。
+## 验证入口
 
-## 不在范围
-
-- 大 V 推拉混合（粉丝 >5000 时不推，读时拉）
-- 热度衰减算法（#13）
-- 取消关注时清理 timeline（#13）
-- 游标分页（#13）
-
-## 后果
-
-- 正面：读路径 O(1)（ZSet range + 批量 DB），面试可讲微博/Twitter 同款架构；
-  发帖写放大可控（粉丝上限 5000）。
-- 负面：新关注的人的历史帖子不在 timeline（需主动"拉一次"回填，本切片不实现）；
-  取消关注后 timeline 残留帖子（读路径过滤兜底，#13 清理）。
+[发帖后监听器](../../kuros-backend/src/main/java/com/kuros/kurosbackend/feed/event/FeedFanoutListener.java)、[关注流读取](../../kuros-backend/src/main/java/com/kuros/kurosbackend/feed/service/FeedService.java)、[时间线规格](../specs/feed-timeline.md)、[实现复盘](../learning/12-feed-timeline.md)。

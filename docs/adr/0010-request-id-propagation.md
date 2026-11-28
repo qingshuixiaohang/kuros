@@ -10,6 +10,8 @@ Gateway、kuros-backend 和 kuros-user 暂无统一请求标识。一次浏览�
 
 ## 决策
 
+例子：打开帖子列表时，Gateway 生成一个请求 ID，内容服务查帖子和经 Feign 请求作者资料时沿用它。拿到响应头里的 ID，就能在网关、内容服务和用户服务的日志里查这次请求。MDC 是日志框架给当前处理线程保存附加字段的位置，Servlet 请求结束时清掉这个值，避免线程服务下一次请求时沿用旧 ID。
+
 1. 对经 Gateway 路由的每个请求生成 UUID 格式的 `X-Request-Id`。Gateway 不信任或复用客户端传入的同名头，始终覆盖它，降低日志伪造与注入风险。
 2. Gateway 将该 ID 放入下游请求并在响应中回显。backend 和 user 服务对直接到达的请求只接受规范 UUID；缺失或格式错误时自行生成 UUID，并在响应中回显。
 3. backend/user 的 Servlet filter 在请求处理期间将 ID 放入 MDC，结束时始终清除；控制台日志格式包含该 MDC 字段。
@@ -28,4 +30,4 @@ Gateway、kuros-backend 和 kuros-user 暂无统一请求标识。一次浏览�
 - Gateway 路由集成测试证明伪造的客户端 ID 被替换，且下游收到的 UUID 与响应回显一致。
 - backend/user filter 测试覆盖合法、缺失、非法 ID，MDC 作用域和清理。
 - backend Feign 桩测试证明内部请求携带与当前请求相同的 ID。
-- 三个服务编译与相关定向测试通过；手动全量 CI 验证服务组合。
+- [请求 ID 复盘与验证记录](../learning/26-request-id-propagation.md)。

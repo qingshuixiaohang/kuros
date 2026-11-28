@@ -1,55 +1,72 @@
 package com.kuros.kurosbackend.interaction.event;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.rocketmq.client.common.ClientErrorCode;
+import org.apache.rocketmq.client.exception.MQClientException;
+import org.apache.rocketmq.client.producer.DefaultMQProducer;
+import org.apache.rocketmq.client.producer.SendStatus;
+import org.apache.rocketmq.common.message.Message;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.cloud.stream.function.StreamBridge;
-import org.springframework.messaging.Message;
-import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Component;
 
-/**
- * RocketMQ 互动事件发布器（切片 #11）：async.enabled=true 时启用，经 StreamBridge 投递到 RocketMQ。
- *
- * 为什么用 StreamBridge 而不是直接注入 Producer/Binding？
- * StreamBridge 是 Spring Cloud Stream 的「按需发送」入口——无需为发送端声明 function bean，
- * 首次 send 时按逻辑通道名（interactionOutbound）动态创建生产绑定并套用 application.properties
- * 里该通道的分区/orderly 配置。发送端只有一个通道，StreamBridge 比声明式 Output 更轻。
- *
- * 为什么设 KEYS 头？
- * RocketMQ 的 KEYS 是消息的业务索引（可在控制台按 key 查消息轨迹），设为 postId 便于按帖排查；
- * 顺序性由 binder 的 partition-key-expression=payload.postId + orderly=true 保证，与 KEYS 头无关。
- *
- * 为什么 send 失败/异常都返回 false？
- * 让调用方（写路径）统一走「同步降级落库」，保证互动绝不因 MQ 抖动而丢失（ADR 0004 决策）。
- */
 @Component
 @ConditionalOnProperty(name = "app.interaction.async.enabled", havingValue = "true")
 public class RocketMqInteractionEventPublisher implements InteractionEventPublisher {
+    private final DefaultMQProducer producer;
+    private final String topic;
+    private final ObjectMapper mapper = new ObjectMapper();
 
-    private static final Logger log = LoggerFactory.getLogger(RocketMqInteractionEventPublisher.class);
+    public RocketMqInteractionEventPublisher(DefaultMQProducer producer) {
+        this(producer, "post-interaction-topic");
+    }
 
-    /** 逻辑发送通道名，对应 application.properties 的 spring.cloud.stream.bindings.interactionOutbound.*。 */
-    private static final String OUT_BINDING = "interactionOutbound";
-
-    private final StreamBridge streamBridge;
-
-    public RocketMqInteractionEventPublisher(StreamBridge streamBridge) {
-        this.streamBridge = streamBridge;
+    /** 可注入 Topic：部署可换主题；测试用不存在的 Topic 验证「无路由」被归类为明确拒绝。 */
+    @org.springframework.beans.factory.annotation.Autowired
+    public RocketMqInteractionEventPublisher(DefaultMQProducer producer,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${app.interaction.rocketmq.topic:post-interaction-topic}") String topic) {
+        this.producer = producer;
+        this.topic = topic;
     }
 
     @Override
-    public boolean publish(InteractionEvent event) {
+    public Result publish(InteractionEvent event) {
         try {
-            Message<InteractionEvent> message = MessageBuilder.withPayload(event)
-                    .setHeader("KEYS", event.postId())
-                    .build();
-            return streamBridge.send(OUT_BINDING, message);
-        } catch (RuntimeException ex) {
-            // 投递异常（binder 未就绪、broker 不可达等）→ 返回 false 触发同步降级，互动不丢
-            log.warn("互动事件投递 MQ 失败，转同步降级落库: postId={} userId={} type={}",
-                    event.postId(), event.userId(), event.type(), ex);
-            return false;
+            Message message = new Message(topic, mapper.writeValueAsBytes(event));
+            message.setKeys(event.eventId());
+            message.putUserProperty("contentType", "application/json");
+            var result = producer.send(message, (queues, ignored, key) ->
+                    queues.get(Math.abs(((String) key).hashCode() % 4) % queues.size()), event.postId(), 3000L);
+            return result.getSendStatus() == SendStatus.SEND_OK ? Result.SENT : Result.UNKNOWN;
+        } catch (MQClientException ex) {
+            if (isNoRoute(ex) || ex.getCause() instanceof org.apache.rocketmq.remoting.exception.RemotingConnectException) {
+                return Result.REJECTED;
+            }
+            return Result.UNKNOWN;
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            return Result.UNKNOWN;
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException(ex);
+        } catch (org.apache.rocketmq.remoting.exception.RemotingConnectException ex) {
+            return Result.REJECTED;
+        } catch (org.apache.rocketmq.remoting.exception.RemotingException |
+                 org.apache.rocketmq.client.exception.MQBrokerException ex) {
+            return Result.UNKNOWN;
         }
+    }
+
+    /**
+     * 「无路由」在两种发送重载下的形状不同：普通 send 是 responseCode=10005，
+     * 选择队列的 send 在 5.3.1 用 responseCode=-1 + 固定前缀抛出（无对应错误码）。
+     */
+    private static boolean isNoRoute(MQClientException ex) {
+        if (ex.getResponseCode() == ClientErrorCode.NOT_FOUND_TOPIC_EXCEPTION ||
+                ex.getResponseCode() == ClientErrorCode.NO_NAME_SERVER_EXCEPTION) {
+            return true;
+        }
+        return ex.getResponseCode() == -1 && ex.getMessage() != null
+                && ex.getMessage().startsWith("No route info for this topic");
     }
 }

@@ -21,7 +21,8 @@ class RedisPostInteractionCountReaderTest {
         TestInteractionRedisStore redisStore = new TestInteractionRedisStore();
         redisStore.liveCounts.put(InteractionKind.LIKE, 12L);
         redisStore.liveCounts.put(InteractionKind.FAVORITE, 3L);
-        RedisPostInteractionCountReader reader = new RedisPostInteractionCountReader(redisStore);
+        var likes = org.mockito.Mockito.mock(com.kuros.kurosbackend.post.repository.CommunityPostRepository.class);
+        RedisPostInteractionCountReader reader = new RedisPostInteractionCountReader(redisStore, likes);
         AtomicInteger baselineReads = new AtomicInteger();
 
         PostInteractionCounts counts = reader.readForPost("post-1", baselineReads::incrementAndGet,
@@ -36,7 +37,9 @@ class RedisPostInteractionCountReaderTest {
     @Test
     void delegatesEachDatabaseBaselineToItsMatchingRedisCount() {
         TestInteractionRedisStore redisStore = new TestInteractionRedisStore();
-        RedisPostInteractionCountReader reader = new RedisPostInteractionCountReader(redisStore);
+        var likes = org.mockito.Mockito.mock(com.kuros.kurosbackend.post.repository.CommunityPostRepository.class);
+        org.mockito.Mockito.when(likes.readCommittedLikeCount("post-2")).thenReturn(21L);
+        RedisPostInteractionCountReader reader = new RedisPostInteractionCountReader(redisStore, likes);
 
         PostInteractionCounts counts = reader.readForPost("post-2", () -> 21L, () -> 5L);
 

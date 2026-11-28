@@ -5,6 +5,7 @@ import com.kuros.kurosbackend.post.api.CreatePostRequest;
 import com.kuros.kurosbackend.post.api.PostDetailResponse;
 import com.kuros.kurosbackend.post.service.CommunityPostService;
 import com.kuros.kurosbackend.post.service.PostPublishingService;
+import com.kuros.kurosbackend.user.client.UserDirectoryFacade;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,14 +18,20 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
 
 /**
  * Caffeine 缓存行为集成测试。
@@ -70,12 +77,38 @@ class CacheIntegrationTest {
     @Autowired
     private StringRedisTemplate redisTemplate;
 
+    @MockitoSpyBean
+    private UserDirectoryFacade userDirectory;
+
     @BeforeEach
     void setUp() {
         // 清空 Redis（SaToken 会话数据）
         Objects.requireNonNull(redisTemplate.getConnectionFactory()).getConnection().serverCommands().flushDb();
         // 清空缓存（split-07：publicProfile 缓存已随用户域迁出移除）
         Objects.requireNonNull(cacheManager.getCache("postDetail")).clear();
+    }
+
+    @Test
+    void 独立详情缓存未命中时应在事务结束后获取作者资料() {
+        PostDetailResponse published = publishingService.publish(new CreatePostRequest(
+                "GUIDE", "攻略", "事务边界测试帖", "测试摘要", "测试正文", List.of("测试标签"), List.of()
+        ), TEST_USER_ID);
+        String postId = published.id();
+        Objects.requireNonNull(cacheManager.getCache("postDetail")).evict(postId);
+        redisTemplate.delete("cache:postDetail:" + postId);
+        clearInvocations(userDirectory);
+
+        doAnswer(invocation -> {
+            assertFalse(TransactionSynchronizationManager.isActualTransactionActive());
+            return Map.of();
+        }).when(userDirectory).findAuthors(List.of(TEST_USER_ID));
+
+        PostDetailResponse detail = postService.findPublishedById(postId);
+
+        assertEquals(postId, detail.id());
+        assertEquals(List.of("测试标签"), detail.tags());
+        assertEquals(TEST_USER_ID, detail.author().id());
+        verify(userDirectory).findAuthors(List.of(TEST_USER_ID));
     }
 
     @Test
