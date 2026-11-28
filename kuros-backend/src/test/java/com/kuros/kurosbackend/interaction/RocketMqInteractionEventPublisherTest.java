@@ -44,6 +44,15 @@ class RocketMqInteractionEventPublisherTest {
     }
 
     @Test
+    void 选择队列发送的无路由异常同样明确拒绝() throws Exception {
+        // 5.3.1 的 selector 重载没有复用 10005，而是 -1 + 固定前缀
+        when(producer.send(any(org.apache.rocketmq.common.message.Message.class), any(MessageQueueSelector.class), any(), anyLong()))
+                .thenThrow(new MQClientException(-1, "No route info for this topic, post-interaction-topic"));
+
+        assertThat(publisher.publish(event)).isEqualTo(Result.REJECTED);
+    }
+
+    @Test
     void brokerTimeoutLeavesDeliveryUnknown() throws Exception {
         when(producer.send(any(org.apache.rocketmq.common.message.Message.class), any(MessageQueueSelector.class), any(), anyLong())).thenThrow(
                 new MQClientException(ClientErrorCode.ACCESS_BROKER_TIMEOUT, "timeout"));

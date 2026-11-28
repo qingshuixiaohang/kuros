@@ -116,9 +116,9 @@ class InteractionBatchStateIntegrationTest {
         assertThat(states.get(postIds.get(1))[0]).isTrue();
         assertThat(states.get(postIds.get(2))[0]).isTrue();
         assertThat(redisTemplate.opsForZSet().size("user:likes:patten:" + userId + ":post")).isEqualTo(2L);
-        assertThat(redisTemplate.opsForValue().get("count:patten:post:" + postIds.get(0))).isNull();
+        assertThat(redisTemplate.opsForValue().get("interaction:count:like:" + postIds.get(0))).isNull();
         assertThat(interactionService.findPost(postIds.get(0), userId).likeCount()).isEqualTo(1);
-        assertThat(redisTemplate.opsForValue().get("count:patten:post:" + postIds.get(0))).isEqualTo("1,0");
+        assertThat(redisTemplate.opsForValue().get("interaction:count:like:" + postIds.get(0))).isEqualTo("1");
     }
 
     @Test
@@ -203,7 +203,7 @@ class InteractionBatchStateIntegrationTest {
             projectionService.apply(InteractionEvent.of(postId, userId, InteractionType.UNLIKE));
             resume.countDown();
             assertThat(result.get(10, java.util.concurrent.TimeUnit.SECONDS)).isZero();
-            assertThat(redisTemplate.opsForValue().get("count:patten:post:" + postId)).isEqualTo("0,0");
+            assertThat(redisTemplate.opsForValue().get("interaction:count:like:" + postId)).isEqualTo("0");
         } finally {
             resume.countDown();
             executor.shutdownNow();

@@ -16,8 +16,14 @@ import org.springframework.context.annotation.Configuration;
 @ConditionalOnProperty(name = "app.interaction.async.enabled", havingValue = "true")
 public class InteractionStreamConfig {
     @Bean(destroyMethod = "shutdown")
-    DefaultMQPushConsumer interactionConsumer(InteractionProjectionService projection,
+    public DefaultMQPushConsumer interactionConsumer(InteractionProjectionService projection,
             @Value("${spring.cloud.stream.rocketmq.binder.name-server}") String nameserver) throws MQClientException {
+        return newInteractionConsumer(projection, nameserver);
+    }
+
+    /** 新建消费者实例但不注册为 Bean；供集成测试在 Broker 侧清理消息后重建消费链路。 */
+    public DefaultMQPushConsumer newInteractionConsumer(InteractionProjectionService projection,
+            String nameserver) throws MQClientException {
         var consumer = new DefaultMQPushConsumer("interaction-consumer-group");
         consumer.setNamesrvAddr(nameserver);
         consumer.subscribe("post-interaction-topic", "*");

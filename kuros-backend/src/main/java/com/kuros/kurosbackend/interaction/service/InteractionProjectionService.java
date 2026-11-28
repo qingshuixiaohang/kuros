@@ -25,25 +25,33 @@ public class InteractionProjectionService {
     private final TransactionTemplate transactionTemplate;
     private final InteractionRedisStore redisStore;
     private final JdbcTemplate jdbc;
+    private final InteractionCrashPoint crashPoint;
 
     public InteractionProjectionService(PostLikeRepository likeRepository,
                                         PostFavoriteRepository favoriteRepository,
                                         CommunityPostRepository postRepository,
                                         TransactionTemplate transactionTemplate,
                                         InteractionRedisStore redisStore,
-                                        JdbcTemplate jdbc) {
+                                        JdbcTemplate jdbc,
+                                        InteractionCrashPoint crashPoint) {
         this.likeRepository = likeRepository;
         this.favoriteRepository = favoriteRepository;
         this.postRepository = postRepository;
         this.transactionTemplate = transactionTemplate;
         this.redisStore = redisStore;
         this.jdbc = jdbc;
+        this.crashPoint = crashPoint;
     }
 
     public void apply(InteractionEvent event) {
-        transactionTemplate.executeWithoutResult(status -> persist(event));
+        transactionTemplate.executeWithoutResult(status -> {
+            crashPoint.reached(InteractionCrashPoint.BEFORE_COMMIT, event.eventId());
+            persist(event);
+        });
+        crashPoint.reached(InteractionCrashPoint.AFTER_COMMIT, event.eventId());
         // 重投也要失效缓存，前一次可能在提交之后、失效之前失败。
         redisStore.invalidate(event.type().kind(), event.postId(), event.userId());
+        crashPoint.reached(InteractionCrashPoint.AFTER_INVALIDATE, event.eventId());
         rebuildLikes(event.type().kind(), event.userId());
         jdbc.update("update interaction_operations set cache_pending = false where operation_id = ?", event.eventId());
         jdbc.update("update interaction_failures set status = 'RESOLVED', updated_at = ? where operation_id = ? and post_id = ? and user_id = ? and operation_type = ?",

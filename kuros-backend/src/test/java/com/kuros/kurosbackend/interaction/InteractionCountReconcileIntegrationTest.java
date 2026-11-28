@@ -121,7 +121,7 @@ class InteractionCountReconcileIntegrationTest {
     }
 
     private String likeCountKey() {
-        return "count:patten:post:" + postId;
+        return "interaction:count:like:" + postId;
     }
 
     private String favoriteCountKey() {
@@ -160,9 +160,9 @@ class InteractionCountReconcileIntegrationTest {
         assertThat(truth).isEqualTo(1);
 
         // 人为制造偏差：Redis 计数比真相多 1（模拟事件丢失后 Redis 已翻）
-        redisTemplate.opsForValue().set(likeCountKey(), (truth + 1) + ",0");
+        redisTemplate.opsForValue().set(likeCountKey(), Long.toString(truth + 1));
         assertThat(redisTemplate.opsForValue().get(likeCountKey()))
-                .isEqualTo((truth + 1) + ",0");
+                .isEqualTo(Long.toString(truth + 1));
 
         InteractionRedisStore.ReconcileResult result = redisStore.reconcileCount(
                 InteractionKind.LIKE, postId, () -> likeRepository.countByPostId(postId));
@@ -170,7 +170,7 @@ class InteractionCountReconcileIntegrationTest {
         assertThat(result.count()).isEqualTo(truth);
         assertThat(result.corrected()).isTrue();
         assertThat(redisTemplate.opsForValue().get(likeCountKey()))
-                .isEqualTo(truth + ",0");
+                .isEqualTo(Long.toString(truth));
     }
 
     /**
@@ -185,7 +185,7 @@ class InteractionCountReconcileIntegrationTest {
         // 人为把冗余计数列改错（模拟 MQ 事件丢失后 incrementLikeCount 没执行）
         corruptLikeColumn(99);
         // Redis 也偏离
-        redisTemplate.opsForValue().set(likeCountKey(), "88,0");
+        redisTemplate.opsForValue().set(likeCountKey(), "88");
 
         Map<InteractionKind, InteractionCountReconciler.CountDelta> deltas =
                 reconciler.reconcile(postId);
@@ -194,7 +194,7 @@ class InteractionCountReconcileIntegrationTest {
         assertThat(like.after()).isEqualTo(truth);
         assertThat(like.dbBefore()).isEqualTo(99);
         assertThat(redisTemplate.opsForValue().get(likeCountKey()))
-                .isEqualTo(truth + ",0");
+                .isEqualTo(Long.toString(truth));
         assertThat(postRepository.findById(postId).orElseThrow().getLikeCount())
                 .isEqualTo(truth);
     }
@@ -208,7 +208,7 @@ class InteractionCountReconcileIntegrationTest {
         long truth = likeRepository.countByPostId(postId);
 
         // 先建立一致的 Redis 值
-        redisTemplate.opsForValue().set(likeCountKey(), truth + ",0");
+        redisTemplate.opsForValue().set(likeCountKey(), Long.toString(truth));
 
         InteractionRedisStore.ReconcileResult result = redisStore.reconcileCount(
                 InteractionKind.LIKE, postId, () -> likeRepository.countByPostId(postId));
@@ -218,7 +218,7 @@ class InteractionCountReconcileIntegrationTest {
                 .as("值本来就一致时不应报告为已修正")
                 .isFalse();
         assertThat(redisTemplate.opsForValue().get(likeCountKey()))
-                .isEqualTo(truth + ",0");
+                .isEqualTo(Long.toString(truth));
     }
 
     /**
@@ -257,7 +257,7 @@ class InteractionCountReconcileIntegrationTest {
         long truth = likeRepository.countByPostId(postId);
 
         // 制造偏差后直接读（此时读到的是错值）
-        redisTemplate.opsForValue().set(likeCountKey(), "50,0");
+        redisTemplate.opsForValue().set(likeCountKey(), "50");
         long beforeReconcile = redisStore.readCount(InteractionKind.LIKE, postId,
                 () -> postRepository.findById(postId).orElseThrow().getLikeCount());
         assertThat(beforeReconcile).isEqualTo(50);
@@ -293,7 +293,7 @@ class InteractionCountReconcileIntegrationTest {
             CommunityPost repaired = postRepository.findById(post.getId()).orElseThrow();
             assertThat(repaired.getLikeCount()).isEqualTo(likeRepository.countByPostId(post.getId()));
             assertThat(repaired.getFavoriteCount()).isEqualTo(favoriteRepository.countByPostId(post.getId()));
-            assertThat(redisTemplate.hasKey("count:patten:post:" + post.getId())).isFalse();
+            assertThat(redisTemplate.hasKey("interaction:count:like:" + post.getId())).isFalse();
             assertThat(redisTemplate.hasKey("interaction:count:favorite:" + post.getId())).isFalse();
         }
     }
@@ -301,8 +301,8 @@ class InteractionCountReconcileIntegrationTest {
     @Test
     void 旧Redis计数不会反写数据库() {
         CommunityPost post = createPost("异步投影中的帖子");
-        String likeKey = "count:patten:post:" + post.getId();
-        redisTemplate.opsForValue().set(likeKey, "1,0");
+        String likeKey = "interaction:count:like:" + post.getId();
+        redisTemplate.opsForValue().set(likeKey, "1");
 
         reconciliationJob.reconcilePublishedPosts();
 
@@ -375,15 +375,15 @@ class InteractionCountReconcileIntegrationTest {
     }
 
     private void setRedisCounts(String targetPostId, long likeCount, long favoriteCount) {
-        redisTemplate.opsForValue().set("count:patten:post:" + targetPostId, likeCount + ",0");
+        redisTemplate.opsForValue().set("interaction:count:like:" + targetPostId, Long.toString(likeCount));
         redisTemplate.opsForValue().set("interaction:count:favorite:" + targetPostId, Long.toString(favoriteCount));
     }
 
     private void assertCounts(String targetPostId, long likeCount, long favoriteCount) {
         assertThat(postRepository.findById(targetPostId).orElseThrow().getLikeCount()).isEqualTo(likeCount);
         assertThat(postRepository.findById(targetPostId).orElseThrow().getFavoriteCount()).isEqualTo(favoriteCount);
-        assertThat(redisTemplate.opsForValue().get("count:patten:post:" + targetPostId))
-                .isEqualTo(likeCount + ",0");
+        assertThat(redisTemplate.opsForValue().get("interaction:count:like:" + targetPostId))
+                .isEqualTo(Long.toString(likeCount));
         assertThat(redisTemplate.opsForValue().get("interaction:count:favorite:" + targetPostId))
                 .isEqualTo(Long.toString(favoriteCount));
     }
