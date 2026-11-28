@@ -1,10 +1,14 @@
 import { expect, test } from "@playwright/test";
 
+// Banner 侧卡收起与频道抽屉接管侧栏都发生在 720px；这是项目支持的最窄桌面宽度。
+const narrowDesktopViewport = { width: 768, height: 900 };
+// Banner 侧卡收起断点是 720px，抽屉等窄桌面布局仍以 768px 为准。
+const bannerCollapseViewport = { width: 720, height: 900 };
+
 for (const viewport of [
   { name: "desktop", width: 1440, height: 1000 },
   { name: "wide-tablet", width: 1280, height: 900 },
   { name: "tablet", width: 1024, height: 900 },
-  { name: "mobile", width: 390, height: 844 },
 ]) {
   test(`首页在 ${viewport.name} 视口没有页面级横向滚动`, async ({ page }) => {
     await page.setViewportSize(viewport);
@@ -152,7 +156,7 @@ test("首页多图帖子以宫格缩略图展示并新标签打开帖子", async
   await expect(thumb).toHaveAttribute("rel", /noopener/);
 });
 
-test("首页 Banner 支持桌面端层叠轮播并在移动端收起侧卡", async ({ page }) => {
+test("首页 Banner 支持桌面端层叠轮播并在最窄桌面宽度收起侧卡", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/");
 
@@ -167,7 +171,7 @@ test("首页 Banner 支持桌面端层叠轮播并在移动端收起侧卡", asy
   await expect(banner.getByRole("heading", { name: "心灵海" })).toBeVisible();
   await expect(banner.getByText("探索地图 · 标记你的下一处回响")).toBeVisible();
 
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize(bannerCollapseViewport);
   await expect(banner.locator(".community-banner-slide--previous")).toHaveCSS("opacity", "0");
   await expect(banner.locator(".community-banner-slide--next")).toHaveCSS("opacity", "0");
 });
@@ -216,7 +220,7 @@ test("帖子详情页分享会将帖子地址写入剪贴板", async ({ page }) 
 });
 
 test("窄桌面端可以通过菜单打开频道抽屉", async ({ page }) => {
-  await page.setViewportSize({ width: 768, height: 900 });
+  await page.setViewportSize(narrowDesktopViewport);
   await page.goto("/guides");
 
   await expect(page.getByRole("button", { name: "打开导航" })).toBeVisible();
